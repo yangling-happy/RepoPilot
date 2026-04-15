@@ -1,0 +1,9 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: terminal-service
+  websocket:
+    max-text-message-size: 65536
+    max-binary-message-size: 65536

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if command -v mvn >/dev/null 2>&1; then
+  exec mvn "$@"
+fi
+
+echo "Apache Maven not found in PATH." >&2
+echo "Install Maven first, then run: mvn -N wrapper" >&2
+echo "That command will generate the official Maven Wrapper files." >&2
+exit 1
