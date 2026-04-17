@@ -47,24 +47,39 @@ pnpm --filter @repo-pilot/shared-types build
 
 ### 4. 启动服务
 
-#### 方式一：一键启动所有服务（推荐）
-
-同时启动前端、终端中台和后端服务：
+#### 启动前端
 
 ```bash
-pnpm dev
+pnpm dev:frontend
 ```
 
-#### 方式二：单独启动
+#### 启动后端
 
-- **仅启动前端**：
-  ```bash
-  pnpm dev:frontend
-  ```
-- **仅启动后端**：
-  ```bash
-  pnpm dev:backend
-  ```
+> 说明：后端当前为多模块 Maven 工程（`backend/common`、`backend/business`、`backend/terminal`、`backend/gateway`），
+> 在 Windows 环境下不建议使用根脚本 `pnpm dev:backend`。
+
+**Windows Git Bash**
+
+```bash
+cd backend
+./mvnw -N install
+cd common && ../mvnw install -DskipTests
+cd ../business && ../mvnw spring-boot:run -DskipTests
+```
+
+**Windows PowerShell / CMD**
+
+```powershell
+cd backend
+.\mvnw.cmd -N install
+cd common; ..\mvnw.cmd install -DskipTests
+cd ..\business; ..\mvnw.cmd spring-boot:run -DskipTests
+```
+
+如需分别启动其它服务：
+
+- 终端服务：在 `backend/terminal` 执行 `../mvnw spring-boot:run`（PowerShell/CMD 用 `..\mvnw.cmd spring-boot:run`）
+- 网关服务：在 `backend/gateway` 执行 `../mvnw spring-boot:run`（PowerShell/CMD 用 `..\mvnw.cmd spring-boot:run`）
 
 ### 5. 访问地址
 
@@ -73,14 +88,14 @@ pnpm dev
 
 ## 常用命令
 
-| 命令                | 描述                        |
-| :------------------ | :-------------------------- |
-| `pnpm dev`          | 启动所有服务（前端+后端）   |
-| `pnpm dev:frontend` | 仅启动前端开发服务器        |
-| `pnpm dev:backend`  | 仅启动后端 Spring Boot 应用 |
-| `pnpm build`        | 构建所有模块                |
-| `pnpm lint`         | 执行 ESLint 检查            |
-| `pnpm format`       | 格式化代码                  |
+| 命令                | 描述                                                                        |
+| :------------------ | :-------------------------------------------------------------------------- |
+| `pnpm dev`          | 启动前端与后端（当前 Windows 可能受 `dev:backend` 影响）                    |
+| `pnpm dev:frontend` | 仅启动前端开发服务器                                                        |
+| `pnpm dev:backend`  | 仅启动后端（当前 Windows 下不建议，改用 backend 目录的 Maven Wrapper 命令） |
+| `pnpm build`        | 构建所有模块                                                                |
+| `pnpm lint`         | 执行 ESLint 检查                                                            |
+| `pnpm format`       | 格式化代码                                                                  |
 
 ## 项目结构
 
