@@ -14,7 +14,7 @@ backend/
 
 ## 技术栈
 
-- Java 21
+- Java 17
 - Spring Boot 3.2.0
 - Spring Cloud Gateway
 - MyBatis Plus
@@ -27,15 +27,19 @@ backend/
 
 ### 前置要求
 
-- JDK 21+
-- Maven 3.6+
+- JDK 17+
 - MySQL 8.0+
 
-### 安装依赖
+说明：仓库已包含 Maven Wrapper（`mvnw` / `mvnw.cmd`），可不预装 Maven。
+
+### 构建项目
 
 ```bash
-cd backend
+# Linux / macOS
 ./mvnw clean install
+
+# Windows PowerShell
+.\mvnw.cmd clean install
 ```
 
 ### 配置数据库

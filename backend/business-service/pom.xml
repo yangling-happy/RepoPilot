@@ -54,12 +54,6 @@
             <artifactId>gitlab4j-api</artifactId>
         </dependency>
 
-        <!-- PTY4J -->
-        <dependency>
-            <groupId>org.jetbrains.pty4j</groupId>
-            <artifactId>pty4j</artifactId>
-        </dependency>
-
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
