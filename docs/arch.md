@@ -23,29 +23,26 @@ MVP 范围与约束如下：
 **技术栈总览**：
 
 - 前端：React + TypeScript + Ant Design + Xterm.js + Vite + pnpm workspace
-- 后端：Java Spring Boot + Pty4J + Maven +  Docker(待定)
+- 后端：Java Spring Boot + Pty4J + Maven + Docker(待定)
 
 **参考产品**：打包部署功能参考 Vercel 的设计思路——关联 GitLab 仓库的交互模式、Build Log 的实时展示方式、部署流程的视觉反馈。
 
 项目目录结构：
 
 ```Bash
-my_project/
-├── .github/                    # GitHub Actions CI/CD 配置
-│   ├── workflows/
-│   │   ├── frontend.yml        # 前端构建测试
-│   │   ├── backend.yml         # 后端构建测试
-│   │   └── e2e.yml             # 端到端测试
-│   └── CODEOWNERS              # 代码归属权（后端/前端分开）
+RepoPilot/
+├── .vscode/                    # VS Code 配置
+│   └── settings.json
 │
 ├── apps/                       # 应用层（由 pnpm 管理）
 │   ├── web/                    # React 前端应用
 │   │   ├── src/
-│   │   ├── public/
+│   │   │   ├── App.tsx
+│   │   │   └── main.tsx
+│   │   ├── index.html
 │   │   ├── package.json
 │   │   ├── tsconfig.json
-│   │   ├── vite.config.ts
-│   │   └── index.html
+│   │   └── vite.config.ts
 │   │
 │   └── terminal/               # Xterm 中台（独立应用）
 │       ├── src/
@@ -54,68 +51,122 @@ my_project/
 │       │   └── types.ts
 │       ├── package.json
 │       ├── tsconfig.json
-│       └── rollup.config.js
+│       └── vite.config.ts
 │
 ├── packages/                   # 共享库（由 pnpm 管理）
-│   ├── shared-types/           # TypeScript 类型定义（前后端共享）
-│   │   ├── src/
-│   │   │   ├── api.ts          # API 请求/响应类型
-│   │   │   ├── websocket.ts    # WebSocket 消息类型
-│   │   │   └── terminal.ts     # 终端相关类型
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   │
-│   ├── ui-components/          # React 组件库
-│   │   ├── src/
-│   │   ├── package.json
-│   │   └── tsconfig.json
-│   │
-│   └── config-eslint/          # 共享 ESLint 配置
+│   └── shared-types/           # TypeScript 类型定义（前后端共享）
+│       ├── src/
+│       │   ├── api.ts          # API 请求/响应类型
+│       │   ├── api.js
+│       │   └── api.d.ts
 │       ├── package.json
-│       └── index.js
+│       ├── tsconfig.json
+│       └── tsconfig.tsbuildinfo
 │
 ├── backend/                    # Java Spring Boot 后端（Maven管理）
-│   ├── pom.xml                 # Maven 父 POM
+│   ├── .mvn/                   # Maven 包装器
+│   │   └── wrapper/
+│   │       └── maven-wrapper.properties
+│   ├── .gitignore
+│   ├── README.md
 │   ├── mvnw
 │   ├── mvnw.cmd
+│   ├── pom.xml                 # Maven 父 POM
 │   │
-│   ├── gateway-service/        # Spring Cloud Gateway（可选）
+│   ├── gateway/                # Spring Cloud Gateway（可选）
 │   │   ├── pom.xml
 │   │   └── src/
+│   │       ├── main/
+│   │       │   ├── java/
+│   │       │   │   └── com/
+│   │       │   │       └── repopilot/
+│   │       │   │           └── gateway/
+│   │       │   │               ├── config/
+│   │       │   │               ├── filter/
+│   │       │   │               └── GatewayServiceApplication.java
+│   │       │   └── resources/
+│   │       │       └── application.yml
+│   │       └── test/
+│   │           └── java/
+│   │               └── com/
+│   │                   └── repopilot/
+│   │                       └── gateway/
 │   │
-│   ├── terminal-service/       # 终端服务（WebSocket 处理）
+│   ├── terminal/               # 终端服务（WebSocket 处理）
 │   │   ├── pom.xml
 │   │   └── src/
-│   │       ├── main/java/
-│   │       └── main/resources/
+│   │       ├── main/
+│   │       │   ├── java/
+│   │       │   │   └── com/
+│   │       │   │       └── repopilot/
+│   │       │   │           └── terminal/
+│   │       │   │               ├── config/
+│   │       │   │               ├── controller/
+│   │       │   │               ├── handler/
+│   │       │   │               ├── service/
+│   │       │   │               └── TerminalServiceApplication.java
+│   │       │   └── resources/
+│   │       │       └── application.yml
+│   │       └── test/
+│   │           └── java/
+│   │               └── com/
+│   │                   └── repopilot/
+│   │                       └── terminal/
 │   │
-│   └── business-service/       # 业务服务
+│   ├── business/               # 业务服务
+│   │   ├── pom.xml
+│   │   └── src/
+│   │       ├── main/
+│   │       │   ├── java/
+│   │       │   │   └── com/
+│   │       │   │       └── repopilot/
+│   │       │   │           └── business/
+│   │       │   │               ├── controller/
+│   │       │   │               ├── dto/
+│   │       │   │               ├── entity/
+│   │       │   │               ├── mapper/
+│   │       │   │               └── BusinessServiceApplication.java
+│   │       │   └── resources/
+│   │       │       ├── mapper/
+│   │       │       ├── scripts/
+│   │       │       └── application.yml
+│   │       └── test/
+│   │           └── java/
+│   │               └── com/
+│   │                   └── repopilot/
+│   │                       └── business/
+│   │
+│   └── common/                 # 公共服务
 │       ├── pom.xml
 │       └── src/
-│
-├── docker/                     # Docker 配置文件
-│   ├── Dockerfile.frontend
-│   ├── Dockerfile.terminal
-│   ├── Dockerfile.backend
-│   └── docker-compose.yml
-│
-├── scripts/                    # 辅助脚本
-│   ├── generate-api-types.sh   # 从 Java 注解生成 TS 类型
-│   └── dev-init.sh
+│           ├── main/
+│           │   ├── java/
+│           │   │   └── com/
+│           │   │       └── repopilot/
+│           │   │           └── common/
+│           │   │               ├── config/
+│           │   │               ├── constant/
+│           │   │               ├── dto/
+│           │   │               ├── entity/
+│           │   │               ├── enums/
+│           │   │               ├── exception/
+│           │   │               └── util/
+│           │   └── resources/
+│           └── test/
+│               └── java/
+│                   └── com/
+│                       └── repopilot/
+│                           └── common/
 │
 ├── docs/                       # 项目文档
-│   ├── architecture.md
-│   ├── api.md
-│   └── development.md
+│   ├── arch.md
+│   └── 评审材料.pdf
 │
 ├── .gitignore
-├── .prettierrc
-├── .eslintrc.js
-├── pnpm-workspace.yaml         # pnpm workspace 配置
-├── package.json                # 根 package.json
-├── turbo.json                  # Turborepo 配置（可选）
 ├── README.md
-└── LICENSE
+├── package.json                # 根 package.json
+├── pnpm-lock.yaml
+└── pnpm-workspace.yaml         # pnpm workspace 配置
 ```
 
 **关键配置文件**：
@@ -172,14 +223,15 @@ packages:
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.myapp</groupId>
-    <artifactId>myapp-backend</artifactId>
-    <version>0.0.1</version>
+    <groupId>com.repopilot</groupId>
+    <artifactId>repopilot-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
     <packaging>pom</packaging>
     <modules>
-        <module>gateway-service</module>
-        <module>terminal-service</module>
-        <module>business-service</module>
+        <module>gateway</module>
+        <module>terminal</module>
+        <module>business</module>
+        <module>common</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -187,7 +239,14 @@ packages:
         <version>3.2.0</version>
     </parent>
     <properties>
-        <java.version>21</java.version>
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <spring-cloud.version>2023.0.0</spring-cloud.version>
+        <pty4j.version>0.12.13</pty4j.version>
+        <gitlab4j.version>5.5.0</gitlab4j.version>
+        <mybatis-plus.version>3.5.5</mybatis-plus.version>
     </properties>
 </project>
 ```
@@ -217,10 +276,8 @@ packages:
     "test": "vitest"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "@myapp/shared-types": "workspace:",
-    "@myapp/terminal-client": "workspace:"
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
@@ -230,13 +287,13 @@ packages:
 }
 ```
 
-前端采用 React 18 + TypeScript + Vite 构建，通过 workspace 协议引用共享类型包和终端客户端包。
+前端采用 React 18 + TypeScript + Vite 构建。
 
 `apps/terminal`（Xterm 中台）：
 
 ```JSON
 {
-  "name": "@myapp/terminal-client",
+  "name": "@repo-pilot/terminal-client",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -248,9 +305,9 @@ packages:
     }
   },
   "scripts": {
-    "dev": "vite build --watch",
-    "build": "tsc && vite build",
-    "test": "vitest"
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "test": "echo \"No tests configured\""
   },
   "dependencies": {
     "xterm": "^5.3.0",
@@ -270,7 +327,7 @@ packages:
 
 ```TypeScript
 {
-  "name": "@myapp/shared-types",
+  "name": "@repo-pilot/shared-types",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -284,23 +341,42 @@ packages:
   }
 }
 共享类型示例（api.ts）：
-// 前后端共享的类型定义
-export interface TerminalSession {
-  id: string;
-  createdAt: Date;
-  status: 'active' | 'closed';
-}
-
-export interface WebSocketMessage {
-  type: 'stdin' | 'stdout' | 'resize';
-  data: string | number[];
-  sessionId: string;
-}
-
 export interface ApiResponse<T> {
   code: number;
   message: string;
   data: T;
+}
+
+export interface DocTask {
+  eventId: string;
+  project: string;
+  branch: string;
+  commitId: string;
+  status: 'PENDING' | 'SUCCESS' | 'FAILED';
+  duration: number;
+}
+
+export interface DocFile {
+  project: string;
+  branch: string;
+  filePath: string;
+  commitId: string;
+  docJson: string;
+  docMarkdown: string;
+  updateTime: Date;
+}
+
+export interface DeployTask {
+  taskId: string;
+  project: string;
+  branch: string;
+  scriptName: string;
+  args: string[];
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED';
+  operator: string;
+  startTime: Date;
+  endTime: Date;
+  result?: string;
 }
 ```
 
@@ -359,14 +435,13 @@ npx openapi-typescript /tmp/openapi.json -o packages/shared-types/src/generated/
 
 ```TypeScript
 // apps/web/src/hooks/useTerminal.ts
-import { TerminalClient } from '@myapp/terminal-client';
-import type { WebSocketMessage } from '@myapp/shared-types';
+import { TerminalClient } from '@repo-pilot/terminal-client';
 
 export const useTerminal = (sessionId: string) => {
   const ws = new WebSocket(`ws://localhost:8080/ws/terminal/${sessionId}`);
   const client = new TerminalClient(ws);
 
-  client.onMessage((msg: WebSocketMessage) => {
+  client.onMessage((msg: any) => {
     if (msg.type === 'stdout') {
       // 处理终端输出
     }
@@ -474,7 +549,7 @@ git clone <your-repo>
 pnpm install
 
 # 3. 构建共享包
-pnpm --filter @myapp/shared-types build
+pnpm --filter @repo-pilot/shared-types build
 
 # 4. 安装后端依赖
 cd backend && ./mvnw dependency:resolve
@@ -595,5 +670,3 @@ services:
 **影响点**：单次 push 可能包含多个 Java 文件，造成突发写入
 
 **优化策略**：文档入库批量写
-
-

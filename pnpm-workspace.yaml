@@ -1,0 +1,4 @@
+packages:
+  - "apps/"
+  - "packages/"
+  # backend 目录不在此列表，由 Maven 独立管理
