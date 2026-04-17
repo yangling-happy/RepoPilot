@@ -3,15 +3,15 @@ server:
 
 spring:
   application:
-    name: gateway-service
+    name: gateway
   cloud:
     gateway:
       routes:
-        - id: business-service
+        - id: business
           uri: http://localhost:8080
           predicates:
             - Path=/api/**
-        - id: terminal-service
+        - id: terminal
           uri: http://localhost:8081
           predicates:
             - Path=/ws/**

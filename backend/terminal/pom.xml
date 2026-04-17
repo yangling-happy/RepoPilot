@@ -11,7 +11,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>terminal-service</artifactId>
+    <artifactId>terminal</artifactId>
     <packaging>jar</packaging>
     <name>Terminal Service</name>
     <description>WebSocket terminal service with PTY4J</description>
@@ -20,7 +20,7 @@
         <!-- Common Service -->
         <dependency>
             <groupId>com.repopilot</groupId>
-            <artifactId>common-service</artifactId>
+            <artifactId>common</artifactId>
         </dependency>
 
         <!-- Spring Boot Web -->

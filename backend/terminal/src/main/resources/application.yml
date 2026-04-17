@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: terminal-service
+    name: terminal
   websocket:
     max-text-message-size: 65536
     max-binary-message-size: 65536

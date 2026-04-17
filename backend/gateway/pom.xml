@@ -11,7 +11,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>gateway-service</artifactId>
+    <artifactId>gateway</artifactId>
     <packaging>jar</packaging>
     <name>Gateway Service</name>
     <description>Spring Cloud Gateway (Optional)</description>

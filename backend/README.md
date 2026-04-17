@@ -6,10 +6,10 @@ Spring Boot 后端服务，包含文档生成和部署功能。
 
 ```
 backend/
-├── common-service/          # 公共模块（DTO、异常处理、工具类）
-├── business-service/        # 业务服务（文档生成、部署管理）
-├── terminal-service/        # 终端服务（WebSocket + PTY4J）
-└── gateway-service/         # 网关服务（可选，Spring Cloud Gateway）
+├── common/                  # 公共模块（DTO、异常处理、工具类）
+├── business/                # 业务服务（文档生成、部署管理）
+├── terminal/                # 终端服务（WebSocket + PTY4J）
+└── gateway/                 # 网关服务（可选，Spring Cloud Gateway）
 ```
 
 ## 技术栈
@@ -28,7 +28,7 @@ backend/
 ### 前置要求
 
 - JDK 17+
-- MySQL 8.0+
+- MySQL 8.0+（仅 business 服务必需）
 
 说明：仓库已包含 Maven Wrapper（`mvnw` / `mvnw.cmd`），可不预装 Maven。
 
@@ -49,29 +49,33 @@ backend/
 CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 修改 `business-service/src/main/resources/application.yml` 中的数据库配置
+2. 修改 `business/src/main/resources/application.yml` 中的数据库配置
 
 ### 运行服务
 
+说明：
+- 启动 business 前需先完成数据库配置
+- terminal 与 gateway 可独立启动，无需数据库
+
 ```bash
 # 运行业务服务
-cd business-service
+cd business
 ../mvnw spring-boot:run
 
 # 运行终端服务
-cd terminal-service
+cd terminal
 ../mvnw spring-boot:run
 
 # 运行网关服务（可选）
-cd gateway-service
+cd gateway
 ../mvnw spring-boot:run
 ```
 
 ## 服务端口
 
-- business-service: 8080
-- terminal-service: 8081
-- gateway-service: 9000
+- business: 8080
+- terminal: 8081
+- gateway: 9000
 
 ## API 文档
 
