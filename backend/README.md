@@ -51,6 +51,15 @@ CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 2. 修改 `business-service/src/main/resources/application.yml` 中的数据库配置
 
+3. 执行建表脚本：
+```bash
+# Linux / macOS
+mysql -u root -p repopilot < business-service/src/main/resources/scripts/01_init_tables.sql
+
+# Windows PowerShell
+Get-Content .\business-service\src\main\resources\scripts\01_init_tables.sql | mysql -u root -p repopilot
+```
+
 ### 运行服务
 
 ```bash
@@ -91,54 +100,63 @@ cd gateway-service
 
 ## 数据库表结构
 
+当前版本为 4 张核心表：`doc_task`、`doc_file_dtl`、`deploy_task`、`build_task`。
+
 ### doc_task - 文档任务表（用于日志）
 - id: 主键
 - event_id: 事件ID
-- project: 项目名
-- branch: 分支名
+- project_name: 项目名
+- branch_name: 分支名
 - commit_id: 提交ID
 - status: 状态
-- create_time：创建时间
 - duration: 执行时长
+- create_time
+- 关键约束:
+	- `uk_doc_task_event_id`：event_id 去重
+	- `idx_doc_task_project_branch_commit`：按 project_name/branch_name/commit_id 查询加速
 
 ### doc_file_dtl - 文档明细表
 - id: 主键
-- task_id: 关联文档任务ID
 - project_name: 项目名
 - branch_name: 分支名
+- file_path: 文件路径
 - commit_id: 提交ID
-- file_path: Java文件路径
-- doc_file_path: 文档解析结果文件路径
-- parse_status: 解析状态
-- parse_error_msg: 解析失败信息
-- create_time: 创建时间
-- update_time: 更新时间
+- doc_json: JSON格式文档
+- 关键约束:
+	- `uk_project_branch_file_commit`：project_name + branch_name + file_path + commit_id 唯一
+	- 内部使用 file_path 的 SHA-256 生成列避免 MySQL 组合唯一索引长度超限
 
 ### deploy_task - 部署任务表
 - id: 主键
-- deploy_task_id: 部署任务ID
+- task_id: 任务ID
 - project_name: 项目名
 - branch_name: 分支名
 - commit_id: 提交ID
-- deploy_params: 部署参数
-- run_status: 运行状态
-- log_dir_path: 日志目录路径
-- result_path: 部署结果路径
-- error_msg: 部署失败信息
+- script_name: 脚本名称
+- args: 参数
+- run_status: 状态
+- operator: 操作人
 - start_time: 开始时间
-- duration: 执行时长
+- end_time: 结束时间
+- 关键约束:
+	- `uk_deploy_task_task_id`：task_id 唯一
+	- `uk_deploy_task_running_commit`：同一 project_name + branch_name + commit_id 仅允许一个 RUNNING 任务
+	- `idx_project_status_time`：按 project_name/run_status/update_time 查询加速
 
 ### build_task - 构建任务表
 - id: 主键
-- build_task_id: 构建任务ID
-- deploy_task_id: 关联部署任务ID
+- build_id: 构建任务ID
+- deploy_task_id: 关联部署任务ID（可空）
 - project_name: 项目名
 - branch_name: 分支名
 - commit_id: 提交ID
-- script_path: 执行构建脚本路径
-- artifact_path: 构建产物路径
-- log_dir_path: 构建日志目录路径
-- run_status: 运行状态
-- error_msg: 构建失败信息
+- build_type: 构建类型（例如 PACKAGE、IMAGE）
+- build_tool: 构建工具（例如 MAVEN、DOCKER）
+- run_status: 构建状态
+- artifact_url: 构建产物地址
 - start_time: 开始时间
-- duration: 执行时长
+- end_time: 结束时间
+- 关键约束:
+	- `uk_build_task_build_id`：build_id 唯一
+	- `idx_build_task_project_status_time`：按 project_name/run_status/update_time 查询加速
+	- 外键 `fk_build_task_deploy_task_id`：关联 deploy_task.task_id

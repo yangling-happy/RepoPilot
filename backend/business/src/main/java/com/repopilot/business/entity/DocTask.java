@@ -12,7 +12,9 @@ public class DocTask {
     private Long id;
 
     private String eventId;
+    @TableField("project_name")
     private String project;
+    @TableField("branch_name")
     private String branch;
     private String commitId;
     private String status;

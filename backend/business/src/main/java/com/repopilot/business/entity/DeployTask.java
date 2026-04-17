@@ -12,11 +12,14 @@ public class DeployTask {
     private Long id;
 
     private String taskId;
+    @TableField("project_name")
     private String project;
+    @TableField("branch_name")
     private String branch;
     private String commitId;
     private String scriptName;
     private String args;
+    @TableField("run_status")
     private String status;
     private String operator;
     private String result;
