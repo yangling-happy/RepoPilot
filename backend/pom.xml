@@ -20,10 +20,10 @@
     <description>Backend services for RepoPilot</description>
 
     <modules>
-        <module>common-service</module>
-        <module>business-service</module>
-        <module>terminal-service</module>
-        <module>gateway-service</module>
+        <module>common</module>
+        <module>business</module>
+        <module>terminal</module>
+        <module>gateway</module>
     </modules>
 
     <properties>
