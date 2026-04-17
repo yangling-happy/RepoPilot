@@ -91,33 +91,54 @@ cd gateway-service
 
 ## 数据库表结构
 
-### doc_task - 文档任务表
+### doc_task - 文档任务表（用于日志）
 - id: 主键
 - event_id: 事件ID
 - project: 项目名
 - branch: 分支名
 - commit_id: 提交ID
 - status: 状态
+- create_time：创建时间
 - duration: 执行时长
 
-### doc_file - 文档文件表
+### doc_file_dtl - 文档明细表
 - id: 主键
-- project: 项目名
-- branch: 分支名
-- file_path: 文件路径
+- task_id: 关联文档任务ID
+- project_name: 项目名
+- branch_name: 分支名
 - commit_id: 提交ID
-- doc_json: JSON格式文档
-- doc_markdown: Markdown格式文档
+- file_path: Java文件路径
+- doc_file_path: 文档解析结果文件路径
+- parse_status: 解析状态
+- parse_error_msg: 解析失败信息
+- create_time: 创建时间
+- update_time: 更新时间
 
 ### deploy_task - 部署任务表
 - id: 主键
-- task_id: 任务ID
-- project: 项目名
-- branch: 分支名
+- deploy_task_id: 部署任务ID
+- project_name: 项目名
+- branch_name: 分支名
 - commit_id: 提交ID
-- script_name: 脚本名称
-- args: 参数
-- status: 状态
-- operator: 操作人
+- deploy_params: 部署参数
+- run_status: 运行状态
+- log_dir_path: 日志目录路径
+- result_path: 部署结果路径
+- error_msg: 部署失败信息
 - start_time: 开始时间
-- end_time: 结束时间
+- duration: 执行时长
+
+### build_task - 构建任务表
+- id: 主键
+- build_task_id: 构建任务ID
+- deploy_task_id: 关联部署任务ID
+- project_name: 项目名
+- branch_name: 分支名
+- commit_id: 提交ID
+- script_path: 执行构建脚本路径
+- artifact_path: 构建产物路径
+- log_dir_path: 构建日志目录路径
+- run_status: 运行状态
+- error_msg: 构建失败信息
+- start_time: 开始时间
+- duration: 执行时长
