@@ -11,7 +11,7 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>business-service</artifactId>
+    <artifactId>business</artifactId>
     <packaging>jar</packaging>
     <name>Business Service</name>
     <description>Main business logic for documentation and deployment</description>
@@ -20,7 +20,7 @@
         <!-- Common Service -->
         <dependency>
             <groupId>com.repopilot</groupId>
-            <artifactId>common-service</artifactId>
+            <artifactId>common</artifactId>
         </dependency>
 
         <!-- Spring Boot Web -->
@@ -38,7 +38,7 @@
         <!-- MyBatis Plus -->
         <dependency>
             <groupId>com.baomidou</groupId>
-            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
         </dependency>
 
         <!-- MySQL Driver -->

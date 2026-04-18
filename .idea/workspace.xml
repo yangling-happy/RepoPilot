@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="71bf51ef-7a91-497c-b0cd-c17fa8743ec0" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/arch.md" beforeDir="false" afterPath="$PROJECT_DIR$/arch.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/backend/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/business-service/src/main/java/com/repopilot/business/entity/DeployTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/business-service/src/main/java/com/repopilot/business/entity/DeployTask.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/business-service/src/main/java/com/repopilot/business/entity/DocFile.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/business-service/src/main/java/com/repopilot/business/entity/DocFile.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/business-service/src/main/java/com/repopilot/business/entity/DocTask.java" beforeDir="false" afterPath="$PROJECT_DIR$/backend/business-service/src/main/java/com/repopilot/business/entity/DocTask.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/评审材料.pdf" beforeDir="false" afterPath="$PROJECT_DIR$/评审材料.pdf" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 5,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3CT1DzEQqR9Rv52Ofe7xj35gJzD" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "D:/RepoPilot"
+  },
+  "keyToStringList": {
+    "DatabaseDriversLRU": [
+      "mysql"
+    ]
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="71bf51ef-7a91-497c-b0cd-c17fa8743ec0" name="更改" comment="" />
+      <created>1776394632417</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1776394632417</updated>
+    </task>
+    <servers />
+  </component>
+</project>
