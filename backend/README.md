@@ -49,7 +49,37 @@ backend/
 CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 修改 `business/src/main/resources/application.yml` 中的数据库配置
+2. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:repopilot}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:}
+```
+
+3. 在本机注入环境变量（使用各自账号密码）：
+
+```bash
+# Linux / macOS / WSL（当前终端生效）
+export DB_USER=your_db_user
+export DB_PASSWORD=your_db_password
+
+# 可选：写入 ~/.bashrc 持久生效
+echo 'export DB_USER=your_db_user' >> ~/.bashrc
+echo 'export DB_PASSWORD=your_db_password' >> ~/.bashrc
+```
+
+```powershell
+# Windows PowerShell（新开终端后生效）
+setx DB_USER "your_db_user"
+setx DB_PASSWORD "your_db_password"
+```
+
+4. 团队协作约定：
+- `application.yml` 仅保留占位符，不提交真实账号密码。
+- 如需临时切换数据库账号，只改本机环境变量，不改仓库文件。
 
 ### 运行服务
 
