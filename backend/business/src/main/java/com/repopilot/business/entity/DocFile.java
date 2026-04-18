@@ -11,18 +11,14 @@ public class DocFile {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    @TableField("project_name")
-    private String project;
-    @TableField("branch_name")
-    private String branch;
+    private Long taskId;
+    private String projectName;
+    private String branchName;
     private String filePath;
     private String commitId;
-    private String docJson;
-    private String docMarkdown;
-
-    @TableField(fill = FieldFill.INSERT)
+    private String docFilePath;
+    private String parseStatus;
+    private String parseErrorMsg;
     private LocalDateTime createTime;
-
-    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 }

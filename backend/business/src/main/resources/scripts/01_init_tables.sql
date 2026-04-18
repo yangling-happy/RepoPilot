@@ -1,0 +1,81 @@
+CREATE TABLE IF NOT EXISTS `doc_task` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `event_id` VARCHAR(128) NOT NULL,
+  `project` VARCHAR(128) NOT NULL,
+  `branch` VARCHAR(128) NOT NULL,
+  `commit_id` VARCHAR(64) NOT NULL,
+  `status` VARCHAR(32) NOT NULL,
+  `create_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `duration` INT UNSIGNED NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_doc_task_event_id` (`event_id`),
+  KEY `idx_doc_task_project_branch_commit` (`project`, `branch`, `commit_id`),
+  KEY `idx_doc_task_status_time` (`status`, `create_time`),
+  CONSTRAINT `chk_doc_task_status` CHECK (`status` IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'SKIPPED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `doc_file_dtl` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `task_id` BIGINT UNSIGNED NULL,
+  `project_name` VARCHAR(128) NOT NULL,
+  `branch_name` VARCHAR(128) NOT NULL,
+  `commit_id` VARCHAR(64) NOT NULL,
+  `file_path` VARCHAR(1024) NOT NULL,
+  `doc_file_path` VARCHAR(1024) NULL,
+  `parse_status` VARCHAR(32) NOT NULL DEFAULT 'PENDING',
+  `parse_error_msg` TEXT NULL,
+  `create_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  `file_path_sha` BINARY(32) GENERATED ALWAYS AS (UNHEX(SHA2(`file_path`, 256))) STORED,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_project_branch_file_commit` (`project_name`, `branch_name`, `file_path_sha`, `commit_id`),
+  KEY `idx_doc_file_task_id` (`task_id`),
+  KEY `idx_doc_file_project_branch_update_time` (`project_name`, `branch_name`, `update_time`),
+  CONSTRAINT `chk_doc_file_parse_status` CHECK (`parse_status` IN ('PENDING', 'SUCCESS', 'FAILED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `deploy_task` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `deploy_task_id` VARCHAR(64) NOT NULL,
+  `project_name` VARCHAR(128) NOT NULL,
+  `branch_name` VARCHAR(128) NOT NULL,
+  `commit_id` VARCHAR(64) NOT NULL,
+  `deploy_params` TEXT NULL,
+  `run_status` VARCHAR(32) NOT NULL,
+  `log_dir_path` VARCHAR(512) NULL,
+  `result_path` VARCHAR(512) NULL,
+  `error_msg` TEXT NULL,
+  `start_time` DATETIME(3) NULL,
+  `duration` INT UNSIGNED NULL,
+  `create_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_deploy_task_id` (`deploy_task_id`),
+  KEY `idx_deploy_task_project_status_time` (`project_name`, `run_status`, `update_time`),
+  KEY `idx_deploy_task_commit_status` (`commit_id`, `run_status`),
+  CONSTRAINT `chk_deploy_task_run_status` CHECK (`run_status` IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'TIMEOUT'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `build_task` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `build_task_id` VARCHAR(64) NOT NULL,
+  `deploy_task_id` VARCHAR(64) NULL,
+  `project_name` VARCHAR(128) NOT NULL,
+  `branch_name` VARCHAR(128) NOT NULL,
+  `commit_id` VARCHAR(64) NOT NULL,
+  `script_path` VARCHAR(512) NULL,
+  `artifact_path` VARCHAR(512) NULL,
+  `log_dir_path` VARCHAR(512) NULL,
+  `run_status` VARCHAR(32) NOT NULL,
+  `error_msg` TEXT NULL,
+  `start_time` DATETIME(3) NULL,
+  `duration` INT UNSIGNED NULL,
+  `create_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  `update_time` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_build_task_id` (`build_task_id`),
+  KEY `idx_build_task_deploy_task_id` (`deploy_task_id`),
+  KEY `idx_build_task_project_status_time` (`project_name`, `run_status`, `update_time`),
+  CONSTRAINT `chk_build_task_run_status` CHECK (`run_status` IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'CANCELLED', 'TIMEOUT')),
+  CONSTRAINT `fk_build_task_deploy_task_id` FOREIGN KEY (`deploy_task_id`) REFERENCES `deploy_task` (`deploy_task_id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

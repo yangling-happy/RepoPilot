@@ -49,7 +49,19 @@ backend/
 CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
+2. 执行建表脚本（脚本仅包含建表语句）：
+
+```bash
+# Linux / macOS / WSL
+mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/01_init_tables.sql
+```
+
+```powershell
+# Windows PowerShell
+Get-Content .\business\src\main\resources\scripts\01_init_tables.sql | mysql -h127.0.0.1 -P3306 -uroot -p repopilot
+```
+
+3. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
 
 ```yaml
 spring:
@@ -59,7 +71,7 @@ spring:
     password: ${DB_PASSWORD:}
 ```
 
-3. 在本机注入环境变量（使用各自账号密码）：
+4. 在本机注入环境变量（使用各自账号密码）：
 
 ```bash
 # Linux / macOS / WSL（当前终端生效）
@@ -77,18 +89,9 @@ setx DB_USER "your_db_user"
 setx DB_PASSWORD "your_db_password"
 ```
 
-4. 团队协作约定：
+5. 团队协作约定：
 - `application.yml` 仅保留占位符，不提交真实账号密码。
 - 如需临时切换数据库账号，只改本机环境变量，不改仓库文件。
-
-3. 执行建表脚本：
-```bash
-# Linux / macOS
-mysql -u root -p repopilot < business-service/src/main/resources/scripts/01_init_tables.sql
-
-# Windows PowerShell
-Get-Content .\business-service\src\main\resources\scripts\01_init_tables.sql | mysql -u root -p repopilot
-```
 
 ### 运行服务
 
@@ -125,72 +128,155 @@ cd gateway
 - `POST /api/doc/webhook/gitlab` - GitLab Webhook
 - `POST /api/doc/rebuild` - 重新构建文档
 - `GET /api/doc/query` - 查询文档
+- `POST /api/doc/task/create` - 写入文档任务（doc_task）
+- `POST /api/doc/file/create` - 写入文档明细（doc_file_dtl）
 
 ### 部署管理
 - `POST /api/deploy/trigger` - 触发部署
+- `POST /api/deploy/task/create` - 写入部署任务（deploy_task）
+- `POST /api/deploy/build/task/create` - 写入构建任务（build_task）
 - `GET /api/deploy/task` - 查询部署任务
 - `GET /api/deploy/log` - 查询部署日志
 - `POST /api/deploy/cancel` - 取消部署
 
-## 数据库表结构
+## 写入接口结构速览
 
-当前版本为 4 张核心表：`doc_task`、`doc_file_dtl`、`deploy_task`、`build_task`。
+团队协作时，推荐按统一链路理解接口写入流程：
+
+1. Controller 接收请求 DTO（结构体）
+2. 参数校验（必填、状态枚举、时长非负）
+3. DTO 映射到 Entity
+4. Mapper `insert` 写入数据库
+5. 返回 `ApiResponse`
+
+当前已实现的写入接口与数据结构：
+
+### 1) 文档任务写入
+- 接口：`POST /api/doc/task/create`
+- 对应表：`doc_task`
+- 请求体字段：
+  - `eventId` `project` `branch` `commitId` `status` `duration`
+
+### 2) 文档明细写入
+- 接口：`POST /api/doc/file/create`
+- 对应表：`doc_file_dtl`
+- 请求体字段：
+  - `taskId` `projectName` `branchName` `filePath` `commitId` `docFilePath` `parseStatus` `parseErrorMsg`
+
+### 3) 部署任务写入
+- 接口：`POST /api/deploy/task/create`
+- 对应表：`deploy_task`
+- 请求体字段：
+  - `deployTaskId` `projectName` `branchName` `commitId` `deployParams` `runStatus` `logDirPath` `resultPath` `errorMsg` `duration`
+
+### 4) 构建任务写入
+- 接口：`POST /api/deploy/build/task/create`
+- 对应表：`build_task`
+- 请求体字段：
+  - `buildTaskId` `deployTaskId` `projectName` `branchName` `commitId` `scriptPath` `artifactPath` `logDirPath` `runStatus` `errorMsg` `duration`
+
+状态字段约束：
+- `doc_task.status`：`PENDING | RUNNING | SUCCESS | FAILED | SKIPPED`
+- `doc_file_dtl.parse_status`：`PENDING | SUCCESS | FAILED`
+- `deploy_task.run_status`、`build_task.run_status`：`PENDING | RUNNING | SUCCESS | FAILED | CANCELLED | TIMEOUT`
+
+## 写入验证样例
+
+以下示例用于快速验证新增写入接口（Windows PowerShell）：
+
+```powershell
+$ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+$deployTaskId = "dep-$ts"
+$buildTaskId = "bld-$ts"
+$deployCommitId = "commit-$ts"
+$docCommitId = "doc-$ts"
+$docFilePath = "src/main/java/com/repopilot/demo/Sample$ts.java"
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/deploy/task/create" -ContentType "application/json" -Body (@{
+  deployTaskId = $deployTaskId
+  projectName = "RepoPilot"
+  branchName = "main"
+  commitId = $deployCommitId
+  deployParams = "--profile=test"
+  runStatus = "SUCCESS"
+  logDirPath = "logs/deploy/$deployTaskId"
+  resultPath = "output/$deployTaskId.json"
+  duration = 42
+} | ConvertTo-Json)
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/deploy/build/task/create" -ContentType "application/json" -Body (@{
+  buildTaskId = $buildTaskId
+  deployTaskId = $deployTaskId
+  projectName = "RepoPilot"
+  branchName = "main"
+  commitId = $deployCommitId
+  scriptPath = "scripts/build.sh"
+  artifactPath = "dist/app.jar"
+  logDirPath = "logs/build/$buildTaskId"
+  runStatus = "SUCCESS"
+  duration = 21
+} | ConvertTo-Json)
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/doc/file/create" -ContentType "application/json" -Body (@{
+  projectName = "RepoPilot"
+  branchName = "main"
+  filePath = $docFilePath
+  commitId = $docCommitId
+  docFilePath = "docs/Sample$ts.md"
+  parseStatus = "SUCCESS"
+} | ConvertTo-Json)
+```
+
+## 数据库表结构
 
 ### doc_task - 文档任务表（用于日志）
 - id: 主键
 - event_id: 事件ID
-- project_name: 项目名
-- branch_name: 分支名
+- project: 项目名
+- branch: 分支名
 - commit_id: 提交ID
 - status: 状态
+- create_time：创建时间
 - duration: 执行时长
-- create_time
-- 关键约束:
-	- `uk_doc_task_event_id`：event_id 去重
-	- `idx_doc_task_project_branch_commit`：按 project_name/branch_name/commit_id 查询加速
 
 ### doc_file_dtl - 文档明细表
 - id: 主键
+- task_id: 关联文档任务ID
 - project_name: 项目名
 - branch_name: 分支名
-- file_path: 文件路径
 - commit_id: 提交ID
-- doc_json: JSON格式文档
-- 关键约束:
-	- `uk_project_branch_file_commit`：project_name + branch_name + file_path + commit_id 唯一
-	- 内部使用 file_path 的 SHA-256 生成列避免 MySQL 组合唯一索引长度超限
+- file_path: Java文件路径
+- doc_file_path: 文档解析结果文件路径
+- parse_status: 解析状态
+- parse_error_msg: 解析失败信息
+- create_time: 创建时间
+- update_time: 更新时间
 
 ### deploy_task - 部署任务表
 - id: 主键
-- task_id: 任务ID
+- deploy_task_id: 部署任务ID
 - project_name: 项目名
 - branch_name: 分支名
 - commit_id: 提交ID
-- script_name: 脚本名称
-- args: 参数
-- run_status: 状态
-- operator: 操作人
+- deploy_params: 部署参数
+- run_status: 运行状态
+- log_dir_path: 日志目录路径
+- result_path: 部署结果路径
+- error_msg: 部署失败信息
 - start_time: 开始时间
-- end_time: 结束时间
-- 关键约束:
-	- `uk_deploy_task_task_id`：task_id 唯一
-	- `uk_deploy_task_running_commit`：同一 project_name + branch_name + commit_id 仅允许一个 RUNNING 任务
-	- `idx_project_status_time`：按 project_name/run_status/update_time 查询加速
+- duration: 执行时长
 
 ### build_task - 构建任务表
 - id: 主键
-- build_id: 构建任务ID
-- deploy_task_id: 关联部署任务ID（可空）
+- build_task_id: 构建任务ID
+- deploy_task_id: 关联部署任务ID
 - project_name: 项目名
 - branch_name: 分支名
 - commit_id: 提交ID
-- build_type: 构建类型（例如 PACKAGE、IMAGE）
-- build_tool: 构建工具（例如 MAVEN、DOCKER）
-- run_status: 构建状态
-- artifact_url: 构建产物地址
+- script_path: 执行构建脚本路径
+- artifact_path: 构建产物路径
+- log_dir_path: 构建日志目录路径
+- run_status: 运行状态
+- error_msg: 构建失败信息
 - start_time: 开始时间
-- end_time: 结束时间
-- 关键约束:
-	- `uk_build_task_build_id`：build_id 唯一
-	- `idx_build_task_project_status_time`：按 project_name/run_status/update_time 查询加速
-	- 外键 `fk_build_task_deploy_task_id`：关联 deploy_task.task_id
+- duration: 执行时长

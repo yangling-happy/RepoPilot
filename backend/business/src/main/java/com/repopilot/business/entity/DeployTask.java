@@ -11,24 +11,17 @@ public class DeployTask {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String taskId;
-    @TableField("project_name")
-    private String project;
-    @TableField("branch_name")
-    private String branch;
+    private String deployTaskId;
+    private String projectName;
+    private String branchName;
     private String commitId;
-    private String scriptName;
-    private String args;
-    @TableField("run_status")
-    private String status;
-    private String operator;
-    private String result;
+    private String deployParams;
+    private String runStatus;
+    private String logDirPath;
+    private String resultPath;
+    private String errorMsg;
     private LocalDateTime startTime;
-    private LocalDateTime endTime;
-
-    @TableField(fill = FieldFill.INSERT)
+    private Integer duration;
     private LocalDateTime createTime;
-
-    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 }
