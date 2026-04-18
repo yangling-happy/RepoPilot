@@ -5,13 +5,15 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("doc_file")
+@TableName("doc_file_dtl")
 public class DocFile {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    @TableField("project_name")
     private String project;
+    @TableField("branch_name")
     private String branch;
     private String filePath;
     private String commitId;

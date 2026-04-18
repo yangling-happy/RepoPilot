@@ -480,18 +480,17 @@ export const useTerminal = (sessionId: string) => {
 
 ## 3.2 核心表设计
 
-> MVP 先不考虑日志功能，后续还要加上日志相关的表
-
 **核心表**：
 
-- `docTask`：文档任务（eventId、project、branch、commitId、status、duration）
-- `docFile`：文档结果（project、branch、filePath、commitId、docJson、docMarkdown、updateTime）
-- `deployTask`：部署任务（taskId、project、branch、scriptName、args、status、operator、startTime、endTime）
+- `docTask`：文档任务（doc_task）
+- `docFileDtl`：文档明细（doc_file_dtl）
+- `deployTask`：部署任务（deploy_task）
+- `buildTask`：构建任务（build_task）
 
 **索引**：
 
-- `docFileUkProjectBranchFileCommit`：唯一索引（project + branch + filePath + commitId）
-- `deployTaskIdxProjectBranchStatusUpdateTime`：普通索引（project + branch + status + updateTime）
+- `uk_project_branch_file_commit`：唯一索引（project_name + branch_name + file_path + commit_id）
+- `idx_project_status_time`：普通索引（project_name + run_status + update_time）
 
 ## 3.3 大表处理
 
