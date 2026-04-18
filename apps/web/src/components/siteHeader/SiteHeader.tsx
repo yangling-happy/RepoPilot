@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useTheme } from "next-themes";
 import { TopNav } from "../topNav/TopNav";
-import { getGithubUrl } from "../../constants/externalLinks";
+import { LoginPlaceholder } from "../loginPlaceholder/LoginPlaceholder";
 
 const { Header } = Layout;
 
@@ -17,7 +17,6 @@ export function SiteHeader() {
   useEffect(() => setMounted(true), []);
 
   const isDark = mounted ? resolvedTheme === "dark" : false;
-  const githubUrl = getGithubUrl();
 
   const languageValue = i18n.language.startsWith("zh") ? "zh" : "en";
 
@@ -61,12 +60,16 @@ export function SiteHeader() {
 
         <Button
           type="text"
-          icon={<GithubOutlined />}
-          href={githubUrl}
+          icon={<GithubOutlined style={{ fontSize: '24px' }} />}
+          href="https://github.com/yangling-happy/RepoPilot"
           target="_blank"
           rel="noreferrer noopener"
           aria-label={t("header.github")}
+          className="flex items-center justify-center"
+          style={{ fontSize: '24px', width: 'auto', height: 'auto' }}
         />
+
+        <LoginPlaceholder />
       </Space>
     </Header>
   );

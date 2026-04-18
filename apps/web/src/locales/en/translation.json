@@ -4,27 +4,29 @@
   },
   "header": {
     "home": "Home",
+    "dashboard": "Dashboard",
     "documentation": "Docs",
     "deploy": "Deploy",
     "language": "Language",
     "theme": "Theme",
-    "github": "Open on GitHub"
-  },
-  "breadcrumb": {
-    "home": "Home",
-    "documentation": "Documentation pipeline",
-    "deploy": "One-click deploy"
+    "github": "Open on GitHub",
+    "loginPlaceholder": "Sign in"
   },
   "home": {
     "hero": {
       "eyebrow": "RepoPilot · Ship with clarity",
       "titleLine1": "Documentation and deploys,",
       "titleLine2": "aligned with every repository.",
-      "subtitle": "Enterprise R&D workflow: refresh docs on every push; trigger deploys from the web with traceable, interruptible runs and live logs."
+      "subtitle": "Built for enterprise engineering teams: refresh docs on every push, deploy from the dashboard, and stream logs over WebSocket with full traceability—interruptible tasks, deduplicated runs, and GitLab-native workflows."
     },
     "cta": {
-      "documentation": "Documentation pipeline",
+      "documentation": "Documentation",
       "deploy": "Deploy"
+    },
+    "dashboardEntry": {
+      "title": "Dashboard",
+      "subtitle": "All linked repositories live in one calm surface—instantly open details, kick off docs, or ship a deployment.",
+      "cta": "Open Dashboard"
     },
     "repos": {
       "title": "Repositories",
@@ -55,33 +57,62 @@
       "title": "From commit to published artifacts"
     },
     "closing": {
-      "title": "Ready when your team is",
-      "subtitle": "Wire up webhooks once—then ship docs and deployments from the dashboard."
+      "title": "Ship faster with confidence",
+      "subtitle": "Configure webhooks once—then automate documentation refreshes and production deployments without leaving RepoPilot."
     }
   },
   "footer": {
-    "line1": "© {{year}} RepoPilot · Docs from comments · Traceable deploys",
-    "line2": "GitLab · WebSocket logs · Session auth (MVP)"
+    "line1": "© {{year}} RepoPilot · Documentation from source · Traceable deployments",
+    "line2": "GitLab integration · WebSocket streaming · Enterprise-grade session security"
   },
   "pages": {
     "documentation": {
-      "title": "Documentation pipeline",
-      "lede": "Turn source comments into structured online docs: GitLab triggers incremental updates; parse failures alert without blocking the main flow.",
-      "contextRepo": "Repository: {{repo}}",
+      "title": "Documentation",
+      "lede": "RepoPilot turns JavaDoc and repository metadata into always-up-to-date internal documentation. GitLab webhooks trigger incremental rebuilds; parse issues surface as alerts without blocking your delivery pipeline.",
+      "contextRepo": "Repository · {{repo}}",
       "items": {
-        "webhook": "Webhook / rebuild:",
-        "query": "Query:",
-        "session": "Session:"
+        "webhook": "Automation",
+        "query": "Read API",
+        "session": "Authentication"
       }
     },
     "deploy": {
-      "title": "One-click deploy",
-      "lede": "Trigger deploy tasks from the web; backend executes via PTY and streams logs over WebSocket; cancel and timeouts supported.",
-      "contextRepo": "Repository: {{repo}}",
+      "title": "Deploy",
+      "lede": "Promote commits to staging or production with one click. Runs execute through the backend PTY runner with live WebSocket logs, cancellation, timeouts, and exactly-once protections per commit.",
+      "contextRepo": "Repository · {{repo}}",
       "items": {
-        "trigger": "Trigger:",
-        "queryLog": "Task / logs:",
-        "cancel": "Cancel:"
+        "trigger": "Trigger",
+        "queryLog": "Status & logs",
+        "cancel": "Cancel"
+      }
+    },
+    "dashboard": {
+      "kicker": "Repositories",
+      "title": "Dashboard",
+      "lede": "GitLab-linked projects appear below. Tap a card for fullscreen details—or jump straight into docs generation and deployments.",
+      "back": "Back",
+      "openRepoDetails": "Open details for {{name}}",
+      "cardHint": "Click anywhere on the card for fullscreen details.",
+      "repoBadge": {
+        "production": "Production"
+      },
+      "repoDescriptions": {
+        "acme-platform-api": "Core platform API—identity, authorization, and organization capabilities.",
+        "billing-svc": "Billing and subscription processing with reconciliation and audit trails.",
+        "docs-hub": "Central documentation portal with search and cross-repo navigation."
+      },
+      "actions": {
+        "generateDocs": "Generate docs",
+        "deploy": "Deploy"
+      },
+      "detail": {
+        "id": "Repository ID",
+        "branch": "Default branch",
+        "owner": "Team",
+        "updatedAt": "Last repository update",
+        "lastDeploy": "Last deployment",
+        "docsEndpoint": "Published documentation",
+        "summary": "Description"
       }
     }
   }

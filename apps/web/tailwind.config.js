@@ -19,10 +19,22 @@ export default {
           '0%, 100%': { opacity: '0.35' },
           '50%': { opacity: '0.55' },
         },
+        'home-rise': {
+          '0%': {
+            opacity: '0',
+            transform: 'translateY(22px) scale(0.97)',
+          },
+          '100%': {
+            opacity: '1',
+            transform: 'translateY(0) scale(1)',
+          },
+        },
       },
       animation: {
         'hero-tilt': 'hero-tilt 16s ease-in-out infinite',
         'hero-glow': 'hero-glow 8s ease-in-out infinite',
+        'home-rise':
+          'home-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards',
       },
     },
   },

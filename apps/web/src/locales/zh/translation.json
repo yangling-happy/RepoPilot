@@ -4,27 +4,29 @@
   },
   "header": {
     "home": "首页",
+    "dashboard": "控制台",
     "documentation": "文档",
     "deploy": "部署",
     "language": "语言",
     "theme": "颜色模式",
-    "github": "在 GitHub 上打开"
-  },
-  "breadcrumb": {
-    "home": "首页",
-    "documentation": "文档流水线",
-    "deploy": "一键部署"
+    "github": "在 GitHub 上打开",
+    "loginPlaceholder": "登录"
   },
   "home": {
     "hero": {
       "eyebrow": "RepoPilot · 研发发布协同",
       "titleLine1": "让每个仓库都能",
       "titleLine2": "生成文档并一键部署。",
-      "subtitle": "面向企业研发：提交即文档更新；在控制台触发部署，并通过 WebSocket 回放实时日志，任务状态可追踪、可中断。"
+      "subtitle": "面向企业工程团队：提交即文档更新；在控制台一键部署；通过 WebSocket 实时回放日志，任务可追踪、可中断；与 GitLab 原生流程深度对齐。"
     },
     "cta": {
-      "documentation": "文档流水线",
-      "deploy": "一键部署"
+      "documentation": "文档",
+      "deploy": "部署"
+    },
+    "dashboardEntry": {
+      "title": "控制台",
+      "subtitle": "所有已关联仓库集中在一处：全屏查看详情、生成文档或发起部署，界面简洁如一线开发者平台。",
+      "cta": "进入控制台"
     },
     "repos": {
       "title": "仓库",
@@ -55,33 +57,62 @@
       "title": "从提交到产物发布"
     },
     "closing": {
-      "title": "准备好就可以开始",
-      "subtitle": "Webhook 只需配置一次——之后在控制台持续交付文档与部署。"
+      "title": "更快、更稳地交付",
+      "subtitle": "Webhook 一次配置——后续文档刷新与生产部署均在 RepoPilot 内闭环完成。"
     }
   },
   "footer": {
-    "line1": "© {{year}} RepoPilot · 注释即文档 · 一键可追溯部署",
-    "line2": "GitLab 集成 · WebSocket 实时日志 · Session 鉴权（MVP）"
+    "line1": "© {{year}} RepoPilot · 源码即文档 · 可追溯部署",
+    "line2": "GitLab 集成 · WebSocket 实时日志 · 企业级会话安全"
   },
   "pages": {
     "documentation": {
-      "title": "文档流水线",
-      "lede": "将代码注释解析为结构化在线文档：GitLab 触发增量更新，解析失败有告警但不阻断主流程（详见架构文档）。",
-      "contextRepo": "当前仓库：{{repo}}",
+      "title": "文档",
+      "lede": "RepoPilot 将 JavaDoc 与仓库元数据转化为持续更新的内部文档站。GitLab Webhook 触发增量重建；解析异常以告警形式呈现，不阻断主线路交付。",
+      "contextRepo": "仓库 · {{repo}}",
       "items": {
-        "webhook": "Webhook / 重建：",
-        "query": "查询：",
-        "session": "会话："
+        "webhook": "自动化",
+        "query": "查询接口",
+        "session": "鉴权"
       }
     },
     "deploy": {
-      "title": "一键部署",
-      "lede": "Web 端触发部署任务，后端 PTY 执行脚本并通过 WebSocket 推送日志；任务具备取消与超时保护。",
-      "contextRepo": "当前仓库：{{repo}}",
+      "title": "部署",
+      "lede": "一键将提交推进至预发或生产环境。任务由后端 PTY 执行器承载，WebSocket 实时输出日志，支持取消、超时与按 commit 维度的并发保护。",
+      "contextRepo": "仓库 · {{repo}}",
       "items": {
-        "trigger": "触发：",
-        "queryLog": "查询 / 日志：",
-        "cancel": "取消："
+        "trigger": "触发",
+        "queryLog": "状态与日志",
+        "cancel": "取消"
+      }
+    },
+    "dashboard": {
+      "kicker": "仓库",
+      "title": "控制台",
+      "lede": "已关联至 GitLab 的仓库将展示于此。点击卡片进入全屏详情，或使用快捷入口生成文档与部署。",
+      "back": "返回",
+      "openRepoDetails": "打开仓库详情：{{name}}",
+      "cardHint": "点击卡片（按钮除外）进入全屏详情。",
+      "repoBadge": {
+        "production": "生产"
+      },
+      "repoDescriptions": {
+        "acme-platform-api": "平台核心 API：用户、鉴权与组织能力。",
+        "billing-svc": "账单与订阅计费，含对账与审计追踪。",
+        "docs-hub": "文档门户与跨仓库检索聚合。"
+      },
+      "actions": {
+        "generateDocs": "生成文档",
+        "deploy": "部署"
+      },
+      "detail": {
+        "id": "仓库 ID",
+        "branch": "默认分支",
+        "owner": "负责团队",
+        "updatedAt": "仓库最近更新",
+        "lastDeploy": "最近部署",
+        "docsEndpoint": "已发布文档",
+        "summary": "说明"
       }
     }
   }

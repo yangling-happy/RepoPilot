@@ -9,6 +9,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { path: "/", labelKey: "header.home" },
+  { path: "/dashboard", labelKey: "header.dashboard" },
   { path: "/documentation", labelKey: "header.documentation" },
   { path: "/deploy", labelKey: "header.deploy" },
 ];

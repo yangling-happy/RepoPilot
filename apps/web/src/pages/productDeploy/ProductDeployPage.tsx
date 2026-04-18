@@ -1,4 +1,3 @@
-import { List, Space, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 
@@ -7,43 +6,61 @@ export function ProductDeployPage() {
   const [params] = useSearchParams();
   const repo = params.get("repo");
 
-  const items = [
-    <>
-      <Typography.Text strong>{t("pages.deploy.items.trigger")}</Typography.Text>{" "}
-      <Typography.Text code>POST /api/deploy/trigger</Typography.Text>
-    </>,
-    <>
-      <Typography.Text strong>{t("pages.deploy.items.queryLog")}</Typography.Text>{" "}
-      <Typography.Text code>GET /api/deploy/task</Typography.Text>
-      {"、"}
-      <Typography.Text code>GET /api/deploy/log</Typography.Text>
-    </>,
-    <>
-      <Typography.Text strong>{t("pages.deploy.items.cancel")}</Typography.Text>{" "}
-      <Typography.Text code>POST /api/deploy/cancel</Typography.Text>
-    </>,
+  const sections = [
+    {
+      label: t("pages.deploy.items.trigger"),
+      codes: ["POST /api/deploy/trigger"],
+    },
+    {
+      label: t("pages.deploy.items.queryLog"),
+      codes: ["GET /api/deploy/task", "GET /api/deploy/log"],
+    },
+    {
+      label: t("pages.deploy.items.cancel"),
+      codes: ["POST /api/deploy/cancel"],
+    },
   ];
 
   return (
-    <Space direction="vertical" size="large" style={{ width: "100%" }}>
-      <Typography.Title level={2} style={{ marginTop: 0 }}>
+    <div className="mx-auto max-w-3xl pb-20 pt-2">
+      <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">
         {t("pages.deploy.title")}
-      </Typography.Title>
+      </h1>
+
       {repo ? (
-        <Typography.Paragraph style={{ marginBottom: 0 }} type="secondary">
+        <div className="mt-5 inline-flex max-w-full rounded-full border border-neutral-200 bg-neutral-50 px-4 py-1.5 font-mono text-xs text-neutral-700 dark:border-white/15 dark:bg-white/[0.06] dark:text-neutral-200">
           {t("pages.deploy.contextRepo", { repo })}
-        </Typography.Paragraph>
+        </div>
       ) : null}
-      <Typography.Paragraph>{t("pages.deploy.lede")}</Typography.Paragraph>
-      <List
-        split={false}
-        dataSource={items}
-        renderItem={(item) => (
-          <List.Item style={{ paddingInline: 0 }}>
-            <Typography.Paragraph style={{ marginBottom: 0 }}>{item}</Typography.Paragraph>
-          </List.Item>
-        )}
-      />
-    </Space>
+
+      <p
+        className={`text-pretty text-base leading-relaxed text-neutral-600 dark:text-neutral-400 ${repo ? "mt-8" : "mt-6"}`}
+      >
+        {t("pages.deploy.lede")}
+      </p>
+
+      <div className="mt-12 space-y-3">
+        {sections.map((section) => (
+          <div
+            key={section.label}
+            className="rounded-2xl border border-neutral-200 bg-neutral-50/60 px-5 py-4 dark:border-white/10 dark:bg-white/[0.03]"
+          >
+            <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              {section.label}
+            </div>
+            <div className="mt-2 flex flex-col gap-2">
+              {section.codes.map((code) => (
+                <code
+                  key={code}
+                  className="block rounded-lg bg-white px-3 py-2 font-mono text-[13px] text-neutral-900 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.06)] dark:bg-black dark:text-neutral-100 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]"
+                >
+                  {code}
+                </code>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

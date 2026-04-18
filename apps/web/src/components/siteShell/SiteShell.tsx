@@ -1,7 +1,6 @@
 import { Layout, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation } from "react-router-dom";
-import { RouteBreadcrumb } from "../routeBreadcrumb/RouteBreadcrumb";
 import { SiteHeader } from "../siteHeader/SiteHeader";
 
 export function SiteShell() {
@@ -16,10 +15,9 @@ export function SiteShell() {
         className={
           isHome
             ? "w-full flex-1 p-0"
-            : "mx-auto w-full max-w-[1120px] flex-1 px-6 py-8 md:px-12"
+            : "mx-auto w-full max-w-6xl flex-1 px-6 py-10 md:px-10"
         }
       >
-        {!isHome ? <RouteBreadcrumb /> : null}
         <Outlet />
       </Layout.Content>
       <Layout.Footer className="border-t border-neutral-200 bg-white px-6 py-10 text-center text-xs leading-relaxed text-neutral-500 dark:border-white/10 dark:bg-black dark:text-neutral-400">

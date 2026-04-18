@@ -1,29 +1,32 @@
-import { FileTextOutlined, RocketOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { HeroScene } from "./HeroScene";
-import { DEMO_REPOS } from "./repoMock";
 
 const PIPELINE_STEPS = [1, 2, 3, 4, 5] as const;
+
+const sectionCard =
+  "rounded-2xl border border-neutral-200 bg-white p-6 shadow-[0_1px_0_rgba(0,0,0,0.04)] dark:border-white/12 dark:bg-black";
 
 export function HomePageView() {
   const { t } = useTranslation();
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-white text-neutral-950 dark:bg-black dark:text-neutral-50">
-      {/* Hero */}
-      <section className="border-b border-neutral-200 dark:border-white/10">
-        <div className="mx-auto max-w-[1200px] px-6 py-14 md:px-8 md:py-20">
-          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+    <div className="min-h-[calc(100vh-64px)] bg-neutral-50 text-neutral-950 dark:bg-neutral-950 dark:text-neutral-50">
+      <div className="mx-auto max-w-[1200px] space-y-4 px-6 py-8 md:space-y-5 md:px-8 md:py-10">
+        {/* Hero */}
+        <section
+          className={`${sectionCard} opacity-0 animate-home-rise [animation-delay:0ms]`}
+        >
+          <div className="grid items-center gap-8 lg:grid-cols-2 lg:gap-12">
             <div className="max-w-xl">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
                 {t("home.hero.eyebrow")}
               </p>
-              <h1 className="mt-5 text-balance text-4xl font-semibold tracking-tight md:text-5xl md:leading-[1.08]">
+              <h1 className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl md:leading-[1.08]">
                 {t("home.hero.titleLine1")}
                 <span className="block">{t("home.hero.titleLine2")}</span>
               </h1>
-              <p className="mt-5 text-pretty text-base leading-relaxed text-neutral-600 dark:text-neutral-400 md:text-lg">
+              <p className="mt-4 text-pretty text-base leading-relaxed text-neutral-600 dark:text-neutral-400 md:text-lg">
                 {t("home.hero.subtitle")}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
@@ -35,110 +38,72 @@ export function HomePageView() {
                 </Link>
                 <Link
                   to="/deploy"
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-transparent px-6 text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-neutral-50 dark:border-white/25 dark:text-white dark:hover:border-white dark:hover:bg-white/5"
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-neutral-50 px-6 text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-white dark:border-white/25 dark:bg-transparent dark:text-white dark:hover:border-white dark:hover:bg-white/5"
                 >
                   {t("home.cta.deploy")}
                 </Link>
               </div>
             </div>
 
-            <HeroScene />
-          </div>
-        </div>
-      </section>
-
-      {/* Repo grid */}
-      <section className="border-b border-neutral-200 py-14 dark:border-white/10 md:py-16">
-        <div className="mx-auto max-w-[1200px] px-6 md:px-8">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
-                {t("home.repos.title")}
-              </h2>
-              <p className="mt-2 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400 md:text-base">
-                {t("home.repos.subtitle")}
-              </p>
+            <div className="opacity-0 animate-home-rise [animation-delay:120ms]">
+              <HeroScene />
             </div>
           </div>
+        </section>
 
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-            {DEMO_REPOS.map((repo) => (
-              <article
-                key={repo.id}
-                className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] transition hover:border-neutral-950 hover:shadow-[0_24px_80px_-48px_rgba(0,0,0,0.35)] dark:border-white/12 dark:bg-black dark:shadow-none dark:hover:border-white dark:hover:shadow-[0_24px_80px_-48px_rgba(255,255,255,0.12)]"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="truncate font-mono text-[15px] font-medium tracking-tight">
-                        {repo.name}
-                      </span>
-                      <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:border-white/20 dark:text-neutral-400">
-                        {t(`home.repos.visibility.${repo.visibility}`)}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-                      {repo.stack}
-                    </p>
-                    <p className="mt-3 text-xs text-neutral-400 dark:text-neutral-500">
-                      {t("home.repos.lastUpdated", {
-                        time: t(`home.repos.times.${repo.timeKey}`),
-                      })}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <Link
-                    to={`/documentation?repo=${encodeURIComponent(repo.id)}`}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-neutral-50 dark:border-white/20 dark:bg-black dark:text-white dark:hover:border-white dark:hover:bg-white/5"
-                  >
-                    <FileTextOutlined />
-                    {t("home.repos.generateDocs")}
-                  </Link>
-                  <Link
-                    to={`/deploy?repo=${encodeURIComponent(repo.id)}`}
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-neutral-950 text-sm font-medium text-white transition hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
-                  >
-                    <RocketOutlined />
-                    {t("home.repos.deploy")}
-                  </Link>
-                </div>
-              </article>
-            ))}
+        {/* Dashboard */}
+        <section
+          className={`${sectionCard} opacity-0 animate-home-rise [animation-delay:90ms]`}
+        >
+          <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+            <div className="max-w-xl">
+              <h2 className="text-xl font-semibold tracking-tight md:text-2xl">
+                {t("home.dashboardEntry.title")}
+              </h2>
+              <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400 md:text-base">
+                {t("home.dashboardEntry.subtitle")}
+              </p>
+            </div>
+            <Link
+              to="/dashboard"
+              className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-950 px-6 text-sm font-medium text-white transition hover:bg-neutral-800 dark:border-white/15 dark:bg-white dark:text-black dark:hover:bg-neutral-200 md:rounded-full"
+            >
+              {t("home.dashboardEntry.cta")}
+            </Link>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Pipeline strip */}
-      <section className="border-b border-neutral-200 bg-neutral-50 py-12 dark:border-white/10 dark:bg-neutral-950">
-        <div className="mx-auto max-w-[1200px] px-6 md:px-8">
+        {/* Pipeline */}
+        <section
+          className={`${sectionCard} opacity-0 animate-home-rise [animation-delay:180ms]`}
+        >
           <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
             {t("home.pipelineStrip.kicker")}
           </p>
-          <h3 className="mt-3 text-xl font-semibold tracking-tight md:text-2xl">
+          <h3 className="mt-2 text-lg font-semibold tracking-tight md:text-xl">
             {t("home.pipelineStrip.title")}
           </h3>
-          <div className="mt-8 flex flex-wrap gap-2">
-            {PIPELINE_STEPS.map((step) => (
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+            {PIPELINE_STEPS.map((step, index) => (
               <div
                 key={step}
-                className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-medium text-neutral-800 shadow-sm dark:border-white/15 dark:bg-black dark:text-neutral-100"
+                style={{ animationDelay: `${260 + index * 55}ms` }}
+                className="flex aspect-square max-h-[100px] items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 px-2 text-center text-[11px] font-medium leading-snug text-neutral-800 opacity-0 shadow-sm animate-home-rise dark:border-white/12 dark:bg-white/[0.04] dark:text-neutral-100 md:text-xs"
               >
                 {t(`home.pipeline.step${step}`)}
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Closing CTA */}
-      <section className="py-16 md:py-20">
-        <div className="mx-auto max-w-[720px] px-6 text-center md:px-8">
-          <h3 className="text-2xl font-semibold tracking-tight md:text-3xl">
+        {/* Closing */}
+        <section
+          className={`${sectionCard} opacity-0 animate-home-rise [animation-delay:260ms] text-center`}
+        >
+          <h3 className="text-xl font-semibold tracking-tight md:text-2xl">
             {t("home.closing.title")}
           </h3>
-          <p className="mt-3 text-neutral-600 dark:text-neutral-400">
+          <p className="mx-auto mt-3 max-w-lg text-sm text-neutral-600 dark:text-neutral-400 md:text-base">
             {t("home.closing.subtitle")}
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -150,13 +115,13 @@ export function HomePageView() {
             </Link>
             <Link
               to="/deploy"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 px-6 text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-neutral-50 dark:border-white/25 dark:text-white dark:hover:border-white dark:hover:bg-white/5"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-neutral-50 px-6 text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-white dark:border-white/25 dark:bg-transparent dark:text-white dark:hover:border-white dark:hover:bg-white/5"
             >
               {t("home.cta.deploy")}
             </Link>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
