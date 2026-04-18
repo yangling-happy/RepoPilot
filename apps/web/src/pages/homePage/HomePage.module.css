@@ -1,0 +1,168 @@
+.homePage {
+  position: relative;
+  overflow-x: hidden;
+}
+
+.pipelineStep {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.pipelineStep::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.pipelineStep:hover::before {
+  left: 100%;
+}
+
+.pipelineStep:hover {
+  border-color: currentColor;
+  transform: translateX(4px);
+}
+
+.featureCard {
+  position: relative;
+  overflow: hidden;
+}
+
+.featureCard::before {
+  content: "";
+  position: absolute;
+  top: -100%;
+  right: -100%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.1) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+  animation: scrawlPattern 0.5s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes scrawlPattern {
+  from {
+    top: -100%;
+    right: -100%;
+    opacity: 0;
+  }
+  to {
+    top: 0;
+    right: 0;
+    opacity: 1;
+  }
+}
+
+.featureCard:hover::before {
+  animation: scrawlPattern 0.5s ease forwards;
+}
+
+.cardLink {
+  transition: all 0.3s ease;
+}
+
+.cardLink:hover {
+  transform: translateX(4px);
+}
+
+.ctaButton {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ctaButton::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transform: translate(-50%, -50%);
+  transition:
+    width 0.6s,
+    height 0.6s;
+}
+
+.ctaButton:hover::after {
+  width: 300px;
+  height: 300px;
+}
+
+.secondaryButton {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.secondaryButton::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: currentColor;
+  opacity: 0.1;
+  transition: left 0.3s ease;
+  z-index: -1;
+}
+
+.secondaryButton:hover::before {
+  left: 0;
+}
+
+.secondaryButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Scrawl decoration animations */
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ctaButton,
+  .secondaryButton {
+    width: 100%;
+  }
+
+  .featureCard {
+    margin-bottom: 16px;
+  }
+}

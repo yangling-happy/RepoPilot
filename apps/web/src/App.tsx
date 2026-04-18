@@ -1,12 +1,22 @@
-import React from 'react'
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { SiteShell } from "./components/siteShell/SiteShell";
+import { HomePage } from "./pages/homePage/HomePage";
+import { ProductDeployPage } from "./pages/productDeploy/ProductDeployPage";
+import { ProductDocsPage } from "./pages/productDocs/ProductDocsPage";
 
 function App() {
   return (
-    <div>
-      <h1>RepoPilot</h1>
-      <p>代码注释自动转文档和一键部署打包平台</p>
-    </div>
-  )
+    <BrowserRouter>
+      <Routes>
+        <Route element={<SiteShell />}>
+          <Route index element={<HomePage />} />
+          <Route path="/documentation" element={<ProductDocsPage />} />
+          <Route path="/deploy" element={<ProductDeployPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;

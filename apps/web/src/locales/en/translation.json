@@ -1,0 +1,83 @@
+{
+  "brand": {
+    "name": "RepoPilot"
+  },
+  "header": {
+    "home": "Home",
+    "documentation": "Docs Pipeline",
+    "deploy": "Deploy",
+    "language": "Language",
+    "theme": "Theme",
+    "github": "Open on GitHub"
+  },
+  "breadcrumb": {
+    "home": "Home",
+    "documentation": "Documentation pipeline",
+    "deploy": "One-click deploy"
+  },
+  "home": {
+    "hero": {
+      "eyebrow": "RepoPilot · Ship with clarity",
+      "titleLine1": "Keep annotations in code,",
+      "titleLine2": "keep docs and deployments on the platform.",
+      "subtitle": "For enterprise R&D: refresh docs on every push; trigger deploys from the web with traceable, interruptible runs and live logs."
+    },
+    "cta": {
+      "documentation": "Documentation pipeline",
+      "deploy": "Deploy"
+    },
+    "pipeline": {
+      "title": "End-to-end flow (illustrative)",
+      "step1": "GitLab Push / Webhook",
+      "step2": "Incremental parsing · JavaDoc",
+      "step3": "Structured docs persisted",
+      "step4": "Scripts · PTY",
+      "step5": "Live logs · Task status"
+    },
+    "capabilities": {
+      "title": "Two core capabilities",
+      "lede": "MVP focuses on “comments to docs” and “one-click deploy”: GitLab group fixed server-side; token in session; dedupe and timeouts enforced in the backend."
+    },
+    "cards": {
+      "doc": {
+        "label": "Capability A",
+        "title": "Java comments to online docs",
+        "desc": "Pull incremental Java changes from GitLab, parse JavaDoc, persist structured records; traceable by project, branch, file, and commit."
+      },
+      "deploy": {
+        "label": "Capability B",
+        "title": "One-click build & deploy",
+        "desc": "Backend runs script chains via PTY; logs stream over WebSocket; only one RUNNING task per commit at a time."
+      },
+      "platform": {
+        "label": "Platform",
+        "title": "Vercel-like UX, enterprise constraints",
+        "desc": "Repo linking and build-log feedback inspired by Vercel; auth via session—no standalone login UI in this phase."
+      }
+    }
+  },
+  "footer": {
+    "line1": "© {{year}} RepoPilot · Docs from comments · Traceable deploys",
+    "line2": "GitLab · WebSocket logs · Session auth (MVP)"
+  },
+  "pages": {
+    "documentation": {
+      "title": "Documentation pipeline",
+      "lede": "Turn source comments into structured online docs: GitLab triggers incremental updates; parse failures alert without blocking the main flow.",
+      "items": {
+        "webhook": "Webhook / rebuild:",
+        "query": "Query:",
+        "session": "Session:"
+      }
+    },
+    "deploy": {
+      "title": "One-click deploy",
+      "lede": "Trigger deploy tasks from the web; backend executes via PTY and streams logs over WebSocket; cancel and timeouts supported.",
+      "items": {
+        "trigger": "Trigger:",
+        "queryLog": "Task / logs:",
+        "cancel": "Cancel:"
+      }
+    }
+  }
+}

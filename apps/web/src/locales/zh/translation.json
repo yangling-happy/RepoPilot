@@ -1,0 +1,83 @@
+{
+  "brand": {
+    "name": "RepoPilot"
+  },
+  "header": {
+    "home": "首页",
+    "documentation": "文档流水线",
+    "deploy": "一键部署",
+    "language": "语言",
+    "theme": "颜色模式",
+    "github": "在 GitHub 上打开"
+  },
+  "breadcrumb": {
+    "home": "首页",
+    "documentation": "文档流水线",
+    "deploy": "一键部署"
+  },
+  "home": {
+    "hero": {
+      "eyebrow": "RepoPilot · 研发发布协同",
+      "titleLine1": "把注释留在代码里，",
+      "titleLine2": "把文档与部署留在平台上",
+      "subtitle": "面向企业研发场景：提交即文档更新；一键触发部署并通过 WebSocket 回放实时日志，任务状态可追踪、可中断。"
+    },
+    "cta": {
+      "documentation": "文档流水线",
+      "deploy": "一键部署"
+    },
+    "pipeline": {
+      "title": "端到端链路（示意）",
+      "step1": "GitLab Push / Webhook",
+      "step2": "增量解析 · JavaDoc",
+      "step3": "结构化文档入库",
+      "step4": "触发脚本 · PTY",
+      "step5": "实时日志 · 任务状态"
+    },
+    "capabilities": {
+      "title": "两项核心能力",
+      "lede": "MVP 聚焦「注释即文档」与「一键部署」的简单可用版本：后端固定 GitLab 组；Token 写入 Session；部署防重与超时保护在后端落地。"
+    },
+    "cards": {
+      "doc": {
+        "label": "Capability A",
+        "title": "代码注释自动转在线文档",
+        "desc": "基于 GitLab 增量变更拉取 Java 文件，解析 JavaDoc 结构化入库；支持按项目、分支、文件与 commit 追溯。"
+      },
+      "deploy": {
+        "label": "Capability B",
+        "title": "一键部署打包",
+        "desc": "触发部署任务后由后端 PTY 执行脚本链，日志经 WebSocket 实时推送；同一 commit 同时仅允许一个 RUNNING 任务。"
+      },
+      "platform": {
+        "label": "Platform",
+        "title": "交互参考 Vercel，落地在企业内网约束",
+        "desc": "仓库关联、构建日志的视觉反馈借鉴 Vercel；鉴权采用 Session，本阶段不提供登录界面。"
+      }
+    }
+  },
+  "footer": {
+    "line1": "© {{year}} RepoPilot · 注释即文档 · 一键可追溯部署",
+    "line2": "GitLab 集成 · WebSocket 实时日志 · Session 鉴权（MVP）"
+  },
+  "pages": {
+    "documentation": {
+      "title": "文档流水线",
+      "lede": "将代码注释解析为结构化在线文档：GitLab 触发增量更新，解析失败有告警但不阻断主流程（详见架构文档）。",
+      "items": {
+        "webhook": "Webhook / 重建：",
+        "query": "查询：",
+        "session": "会话："
+      }
+    },
+    "deploy": {
+      "title": "一键部署",
+      "lede": "Web 端触发部署任务，后端 PTY 执行脚本并通过 WebSocket 推送日志；任务具备取消与超时保护。",
+      "items": {
+        "trigger": "触发：",
+        "queryLog": "查询 / 日志：",
+        "cancel": "取消："
+      }
+    }
+  }
+}
