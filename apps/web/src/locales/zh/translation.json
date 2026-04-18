@@ -17,7 +17,7 @@
       "eyebrow": "RepoPilot · 研发发布协同",
       "titleLine1": "让每个仓库都能",
       "titleLine2": "生成文档并一键部署。",
-      "subtitle": "面向企业工程团队：提交即文档更新；在控制台一键部署；通过 WebSocket 实时回放日志，任务可追踪、可中断；与 GitLab 原生流程深度对齐。"
+      "subtitle": "提交即部署，追踪即日志——为工程团队打造的 GitLab 原生自动化平台。"
     },
     "cta": {
       "documentation": "文档",
