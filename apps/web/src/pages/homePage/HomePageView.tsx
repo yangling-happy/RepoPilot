@@ -1,374 +1,160 @@
-import { ArrowRightOutlined } from "@ant-design/icons";
-import { Button, Col, Flex, Row, Space, Typography, theme } from "antd";
-import { useEffect, useState, type CSSProperties } from "react";
-import { useTranslation } from "react-i18next";
+import { FileTextOutlined, RocketOutlined } from "@ant-design/icons";
 import { Link } from "react-router-dom";
-import styles from "./HomePage.module.css";
+import { useTranslation } from "react-i18next";
+import { HeroScene } from "./HeroScene";
+import { DEMO_REPOS } from "./repoMock";
+
+const PIPELINE_STEPS = [1, 2, 3, 4, 5] as const;
 
 export function HomePageView() {
   const { t } = useTranslation();
-  const { token } = theme.useToken();
-  const [scrollY, setScrollY] = useState(0);
-  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
-
-  useEffect(() => {
-    const handleScroll = () => setScrollY(window.scrollY);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
-
-  const containerStyle: CSSProperties = {
-    width: "100%",
-    maxWidth: 1200,
-    margin: "0 auto",
-    padding: "0 24px",
-  };
-
-  const scrawlDecorStyle: CSSProperties = {
-    position: "absolute",
-    opacity: 0.1,
-    pointerEvents: "none",
-    userSelect: "none",
-  };
-
-  const cardStyle = (isHovered: boolean): CSSProperties => ({
-    border: `2px solid ${token.colorTextBase}`,
-    borderRadius: 12,
-    padding: 32,
-    height: "100%",
-    transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-    transform: isHovered ? "translateY(-8px) scale(1.02)" : "translateY(0)",
-    backgroundColor: isHovered ? token.colorBgBase : "transparent",
-    boxShadow: isHovered ? `0 12px 24px rgba(0, 0, 0, 0.15)` : "none",
-    cursor: "pointer",
-  });
-
-  const buttonStyle: CSSProperties = {
-    height: 48,
-    fontSize: 16,
-    borderRadius: 8,
-    fontWeight: 600,
-  };
 
   return (
-    <div
-      className={styles.homePage}
-      style={{ 
-        backgroundColor: token.colorBgBase,
-        minHeight: "100vh", // 铺满视口高度
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Hero Section - 添加 flex 占据剩余空间 */}
-      <section
-        style={{
-          position: "relative",
-          paddingTop: 80,
-          paddingBottom: 60,
-          overflow: "hidden",
-          flex: 1, // 让 Hero 区域撑满剩余空间
-          display: "flex",
-          alignItems: "center", // 垂直居中内容
-        }}
-      >
-        <svg
-          style={{
-            ...scrawlDecorStyle,
-            top: -50,
-            right: -100,
-            width: 300,
-            height: 300,
-            transform: `translateY(${scrollY * 0.3}px)`,
-          }}
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 64 64"
-          fill="none"
-          stroke={token.colorTextBase}
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M32 8 C32 8 16 24 16 40 C16 52 24 56 32 56 C40 56 48 52 48 40 C48 24 32 8 32 8 Z" />
-          <circle cx="32" cy="36" r="6" />
-          <path d="M16 40 L8 52 L16 48 Z" />
-          <path d="M48 40 L56 52 L48 48 Z" />
-          <path d="M28 56 L32 62 L36 56" />
-        </svg>
-
-        <div style={containerStyle}>
-          <Space direction="vertical" size={32} style={{ width: "100%" }}>
-            <Space direction="vertical" size={16}>
-              <Typography.Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  color: token.colorTextSecondary,
-                }}
-              >
+    <div className="min-h-[calc(100vh-64px)] bg-white text-neutral-950 dark:bg-black dark:text-neutral-50">
+      {/* Hero */}
+      <section className="border-b border-neutral-200 dark:border-white/10">
+        <div className="mx-auto max-w-[1200px] px-6 py-14 md:px-8 md:py-20">
+          <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+            <div className="max-w-xl">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
                 {t("home.hero.eyebrow")}
-              </Typography.Text>
-            </Space>
-
-            <Typography.Title
-              level={1}
-              style={{
-                margin: 0,
-                letterSpacing: "-0.03em",
-                fontSize: 48,
-                lineHeight: 1.2,
-                fontWeight: 800,
-              }}
-            >
-              {t("home.hero.titleLine1")}
-              <br />
-              {t("home.hero.titleLine2")}
-            </Typography.Title>
-
-            <Typography.Paragraph
-              style={{
-                marginBottom: 0,
-                fontSize: 18,
-                maxWidth: 640,
-                lineHeight: 1.6,
-                color: token.colorTextSecondary,
-              }}
-            >
-              {t("home.hero.subtitle")}
-            </Typography.Paragraph>
-
-            <Space wrap size={16} style={{ marginTop: 16 }}>
-              <Link to="/documentation">
-                <Button
-                  type="primary"
-                  size="large"
-                  style={buttonStyle}
-                  icon={<ArrowRightOutlined />}
-                  iconPosition="end"
-                  className={styles.ctaButton}
+              </p>
+              <h1 className="mt-5 text-balance text-4xl font-semibold tracking-tight md:text-5xl md:leading-[1.08]">
+                {t("home.hero.titleLine1")}
+                <span className="block">{t("home.hero.titleLine2")}</span>
+              </h1>
+              <p className="mt-5 text-pretty text-base leading-relaxed text-neutral-600 dark:text-neutral-400 md:text-lg">
+                {t("home.hero.subtitle")}
+              </p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  to="/documentation"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
                 >
                   {t("home.cta.documentation")}
-                </Button>
-              </Link>
-              <Link to="/deploy">
-                <Button
-                  size="large"
-                  style={{
-                    ...buttonStyle,
-                    borderColor: token.colorTextBase,
-                    color: token.colorTextBase,
-                  }}
-                  className={styles.secondaryButton}
+                </Link>
+                <Link
+                  to="/deploy"
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 bg-transparent px-6 text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-neutral-50 dark:border-white/25 dark:text-white dark:hover:border-white dark:hover:bg-white/5"
                 >
                   {t("home.cta.deploy")}
-                </Button>
-              </Link>
-            </Space>
-          </Space>
+                </Link>
+              </div>
+            </div>
+
+            <HeroScene />
+          </div>
         </div>
       </section>
 
-      {/* Pipeline Section */}
-      <section
-        style={{
-          paddingTop: 60,
-          paddingBottom: 60,
-          backgroundColor: token.colorBgContainer,
-          borderTop: `1px solid ${token.colorBorder}`,
-          borderBottom: `1px solid ${token.colorBorder}`,
-        }}
-      >
-        <div style={containerStyle}>
-          <Space direction="vertical" size={32} style={{ width: "100%" }}>
+      {/* Repo grid */}
+      <section className="border-b border-neutral-200 py-14 dark:border-white/10 md:py-16">
+        <div className="mx-auto max-w-[1200px] px-6 md:px-8">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <Typography.Title
-                level={3}
-                style={{ marginTop: 0, marginBottom: 12 }}
+              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
+                {t("home.repos.title")}
+              </h2>
+              <p className="mt-2 max-w-2xl text-sm text-neutral-600 dark:text-neutral-400 md:text-base">
+                {t("home.repos.subtitle")}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
+            {DEMO_REPOS.map((repo) => (
+              <article
+                key={repo.id}
+                className="group relative overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] transition hover:border-neutral-950 hover:shadow-[0_24px_80px_-48px_rgba(0,0,0,0.35)] dark:border-white/12 dark:bg-black dark:shadow-none dark:hover:border-white dark:hover:shadow-[0_24px_80px_-48px_rgba(255,255,255,0.12)]"
               >
-                {t("home.pipeline.title")}
-              </Typography.Title>
-              <Typography.Text type="secondary">
-                {t("home.capabilities.lede")}
-              </Typography.Text>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                gap: 12,
-              }}
-            >
-              {[1, 2, 3, 4, 5].map((step) => (
-                <div
-                  key={`step-${step}`}
-                  className={styles.pipelineStep}
-                  style={{
-                    padding: 16,
-                    border: `1px dashed ${token.colorBorder}`,
-                    borderRadius: 8,
-                    textAlign: "center",
-                    transition: "all 0.3s ease",
-                  }}
-                >
-                  <Typography.Text strong>
-                    {t(`home.pipeline.step${step}`)}
-                  </Typography.Text>
-                </div>
-              ))}
-            </div>
-          </Space>
-        </div>
-      </section>
-
-      {/* Capabilities Section */}
-      <section
-        style={{ paddingTop: 80, paddingBottom: 80, position: "relative" }}
-      >
-        <svg
-          style={{
-            ...scrawlDecorStyle,
-            bottom: -100,
-            left: -150,
-            width: 400,
-            height: 400,
-            transform: `translateY(${(scrollY - 800) * 0.2}px)`,
-          }}
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 64 64"
-          fill="none"
-          stroke={token.colorTextBase}
-          strokeWidth="4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M32 8 C32 8 16 24 16 40 C16 52 24 56 32 56 C40 56 48 52 48 40 C48 24 32 8 32 8 Z" />
-          <circle cx="32" cy="36" r="6" />
-          <path d="M16 40 L8 52 L16 48 Z" />
-          <path d="M48 40 L56 52 L48 48 Z" />
-          <path d="M28 56 L32 62 L36 56" />
-        </svg>
-
-        <div style={containerStyle}>
-          <Space direction="vertical" size={48} style={{ width: "100%" }}>
-            <div>
-              <Typography.Title
-                level={2}
-                style={{ marginTop: 0, marginBottom: 16 }}
-              >
-                {t("home.capabilities.title")}
-              </Typography.Title>
-            </div>
-
-            <Row gutter={[32, 32]}>
-              {(["doc", "deploy", "platform"] as const).map((cardType) => (
-                <Col key={cardType} xs={24} md={8}>
-                  <div
-                    className={styles.featureCard}
-                    style={cardStyle(hoveredCard === cardType)}
-                    onMouseEnter={() => setHoveredCard(cardType)}
-                    onMouseLeave={() => setHoveredCard(null)}
-                  >
-                    <Flex vertical gap={16} style={{ height: "100%" }}>
-                      <Typography.Text
-                        strong
-                        style={{
-                          letterSpacing: "0.06em",
-                          textTransform: "uppercase",
-                          fontSize: 11,
-                          color: token.colorTextSecondary,
-                        }}
-                      >
-                        {t(`home.cards.${cardType}.label`)}
-                      </Typography.Text>
-
-                      <div style={{ flex: 1 }}>
-                        <Typography.Title
-                          level={4}
-                          style={{ marginTop: 0, marginBottom: 12 }}
-                        >
-                          {t(`home.cards.${cardType}.title`)}
-                        </Typography.Title>
-                        <Typography.Paragraph
-                          style={{ marginBottom: 0, fontSize: 14 }}
-                        >
-                          {t(`home.cards.${cardType}.desc`)}
-                        </Typography.Paragraph>
-                      </div>
-
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<ArrowRightOutlined />}
-                        iconPosition="end"
-                        style={{
-                          alignSelf: "flex-start",
-                          padding: 0,
-                          fontWeight: 600,
-                          marginTop: 16,
-                        }}
-                        className={styles.cardLink}
-                      >
-                        Learn more
-                      </Button>
-                    </Flex>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-mono text-[15px] font-medium tracking-tight">
+                        {repo.name}
+                      </span>
+                      <span className="rounded-full border border-neutral-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:border-white/20 dark:text-neutral-400">
+                        {t(`home.repos.visibility.${repo.visibility}`)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+                      {repo.stack}
+                    </p>
+                    <p className="mt-3 text-xs text-neutral-400 dark:text-neutral-500">
+                      {t("home.repos.lastUpdated", {
+                        time: t(`home.repos.times.${repo.timeKey}`),
+                      })}
+                    </p>
                   </div>
-                </Col>
-              ))}
-            </Row>
-          </Space>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <Link
+                    to={`/documentation?repo=${encodeURIComponent(repo.id)}`}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-neutral-200 bg-white text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-neutral-50 dark:border-white/20 dark:bg-black dark:text-white dark:hover:border-white dark:hover:bg-white/5"
+                  >
+                    <FileTextOutlined />
+                    {t("home.repos.generateDocs")}
+                  </Link>
+                  <Link
+                    to={`/deploy?repo=${encodeURIComponent(repo.id)}`}
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-neutral-950 text-sm font-medium text-white transition hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+                  >
+                    <RocketOutlined />
+                    {t("home.repos.deploy")}
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section
-        style={{
-          paddingTop: 60,
-          paddingBottom: 60,
-          backgroundColor: token.colorBgContainer,
-          borderTop: `1px solid ${token.colorBorder}`,
-          textAlign: "center",
-        }}
-      >
-        <div style={containerStyle}>
-          <Space direction="vertical" size={24}>
-            <Typography.Title
-              level={3}
-              style={{ marginTop: 0, marginBottom: 0 }}
+      {/* Pipeline strip */}
+      <section className="border-b border-neutral-200 bg-neutral-50 py-12 dark:border-white/10 dark:bg-neutral-950">
+        <div className="mx-auto max-w-[1200px] px-6 md:px-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-neutral-500 dark:text-neutral-400">
+            {t("home.pipelineStrip.kicker")}
+          </p>
+          <h3 className="mt-3 text-xl font-semibold tracking-tight md:text-2xl">
+            {t("home.pipelineStrip.title")}
+          </h3>
+          <div className="mt-8 flex flex-wrap gap-2">
+            {PIPELINE_STEPS.map((step) => (
+              <div
+                key={step}
+                className="rounded-full border border-neutral-200 bg-white px-4 py-2 text-xs font-medium text-neutral-800 shadow-sm dark:border-white/15 dark:bg-black dark:text-neutral-100"
+              >
+                {t(`home.pipeline.step${step}`)}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Closing CTA */}
+      <section className="py-16 md:py-20">
+        <div className="mx-auto max-w-[720px] px-6 text-center md:px-8">
+          <h3 className="text-2xl font-semibold tracking-tight md:text-3xl">
+            {t("home.closing.title")}
+          </h3>
+          <p className="mt-3 text-neutral-600 dark:text-neutral-400">
+            {t("home.closing.subtitle")}
+          </p>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link
+              to="/documentation"
+              className="inline-flex h-11 items-center justify-center rounded-full bg-neutral-950 px-6 text-sm font-medium text-white transition hover:bg-neutral-800 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
             >
-              Ready to get started?
-            </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 16 }}>
-              Transform your documentation and deployment workflow
-            </Typography.Text>
-            <Space wrap style={{ justifyContent: "center" }}>
-              <Link to="/documentation">
-                <Button
-                  type="primary"
-                  size="large"
-                  style={buttonStyle}
-                  className={styles.ctaButton}
-                >
-                  {t("home.cta.documentation")}
-                </Button>
-              </Link>
-              <Link to="/deploy">
-                <Button
-                  size="large"
-                  style={{
-                    ...buttonStyle,
-                    borderColor: token.colorTextBase,
-                    color: token.colorTextBase,
-                  }}
-                  className={styles.secondaryButton}
-                >
-                  {t("home.cta.deploy")}
-                </Button>
-              </Link>
-            </Space>
-          </Space>
+              {t("home.cta.documentation")}
+            </Link>
+            <Link
+              to="/deploy"
+              className="inline-flex h-11 items-center justify-center rounded-full border border-neutral-300 px-6 text-sm font-medium text-neutral-900 transition hover:border-neutral-950 hover:bg-neutral-50 dark:border-white/25 dark:text-white dark:hover:border-white dark:hover:bg-white/5"
+            >
+              {t("home.cta.deploy")}
+            </Link>
+          </div>
         </div>
       </section>
     </div>

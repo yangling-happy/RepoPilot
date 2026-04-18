@@ -4,7 +4,7 @@
   },
   "header": {
     "home": "Home",
-    "documentation": "Docs Pipeline",
+    "documentation": "Docs",
     "deploy": "Deploy",
     "language": "Language",
     "theme": "Theme",
@@ -18,42 +18,45 @@
   "home": {
     "hero": {
       "eyebrow": "RepoPilot · Ship with clarity",
-      "titleLine1": "Keep annotations in code,",
-      "titleLine2": "keep docs and deployments on the platform.",
-      "subtitle": "For enterprise R&D: refresh docs on every push; trigger deploys from the web with traceable, interruptible runs and live logs."
+      "titleLine1": "Documentation and deploys,",
+      "titleLine2": "aligned with every repository.",
+      "subtitle": "Enterprise R&D workflow: refresh docs on every push; trigger deploys from the web with traceable, interruptible runs and live logs."
     },
     "cta": {
       "documentation": "Documentation pipeline",
       "deploy": "Deploy"
     },
-    "pipeline": {
-      "title": "End-to-end flow (illustrative)",
-      "step1": "GitLab Push / Webhook",
-      "step2": "Incremental parsing · JavaDoc",
-      "step3": "Structured docs persisted",
-      "step4": "Scripts · PTY",
-      "step5": "Live logs · Task status"
-    },
-    "capabilities": {
-      "title": "Two core capabilities",
-      "lede": "MVP focuses on “comments to docs” and “one-click deploy”: GitLab group fixed server-side; token in session; dedupe and timeouts enforced in the backend."
-    },
-    "cards": {
-      "doc": {
-        "label": "Capability A",
-        "title": "Java comments to online docs",
-        "desc": "Pull incremental Java changes from GitLab, parse JavaDoc, persist structured records; traceable by project, branch, file, and commit."
+    "repos": {
+      "title": "Repositories",
+      "subtitle": "Pick a repository to generate structured docs or ship a deployment—same flow as modern hosting dashboards, tuned for your GitLab server.",
+      "generateDocs": "Generate docs",
+      "deploy": "Deploy",
+      "lastUpdated": "Updated {{time}}",
+      "visibility": {
+        "private": "Private",
+        "internal": "Internal"
       },
-      "deploy": {
-        "label": "Capability B",
-        "title": "One-click build & deploy",
-        "desc": "Backend runs script chains via PTY; logs stream over WebSocket; only one RUNNING task per commit at a time."
-      },
-      "platform": {
-        "label": "Platform",
-        "title": "Vercel-like UX, enterprise constraints",
-        "desc": "Repo linking and build-log feedback inspired by Vercel; auth via session—no standalone login UI in this phase."
+      "times": {
+        "2h": "2h ago",
+        "5h": "5h ago",
+        "1d": "Yesterday",
+        "3d": "3 days ago"
       }
+    },
+    "pipeline": {
+      "step1": "GitLab push · webhook",
+      "step2": "Incremental JavaDoc parse",
+      "step3": "Structured docs persisted",
+      "step4": "Scripts · PTY execution",
+      "step5": "Live logs · task status"
+    },
+    "pipelineStrip": {
+      "kicker": "End-to-end",
+      "title": "From commit to published artifacts"
+    },
+    "closing": {
+      "title": "Ready when your team is",
+      "subtitle": "Wire up webhooks once—then ship docs and deployments from the dashboard."
     }
   },
   "footer": {
@@ -64,6 +67,7 @@
     "documentation": {
       "title": "Documentation pipeline",
       "lede": "Turn source comments into structured online docs: GitLab triggers incremental updates; parse failures alert without blocking the main flow.",
+      "contextRepo": "Repository: {{repo}}",
       "items": {
         "webhook": "Webhook / rebuild:",
         "query": "Query:",
@@ -73,6 +77,7 @@
     "deploy": {
       "title": "One-click deploy",
       "lede": "Trigger deploy tasks from the web; backend executes via PTY and streams logs over WebSocket; cancel and timeouts supported.",
+      "contextRepo": "Repository: {{repo}}",
       "items": {
         "trigger": "Trigger:",
         "queryLog": "Task / logs:",

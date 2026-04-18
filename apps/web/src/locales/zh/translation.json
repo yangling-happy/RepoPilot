@@ -4,8 +4,8 @@
   },
   "header": {
     "home": "首页",
-    "documentation": "文档流水线",
-    "deploy": "一键部署",
+    "documentation": "文档",
+    "deploy": "部署",
     "language": "语言",
     "theme": "颜色模式",
     "github": "在 GitHub 上打开"
@@ -18,42 +18,45 @@
   "home": {
     "hero": {
       "eyebrow": "RepoPilot · 研发发布协同",
-      "titleLine1": "把注释留在代码里，",
-      "titleLine2": "把文档与部署留在平台上",
-      "subtitle": "面向企业研发场景：提交即文档更新；一键触发部署并通过 WebSocket 回放实时日志，任务状态可追踪、可中断。"
+      "titleLine1": "让每个仓库都能",
+      "titleLine2": "生成文档并一键部署。",
+      "subtitle": "面向企业研发：提交即文档更新；在控制台触发部署，并通过 WebSocket 回放实时日志，任务状态可追踪、可中断。"
     },
     "cta": {
       "documentation": "文档流水线",
       "deploy": "一键部署"
     },
+    "repos": {
+      "title": "仓库",
+      "subtitle": "选择仓库生成结构化文档或触发部署——交互参考现代托管平台，并贴合你们自托管 GitLab 的约束。",
+      "generateDocs": "生成文档",
+      "deploy": "一键部署",
+      "lastUpdated": "更新于 {{time}}",
+      "visibility": {
+        "private": "私有",
+        "internal": "内部"
+      },
+      "times": {
+        "2h": "2 小时前",
+        "5h": "5 小时前",
+        "1d": "昨天",
+        "3d": "3 天前"
+      }
+    },
     "pipeline": {
-      "title": "端到端链路（示意）",
-      "step1": "GitLab Push / Webhook",
-      "step2": "增量解析 · JavaDoc",
+      "step1": "GitLab 推送 · Webhook",
+      "step2": "增量 JavaDoc 解析",
       "step3": "结构化文档入库",
-      "step4": "触发脚本 · PTY",
+      "step4": "脚本执行 · PTY",
       "step5": "实时日志 · 任务状态"
     },
-    "capabilities": {
-      "title": "两项核心能力",
-      "lede": "MVP 聚焦「注释即文档」与「一键部署」的简单可用版本：后端固定 GitLab 组；Token 写入 Session；部署防重与超时保护在后端落地。"
+    "pipelineStrip": {
+      "kicker": "端到端",
+      "title": "从提交到产物发布"
     },
-    "cards": {
-      "doc": {
-        "label": "Capability A",
-        "title": "代码注释自动转在线文档",
-        "desc": "基于 GitLab 增量变更拉取 Java 文件，解析 JavaDoc 结构化入库；支持按项目、分支、文件与 commit 追溯。"
-      },
-      "deploy": {
-        "label": "Capability B",
-        "title": "一键部署打包",
-        "desc": "触发部署任务后由后端 PTY 执行脚本链，日志经 WebSocket 实时推送；同一 commit 同时仅允许一个 RUNNING 任务。"
-      },
-      "platform": {
-        "label": "Platform",
-        "title": "交互参考 Vercel，落地在企业内网约束",
-        "desc": "仓库关联、构建日志的视觉反馈借鉴 Vercel；鉴权采用 Session，本阶段不提供登录界面。"
-      }
+    "closing": {
+      "title": "准备好就可以开始",
+      "subtitle": "Webhook 只需配置一次——之后在控制台持续交付文档与部署。"
     }
   },
   "footer": {
@@ -64,6 +67,7 @@
     "documentation": {
       "title": "文档流水线",
       "lede": "将代码注释解析为结构化在线文档：GitLab 触发增量更新，解析失败有告警但不阻断主流程（详见架构文档）。",
+      "contextRepo": "当前仓库：{{repo}}",
       "items": {
         "webhook": "Webhook / 重建：",
         "query": "查询：",
@@ -73,6 +77,7 @@
     "deploy": {
       "title": "一键部署",
       "lede": "Web 端触发部署任务，后端 PTY 执行脚本并通过 WebSocket 推送日志；任务具备取消与超时保护。",
+      "contextRepo": "当前仓库：{{repo}}",
       "items": {
         "trigger": "触发：",
         "queryLog": "查询 / 日志：",

@@ -1,24 +1,36 @@
-import { Layout, Typography } from 'antd'
-import { useTranslation } from 'react-i18next'
-import { Outlet } from 'react-router-dom'
-import { RouteBreadcrumb } from '../routeBreadcrumb/RouteBreadcrumb'
-import { SiteHeader } from '../siteHeader/SiteHeader'
+import { Layout, Typography } from "antd";
+import { useTranslation } from "react-i18next";
+import { Outlet, useLocation } from "react-router-dom";
+import { RouteBreadcrumb } from "../routeBreadcrumb/RouteBreadcrumb";
+import { SiteHeader } from "../siteHeader/SiteHeader";
 
 export function SiteShell() {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
+  const { pathname } = useLocation();
+  const isHome = pathname === "/";
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout className="min-h-screen bg-white dark:bg-black">
       <SiteHeader />
-      <Layout.Content style={{ padding: '24px 48px', maxWidth: 1120, margin: '0 auto', width: '100%' }}>
-        <RouteBreadcrumb />
+      <Layout.Content
+        className={
+          isHome
+            ? "w-full flex-1 p-0"
+            : "mx-auto w-full max-w-[1120px] flex-1 px-6 py-8 md:px-12"
+        }
+      >
+        {!isHome ? <RouteBreadcrumb /> : null}
         <Outlet />
       </Layout.Content>
-      <Layout.Footer style={{ textAlign: 'center' }}>
-        <Typography.Text>{t('footer.line1', { year: new Date().getFullYear() })}</Typography.Text>
+      <Layout.Footer className="border-t border-neutral-200 bg-white px-6 py-10 text-center text-xs leading-relaxed text-neutral-500 dark:border-white/10 dark:bg-black dark:text-neutral-400">
+        <Typography.Text className="text-[inherit]">
+          {t("footer.line1", { year: new Date().getFullYear() })}
+        </Typography.Text>
         <br />
-        <Typography.Text>{t('footer.line2')}</Typography.Text>
+        <Typography.Text className="text-[inherit]">
+          {t("footer.line2")}
+        </Typography.Text>
       </Layout.Footer>
     </Layout>
-  )
+  );
 }

@@ -1,5 +1,5 @@
 import { Breadcrumb } from "antd";
-import { Link, useLocation } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { BREADCRUMB_BY_PATH } from "../../constants/breadcrumbRoutes";
 
@@ -12,16 +12,10 @@ export function RouteBreadcrumb() {
     .map((segment, index) => {
       const isLast = index === segments.length - 1;
       if (isLast) return null;
-      const title = segment.path ? (
-        <Link to={segment.path}>{t(segment.translationKey)}</Link>
-      ) : (
-        t(segment.translationKey)
-      );
+      const title = t(segment.translationKey);
       return { title };
     })
-    .filter(
-      (item): item is { title: string | React.ReactElement } => item !== null,
-    );
+    .filter((item): item is { title: string } => item !== null);
 
   return items.length > 0 ? (
     <Breadcrumb items={items} style={{ marginBottom: 24 }} />
