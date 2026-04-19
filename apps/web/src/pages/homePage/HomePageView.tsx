@@ -1,9 +1,30 @@
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { motion } from "framer-motion";
 import { HeroScene } from "./HeroScene";
 import { SpotlightCard } from "./SpotlightCard";
 
 const PIPELINE_STEPS = [1, 2, 3, 4, 5] as const;
+
+const revealVariants = {
+  hidden: { opacity: 0, y: 36 },
+  visible: { opacity: 1, y: 0 },
+} as const;
+
+const revealViewport = {
+  once: true,
+  margin: "0px 0px -12% 0px",
+} as const;
+
+const revealTransition = {
+  duration: 0.8,
+  ease: [0.21, 0.47, 0.32, 0.98] as const,
+};
+
+const pipelineItemVariants = {
+  hidden: { opacity: 0, y: 24, scale: 0.96 },
+  visible: { opacity: 1, y: 0, scale: 1 },
+} as const;
 
 // 更加柔和的卡片：加大圆角，优化深色模式下的边框对比
 const glassCard =
@@ -55,7 +76,14 @@ export function HomePageView() {
         {/* --- Content Grid --- */}
         <div className="grid gap-8 md:grid-cols-12">
           {/* Dashboard Entry */}
-          <section className="col-span-12 opacity-0 animate-home-rise [animation-delay:400ms] [animation-fill-mode:forwards]">
+          <motion.section
+            className="col-span-12"
+            initial="hidden"
+            whileInView="visible"
+            viewport={revealViewport}
+            variants={revealVariants}
+            transition={{ ...revealTransition, delay: 0.1 }}
+          >
             <SpotlightCard
               className={`${glassCard} [--spotlight-color:rgba(0,0,0,0.06)] dark:[--spotlight-color:rgba(255,255,255,0.06)] flex flex-col justify-between gap-8 lg:flex-row lg:items-center`}
             >
@@ -74,11 +102,16 @@ export function HomePageView() {
                 {t("home.dashboardEntry.cta")}
               </Link>
             </SpotlightCard>
-          </section>
+          </motion.section>
 
           {/* Pipeline */}
-          <section
-            className={`${glassCard} col-span-12 opacity-0 animate-home-rise [animation-delay:500ms] [animation-fill-mode:forwards]`}
+          <motion.section
+            className={`${glassCard} col-span-12`}
+            initial="hidden"
+            whileInView="visible"
+            viewport={revealViewport}
+            variants={revealVariants}
+            transition={{ ...revealTransition, delay: 0.2 }}
           >
             <div className="mb-12">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
@@ -91,10 +124,18 @@ export function HomePageView() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:grid-cols-5">
               {PIPELINE_STEPS.map((step, index) => (
-                <div
+                <motion.div
                   key={step}
-                  style={{ animationDelay: `${700 + index * 100}ms` }}
-                  className="group relative flex flex-col items-center justify-center rounded-[2rem] border border-neutral-100 bg-neutral-50/50 p-8 opacity-0 transition-all duration-500 hover:-translate-y-2 hover:border-neutral-300 hover:bg-white hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] dark:border-white/5 dark:bg-white/[0.01] dark:hover:border-white/20 dark:hover:bg-white/[0.05] dark:hover:shadow-[0_20px_40px_-15px_rgba(255,255,255,0.05)] animate-home-rise [animation-fill-mode:forwards]"
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={revealViewport}
+                  variants={pipelineItemVariants}
+                  transition={{
+                    duration: 0.6,
+                    ease: [0.22, 1, 0.36, 1],
+                    delay: 0.15 + index * 0.08,
+                  }}
+                  className="group relative flex flex-col items-center justify-center rounded-[2rem] border border-neutral-100 bg-neutral-50/50 p-8 transition-all duration-500 hover:-translate-y-2 hover:border-neutral-300 hover:bg-white hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] dark:border-white/5 dark:bg-white/[0.01] dark:hover:border-white/20 dark:hover:bg-white/[0.05] dark:hover:shadow-[0_20px_40px_-15px_rgba(255,255,255,0.05)]"
                 >
                   <span className="mb-3 text-sm font-black text-neutral-300 transition-colors group-hover:text-neutral-950 dark:text-neutral-700 dark:group-hover:text-white">
                     STEP 0{step}
@@ -102,13 +143,20 @@ export function HomePageView() {
                   <div className="text-center text-sm font-bold leading-snug tracking-tight text-neutral-700 transition-colors group-hover:text-neutral-950 dark:text-neutral-200 dark:group-hover:text-white md:text-base">
                     {t(`home.pipeline.step${step}`)}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
-          </section>
+          </motion.section>
 
           {/* Closing Footer */}
-          <section className="col-span-12 py-32 text-center opacity-0 animate-home-rise [animation-delay:800ms] [animation-fill-mode:forwards]">
+          <motion.section
+            className="col-span-12 py-32 text-center"
+            initial="hidden"
+            whileInView="visible"
+            viewport={revealViewport}
+            variants={revealVariants}
+            transition={{ ...revealTransition, delay: 0.15 }}
+          >
             <h3 className="text-4xl font-bold tracking-tight md:text-5xl">
               {t("home.closing.title")}
             </h3>
@@ -129,7 +177,7 @@ export function HomePageView() {
                 {t("home.cta.deploy")}
               </Link>
             </div>
-          </section>
+          </motion.section>
         </div>
       </div>
     </div>
