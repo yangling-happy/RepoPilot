@@ -44,6 +44,12 @@ backend/
 
 ### 配置数据库
 
+> [!Warning]
+>
+> 这里要注意，需要用Wsl下的mysql建表，避免后续出现数据库在Windows下的mysql，而环境在Wsl下的情况
+>
+> 我的做法是：Windows的mysql修改端口到3307，Wsl下保持3306，这样登录某个数据库可视化软件，连接3306端口看到的就是WSL下的数据库
+
 1. 创建数据库：
 ```sql
 CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -54,11 +60,6 @@ CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```bash
 # Linux / macOS / WSL
 mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/01_init_tables.sql
-```
-
-```powershell
-# Windows PowerShell
-Get-Content .\business\src\main\resources\scripts\01_init_tables.sql | mysql -h127.0.0.1 -P3306 -uroot -p repopilot
 ```
 
 3. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
@@ -75,19 +76,15 @@ spring:
 
 ```bash
 # Linux / macOS / WSL（当前终端生效）
-export DB_USER=your_db_user
-export DB_PASSWORD=your_db_password
+export DB_USER=your_db_user #这里要改成你的账户  比如root
+export DB_PASSWORD=your_db_password  ##这里要改成账户对应的密码
 
 # 可选：写入 ~/.bashrc 持久生效
 echo 'export DB_USER=your_db_user' >> ~/.bashrc
 echo 'export DB_PASSWORD=your_db_password' >> ~/.bashrc
 ```
 
-```powershell
-# Windows PowerShell（新开终端后生效）
-setx DB_USER "your_db_user"
-setx DB_PASSWORD "your_db_password"
-```
+
 
 5. 团队协作约定：
 - `application.yml` 仅保留占位符，不提交真实账号密码。
