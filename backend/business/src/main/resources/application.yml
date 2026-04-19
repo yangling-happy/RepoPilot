@@ -30,3 +30,9 @@ gitlab:
 deploy:
   timeout-minutes: 10
   script-path: /path/to/scripts
+
+repo:
+  clone:
+    root-dir: ${REPO_CLONE_ROOT:./workspace/repos}
+    default-branch: main
+    timeout-seconds: 120

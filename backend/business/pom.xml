@@ -54,6 +54,20 @@
             <artifactId>gitlab4j-api</artifactId>
         </dependency>
 
+        <!-- Required by GitLab4J at runtime (javax.ws.rs.core.StreamingOutput) -->
+        <dependency>
+            <groupId>javax.ws.rs</groupId>
+            <artifactId>javax.ws.rs-api</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+
+        <!-- JGit for repository clone -->
+        <dependency>
+            <groupId>org.eclipse.jgit</groupId>
+            <artifactId>org.eclipse.jgit</artifactId>
+            <version>6.10.0.202406032230-r</version>
+        </dependency>
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

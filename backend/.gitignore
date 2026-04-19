@@ -37,3 +37,7 @@ build/
 ### Logs ###
 *.log
 logs/
+
+### Local cloned repositories ###
+workspace/repos/
+business/workspace/repos/
