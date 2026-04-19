@@ -51,6 +51,7 @@ backend/
 > 我的做法是：Windows的mysql修改端口到3307，Wsl下保持3306，这样登录某个数据库可视化软件，连接3306端口看到的就是WSL下的数据库
 
 1. 创建数据库：
+
 ```sql
 CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
@@ -84,15 +85,15 @@ echo 'export DB_USER=your_db_user' >> ~/.bashrc
 echo 'export DB_PASSWORD=your_db_password' >> ~/.bashrc
 ```
 
-
-
 5. 团队协作约定：
+
 - `application.yml` 仅保留占位符，不提交真实账号密码。
 - 如需临时切换数据库账号，只改本机环境变量，不改仓库文件。
 
 ### 运行服务
 
 说明：
+
 - 启动 business 前需先完成数据库配置
 - terminal 与 gateway 可独立启动，无需数据库
 
@@ -119,9 +120,11 @@ cd gateway
 ## API 文档
 
 ### 会话管理
+
 - `POST /api/session/setGitlabToken` - 设置 GitLab Token
 
 ### 文档管理
+
 - `POST /api/doc/webhook/gitlab` - GitLab Webhook
 - `POST /api/doc/rebuild` - 重新构建文档
 - `GET /api/doc/query` - 查询文档
@@ -129,6 +132,7 @@ cd gateway
 - `POST /api/doc/file/create` - 写入文档明细（doc_file_dtl）
 
 ### 部署管理
+
 - `POST /api/deploy/trigger` - 触发部署
 - `POST /api/deploy/task/create` - 写入部署任务（deploy_task）
 - `POST /api/deploy/build/task/create` - 写入构建任务（build_task）
@@ -149,30 +153,35 @@ cd gateway
 当前已实现的写入接口与数据结构：
 
 ### 1) 文档任务写入
+
 - 接口：`POST /api/doc/task/create`
 - 对应表：`doc_task`
 - 请求体字段：
   - `eventId` `project` `branch` `commitId` `status` `duration`
 
 ### 2) 文档明细写入
+
 - 接口：`POST /api/doc/file/create`
 - 对应表：`doc_file_dtl`
 - 请求体字段：
   - `taskId` `projectName` `branchName` `filePath` `commitId` `docFilePath` `parseStatus` `parseErrorMsg`
 
 ### 3) 部署任务写入
+
 - 接口：`POST /api/deploy/task/create`
 - 对应表：`deploy_task`
 - 请求体字段：
   - `deployTaskId` `projectName` `branchName` `commitId` `deployParams` `runStatus` `logDirPath` `resultPath` `errorMsg` `duration`
 
 ### 4) 构建任务写入
+
 - 接口：`POST /api/deploy/build/task/create`
 - 对应表：`build_task`
 - 请求体字段：
   - `buildTaskId` `deployTaskId` `projectName` `branchName` `commitId` `scriptPath` `artifactPath` `logDirPath` `runStatus` `errorMsg` `duration`
 
 状态字段约束：
+
 - `doc_task.status`：`PENDING | RUNNING | SUCCESS | FAILED | SKIPPED`
 - `doc_file_dtl.parse_status`：`PENDING | SUCCESS | FAILED`
 - `deploy_task.run_status`、`build_task.run_status`：`PENDING | RUNNING | SUCCESS | FAILED | CANCELLED | TIMEOUT`
@@ -227,6 +236,7 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/doc/file/create" 
 ## 数据库表结构
 
 ### doc_task - 文档任务表（用于日志）
+
 - id: 主键
 - event_id: 事件ID
 - project: 项目名
@@ -237,6 +247,7 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/doc/file/create" 
 - duration: 执行时长
 
 ### doc_file_dtl - 文档明细表
+
 - id: 主键
 - task_id: 关联文档任务ID
 - project_name: 项目名
@@ -250,6 +261,7 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/doc/file/create" 
 - update_time: 更新时间
 
 ### deploy_task - 部署任务表
+
 - id: 主键
 - deploy_task_id: 部署任务ID
 - project_name: 项目名
@@ -264,6 +276,7 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/doc/file/create" 
 - duration: 执行时长
 
 ### build_task - 构建任务表
+
 - id: 主键
 - build_task_id: 构建任务ID
 - deploy_task_id: 关联部署任务ID
