@@ -4,6 +4,7 @@ import { HomePage } from "./pages/homePage/HomePage";
 import { ProductDeployPage } from "./pages/productDeploy/ProductDeployPage";
 import { ProductDocsPage } from "./pages/productDocs/ProductDocsPage";
 import { WorkbenchPage } from "./pages/workbench/WorkbenchPage";
+import { LoginPage } from "./pages/login/LoginPage";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           />
           <Route path="/documentation" element={<ProductDocsPage />} />
           <Route path="/deploy" element={<ProductDeployPage />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

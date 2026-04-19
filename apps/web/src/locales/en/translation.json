@@ -12,6 +12,15 @@
     "github": "Open on GitHub",
     "loginPlaceholder": "Sign in"
   },
+  "login": {
+    "kicker": "Authentication",
+    "title": "Sign in with GitLab",
+    "subtitle": "Use your GitLab account via OAuth. RepoPilot never sees your GitLab password.",
+    "gitlabHint": "You will be redirected to GitLab to approve access, then returned to RepoPilot.",
+    "gitlabCta": "Continue with GitLab",
+    "redirectNote": "If your deployment uses a custom OAuth entry, set VITE_GITLAB_OAUTH_LOGIN_URL in the web environment.",
+    "backHome": "Back to home"
+  },
   "home": {
     "hero": {
       "eyebrow": "RepoPilot · Ship with clarity",
@@ -70,6 +79,12 @@
       "title": "Documentation",
       "lede": "RepoPilot turns JavaDoc and repository metadata into always-up-to-date internal documentation. GitLab webhooks trigger incremental rebuilds; parse issues surface as alerts without blocking your delivery pipeline.",
       "contextRepo": "Repository · {{repo}}",
+      "terminal": {
+        "title": "Virtual console",
+        "subtitle": "Doc generation and webhook-driven rebuilds stream here once a session is attached.",
+        "line1": "RepoPilot virtual terminal initialized.",
+        "line2": "Waiting for documentation pipeline output…"
+      },
       "items": {
         "webhook": "Automation",
         "query": "Read API",
@@ -80,6 +95,12 @@
       "title": "Deploy",
       "lede": "Promote commits to staging or production with one click. Runs execute through the backend PTY runner with live WebSocket logs, cancellation, timeouts, and exactly-once protections per commit.",
       "contextRepo": "Repository · {{repo}}",
+      "terminal": {
+        "title": "Virtual console",
+        "subtitle": "Deploy scripts and PTY logs will appear here when the runner session is connected.",
+        "line1": "RepoPilot virtual terminal initialized.",
+        "line2": "Waiting for deployment task output…"
+      },
       "items": {
         "trigger": "Trigger",
         "queryLog": "Status & logs",

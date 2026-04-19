@@ -12,6 +12,15 @@
     "github": "在 GitHub 上打开",
     "loginPlaceholder": "登录"
   },
+  "login": {
+    "kicker": "身份验证",
+    "title": "使用 GitLab 登录",
+    "subtitle": "通过 GitLab OAuth 授权。RepoPilot 不会收集你的 GitLab 密码。",
+    "gitlabHint": "将跳转至 GitLab 完成授权，随后回到 RepoPilot。",
+    "gitlabCta": "使用 GitLab 继续",
+    "redirectNote": "若网关 OAuth 地址与默认不同，请在 Web 环境变量中配置 VITE_GITLAB_OAUTH_LOGIN_URL。",
+    "backHome": "返回首页"
+  },
   "home": {
     "hero": {
       "eyebrow": "RepoPilot · 研发发布协同",
@@ -70,6 +79,12 @@
       "title": "文档",
       "lede": "RepoPilot 将 JavaDoc 与仓库元数据转化为持续更新的内部文档站。GitLab Webhook 触发增量重建；解析异常以告警形式呈现，不阻断主线路交付。",
       "contextRepo": "仓库 · {{repo}}",
+      "terminal": {
+        "title": "虚拟终端",
+        "subtitle": "文档生成与 Webhook 驱动的重建日志将在此输出（会话接入后）。",
+        "line1": "RepoPilot 虚拟终端已初始化。",
+        "line2": "等待文档流水线输出…"
+      },
       "items": {
         "webhook": "自动化",
         "query": "查询接口",
@@ -80,6 +95,12 @@
       "title": "部署",
       "lede": "一键将提交推进至预发或生产环境。任务由后端 PTY 执行器承载，WebSocket 实时输出日志，支持取消、超时与按 commit 维度的并发保护。",
       "contextRepo": "仓库 · {{repo}}",
+      "terminal": {
+        "title": "虚拟终端",
+        "subtitle": "部署脚本与 PTY 日志将在此展示（执行器会话接入后）。",
+        "line1": "RepoPilot 虚拟终端已初始化。",
+        "line2": "等待部署任务输出…"
+      },
       "items": {
         "trigger": "触发",
         "queryLog": "状态与日志",

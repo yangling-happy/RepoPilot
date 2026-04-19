@@ -1,10 +1,17 @@
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
+import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
 
 export function ProductDeployPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const repo = params.get("repo");
+
+  const bootLines = useMemo(
+    () => [t("pages.deploy.terminal.line1"), t("pages.deploy.terminal.line2")],
+    [t],
+  );
 
   const sections = [
     {
@@ -22,7 +29,7 @@ export function ProductDeployPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl pb-20 pt-2">
+    <div className="mx-auto max-w-[1200px] pb-20 pt-2 text-neutral-950 dark:text-neutral-50">
       <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">
         {t("pages.deploy.title")}
       </h1>
@@ -39,7 +46,15 @@ export function ProductDeployPage() {
         {t("pages.deploy.lede")}
       </p>
 
-      <div className="mt-12 space-y-3">
+      <div className="mt-14">
+        <VirtualTerminalPanel
+          title={t("pages.deploy.terminal.title")}
+          subtitle={t("pages.deploy.terminal.subtitle")}
+          bootLines={bootLines}
+        />
+      </div>
+
+      <div className="mt-14 space-y-3">
         {sections.map((section) => (
           <div
             key={section.label}

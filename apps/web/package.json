@@ -10,6 +10,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@repo-pilot/terminal-client": "workspace:*",
     "@ant-design/icons": "^6.1.1",
     "antd": "^6.3.6",
     "framer-motion": "^12.38.0",
