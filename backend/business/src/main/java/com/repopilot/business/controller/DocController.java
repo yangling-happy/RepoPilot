@@ -2,11 +2,16 @@ package com.repopilot.business.controller;
 
 import com.repopilot.business.dto.CreateDocFileRequest;
 import com.repopilot.business.dto.CreateDocTaskRequest;
+import com.repopilot.business.dto.DocRefreshRequest;
+import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
 import com.repopilot.business.entity.DocTask;
 import com.repopilot.business.mapper.DocFileMapper;
 import com.repopilot.business.mapper.DocTaskMapper;
+import com.repopilot.business.service.DocPipelineService;
 import com.repopilot.common.dto.ApiResponse;
+import com.repopilot.common.exception.BusinessException;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +33,7 @@ public class DocController {
 
     private final DocTaskMapper docTaskMapper;
     private final DocFileMapper docFileMapper;
+    private final DocPipelineService docPipelineService;
 
     @PostMapping("/webhook/gitlab")
     public ApiResponse<Void> handleGitlabWebhook(@RequestBody String payload) {
@@ -36,22 +42,33 @@ public class DocController {
         return ApiResponse.success("Webhook received", null);
     }
 
+    @PostMapping("/refresh")
+    public ApiResponse<DocRefreshResult> refreshDoc(@RequestBody DocRefreshRequest request,
+                                                    HttpSession session) {
+        String token = getGitlabToken(session);
+        log.info("Refresh doc request: project={}, branch={}", request.getProject(), request.getBranch());
+        DocRefreshResult result = docPipelineService.refresh(request.getProject(), request.getBranch(), token);
+        return ApiResponse.success("Refresh completed", result);
+    }
+
     @PostMapping("/rebuild")
     public ApiResponse<Void> rebuildDoc(@RequestParam String project,
             @RequestParam String branch,
-            @RequestParam String commitId) {
+            @RequestParam String commitId,
+            HttpSession session) {
+        String token = getGitlabToken(session);
         log.info("Rebuild doc request: project={}, branch={}, commitId={}", project, branch, commitId);
-        // TODO: Implement rebuild logic
+        docPipelineService.rebuild(project, branch, commitId, token);
         return ApiResponse.success("Rebuild triggered", null);
     }
 
     @GetMapping("/query")
     public ApiResponse<Object> queryDoc(@RequestParam String project,
             @RequestParam(required = false) String branch,
-            @RequestParam(required = false) String filePath) {
-        log.info("Query doc: project={}, branch={}, filePath={}", project, branch, filePath);
-        // TODO: Implement query logic
-        return ApiResponse.success(null);
+            @RequestParam(required = false) String filePath,
+            @RequestParam(required = false) String commitId) {
+        log.info("Query doc: project={}, branch={}, filePath={}, commitId={}", project, branch, filePath, commitId);
+        return ApiResponse.success(docPipelineService.query(project, branch, filePath, commitId));
     }
 
     @PostMapping("/task/create")
@@ -102,6 +119,14 @@ public class DocController {
 
         log.info("Doc file created successfully, id={}, filePath={}", docFile.getId(), docFile.getFilePath());
         return ApiResponse.success("Doc file created", docFile);
+    }
+
+    private String getGitlabToken(HttpSession session) {
+        String token = (String) session.getAttribute("gitlabToken");
+        if (!hasText(token)) {
+            throw new BusinessException(400, "GitLab token not found in session. Call /api/session/setGitlabToken first.");
+        }
+        return token;
     }
 
     private String validateCreateDocTaskRequest(CreateDocTaskRequest request) {

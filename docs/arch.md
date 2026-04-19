@@ -348,7 +348,6 @@ export interface ApiResponse<T> {
 }
 
 export interface DocTask {
-  eventId: string;
   project: string;
   branch: string;
   commitId: string;
@@ -417,7 +416,7 @@ npx openapi-typescript /tmp/openapi.json -o packages/shared-types/src/generated/
 
 **多语言扩展细节**：先看后缀，`.java` 就先走 Javadoc；后续多语言在后端放一个 Map（后缀 → 工具），没有命中的文件写警告信息，不直接报错中断。
 
-**去重与刷新策略**：同一个 eventId 或 commitId 可能被重复推送，后端做去重——查到该 commit 已经处理过，直接返回成功，不再重复解析。缓存刷新策略：先比对 commitId，和缓存里 latestCommitId 一样就不刷，不一样才刷新，避免重复计算。文档入库按 project + branch + filePath + commitId 判断：四个值一样就覆盖更新，不一样就新增一条版本记录。
+**去重与刷新策略**：用户手动触发刷新时，后端按 project + branch + commitId 防重——查到该 commit 已处理（RUNNING/SUCCESS/SKIPPED）则跳过。缓存刷新策略：先比对 commitId，和缓存里 latestCommitId 一样就不刷，不一样才刷新，避免重复计算。文档入库按 project + branch + filePath + commitId 判断：四个值一样就覆盖更新，不一样就新增一条版本记录。
 
 ## 2.6 功能 B：一键部署打包
 
@@ -504,7 +503,7 @@ export const useTerminal = (sessionId: string) => {
 **文档流水线**：
 
 - `POST /api/session/setGitlabToken`
-- `POST /api/doc/webhook/gitlab`
+- `POST /api/doc/refresh`
 - `POST /api/doc/rebuild`
 - `GET /api/doc/query`
 
@@ -530,7 +529,7 @@ export const useTerminal = (sessionId: string) => {
 ## 4.3 限流与防重
 
 - 触发部署：同一 commitId 同时仅允许一个 RUNNING 任务
-- 防重复：eventId/commitId 去重
+- 防重复：commitId 去重
 
 ## 4.4 命令行交互
 

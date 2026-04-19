@@ -8,9 +8,9 @@ spring:
     name: business
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:repopilot}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:}
+    url: ${REPOPILOT_DB_URL:jdbc:mysql://127.0.0.1:3306/repopilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${REPOPILOT_DB_USERNAME:root}
+    password: ${REPOPILOT_DB_PASSWORD:}
   session:
     store-type: none
 

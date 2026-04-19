@@ -120,7 +120,7 @@ RepoPilot/
 
 ### 代码注释转文档
 
-- **触发机制**：支持 GitLab Webhook 触发或手动重建。
+- **触发机制**：前端手动点击刷新按钮触发后端检查新 commit。
 - **处理逻辑**：后端拉取增量 Java 文件，解析 JavaDoc，存入 MySQL。
 - **去重策略**：基于 `project + branch + filePath + commitId` 唯一索引，避免重复解析。
 
