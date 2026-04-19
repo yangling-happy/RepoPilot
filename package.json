@@ -2,9 +2,10 @@
   "name": "my-project-monorepo",
   "private": true,
   "scripts": {
+    "prepare": "husky",
     "dev": "pnpm run dev:all",
-    "dev:frontend": "pnpm --filter web dev",
-    "dev:terminal": "pnpm --filter terminal dev",
+    "dev:frontend": "pnpm --filter @repo-pilot/web dev",
+    "dev:terminal": "pnpm --filter @repo-pilot/terminal-client dev",
     "dev:backend": "pnpm run dev:backend:business",
     "dev:backend:prepare": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f common/pom.xml install -DskipTests\"",
     "dev:backend:business": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f common/pom.xml install -DskipTests && ./mvnw -f business/pom.xml spring-boot:run -DskipTests\"",
@@ -12,20 +13,41 @@
     "dev:backend:gateway": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f gateway/pom.xml spring-boot:run -DskipTests\"",
     "dev:all": "concurrently \"pnpm:dev:frontend\" \"pnpm:dev:terminal\" \"pnpm:dev:backend\"",
     "build": "pnpm run build:all",
-    "build:frontend": "pnpm --filter web build",
-    "build:terminal": "pnpm --filter terminal build",
+    "build:frontend": "pnpm --filter @repo-pilot/web build",
+    "build:terminal": "pnpm --filter @repo-pilot/terminal-client build",
     "build:backend": "cd backend && ./mvnw clean package",
     "build:all": "pnpm run build:frontend && pnpm run build:terminal && pnpm run build:backend",
     "test": "pnpm run test:frontend && pnpm run test:backend",
-    "test:frontend": "pnpm --filter web test",
+    "test:frontend": "pnpm --filter @repo-pilot/web test",
     "test:backend": "cd backend && ./mvnw test",
-    "lint": "eslint apps packages --ext .ts,.tsx",
-    "format": "prettier --write \"apps/**/*.{ts,tsx,css}\" \"packages/**/*.ts\""
+    "lint": "eslint apps --ext .ts,.tsx --max-warnings 0",
+    "lint:fix": "eslint apps --ext .ts,.tsx --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "lint-staged": {
+    "apps/**/*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "apps/**/*.{css,json}": [
+      "prettier --write"
+    ],
+    "*.{yml,yaml,md}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.24.0",
+    "@typescript-eslint/parser": "^8.24.0",
     "concurrently": "^8.0.0",
-    "eslint": "^8.0.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-i18next": "^6.1.1",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.4.3",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0"
   },

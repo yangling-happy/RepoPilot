@@ -55,6 +55,7 @@
       }
     },
     "pipeline": {
+      "stepBadge": "步骤 {{code}}",
       "step1": "GitLab 推送 · Webhook",
       "step2": "增量 JavaDoc 解析",
       "step3": "结构化文档入库",

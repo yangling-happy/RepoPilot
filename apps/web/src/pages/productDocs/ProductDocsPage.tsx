@@ -9,7 +9,10 @@ export function ProductDocsPage() {
   const repo = params.get("repo");
 
   const bootLines = useMemo(
-    () => [t("pages.documentation.terminal.line1"), t("pages.documentation.terminal.line2")],
+    () => [
+      t("pages.documentation.terminal.line1"),
+      t("pages.documentation.terminal.line2"),
+    ],
     [t],
   );
 

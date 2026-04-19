@@ -50,7 +50,10 @@ export function WorkbenchPageView() {
   const detailRows = selectedRepo
     ? [
         { label: t("pages.dashboard.detail.id"), value: selectedRepo.id },
-        { label: t("pages.dashboard.detail.branch"), value: selectedRepo.branch },
+        {
+          label: t("pages.dashboard.detail.branch"),
+          value: selectedRepo.branch,
+        },
         { label: t("pages.dashboard.detail.owner"), value: selectedRepo.owner },
         {
           label: t("pages.dashboard.detail.updatedAt"),
@@ -85,7 +88,6 @@ export function WorkbenchPageView() {
   return (
     <div className="w-full">
       <header className="max-w-6xl">
-
         <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
           {t("pages.dashboard.title")}
         </h1>

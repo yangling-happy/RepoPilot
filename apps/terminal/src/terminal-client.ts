@@ -1,4 +1,7 @@
-import { createVirtualTerminal, type CreateVirtualTerminalOptions } from "./virtual-terminal";
+import {
+  createVirtualTerminal,
+  type CreateVirtualTerminalOptions,
+} from "./virtual-terminal";
 import type { VirtualTerminalHandle } from "./virtual-terminal";
 
 export class TerminalClient {

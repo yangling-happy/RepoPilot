@@ -138,7 +138,9 @@ export function HomePageView() {
                   className="group relative flex flex-col items-center justify-center rounded-[2rem] border border-neutral-100 bg-neutral-50/50 p-8 transition-all duration-500 hover:-translate-y-2 hover:border-neutral-300 hover:bg-white hover:shadow-[0_20px_40px_-15px_rgba(0,0,0,0.1)] dark:border-white/5 dark:bg-white/[0.01] dark:hover:border-white/20 dark:hover:bg-white/[0.05] dark:hover:shadow-[0_20px_40px_-15px_rgba(255,255,255,0.05)]"
                 >
                   <span className="mb-3 text-sm font-black text-neutral-300 transition-colors group-hover:text-neutral-950 dark:text-neutral-700 dark:group-hover:text-white">
-                    STEP 0{step}
+                    {t("home.pipeline.stepBadge", {
+                      code: String(step).padStart(2, "0"),
+                    })}
                   </span>
                   <div className="text-center text-sm font-bold leading-snug tracking-tight text-neutral-700 transition-colors group-hover:text-neutral-950 dark:text-neutral-200 dark:group-hover:text-white md:text-base">
                     {t(`home.pipeline.step${step}`)}

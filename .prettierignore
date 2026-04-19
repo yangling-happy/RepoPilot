@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+coverage
+**/target
+*.min.js
+pnpm-lock.yaml
+*.jar
+backend/**/*.java
+backend/mvnw
+backend/mvnw.cmd
+backend/.mvn
+.git

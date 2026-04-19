@@ -1,0 +1,27 @@
+name: Copilot code review
+
+# 在 PR 打开、同步、重新打开或从草稿就绪时，请求 GitHub Copilot 进行代码审查。
+# 需在仓库设置中启用 Copilot code review，且组织/账户具备相应权限。
+# 参考：https://docs.github.com/en/copilot/how-tos/agents/copilot-code-review/automatic-code-review
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  request-copilot:
+    if: >
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request review from Copilot
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --add-reviewer copilot

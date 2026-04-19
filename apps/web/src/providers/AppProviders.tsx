@@ -1,13 +1,13 @@
-import type { ReactNode } from 'react'
-import { createElement } from 'react'
-import { I18nextProvider } from 'react-i18next'
-import { ThemeProvider } from 'next-themes'
-import i18n from '../i18n/i18n'
-import { AntdThemeBridge } from './AntdThemeBridge'
+import type { ReactNode } from "react";
+import { createElement } from "react";
+import { I18nextProvider } from "react-i18next";
+import { ThemeProvider } from "next-themes";
+import i18n from "../i18n/i18n";
+import { AntdThemeBridge } from "./AntdThemeBridge";
 
 type Props = {
-  children: ReactNode
-}
+  children: ReactNode;
+};
 
 export function AppProviders({ children }: Props) {
   return (
@@ -15,13 +15,13 @@ export function AppProviders({ children }: Props) {
       {createElement(
         ThemeProvider,
         {
-          attribute: 'class',
-          defaultTheme: 'system',
+          attribute: "class",
+          defaultTheme: "system",
           enableSystem: true,
           disableTransitionOnChange: true,
         },
         <AntdThemeBridge>{children}</AntdThemeBridge>,
       )}
     </I18nextProvider>
-  )
+  );
 }

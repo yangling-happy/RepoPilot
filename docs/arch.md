@@ -188,17 +188,17 @@ packages:
   "private": true,
   "scripts": {
     "dev": "pnpm run dev:all",
-    "dev:frontend": "pnpm --filter web dev",
-    "dev:terminal": "pnpm --filter terminal dev",
+    "dev:frontend": "pnpm --filter @repo-pilot/web dev",
+    "dev:terminal": "pnpm --filter @repo-pilot/terminal-client dev",
     "dev:backend": "cd backend && ./mvnw spring-boot:run",
     "dev:all": "concurrently \"pnpm:dev:frontend\" \"pnpm:dev:terminal\" \"pnpm:dev:backend\"",
     "build": "pnpm run build:all",
-    "build:frontend": "pnpm --filter web build",
-    "build:terminal": "pnpm --filter terminal build",
+    "build:frontend": "pnpm --filter @repo-pilot/web build",
+    "build:terminal": "pnpm --filter @repo-pilot/terminal-client build",
     "build:backend": "cd backend && ./mvnw clean package",
     "build:all": "pnpm run build:frontend && pnpm run build:terminal && pnpm run build:backend",
     "test": "pnpm run test:frontend && pnpm run test:backend",
-    "test:frontend": "pnpm --filter web test",
+    "test:frontend": "pnpm --filter @repo-pilot/web test",
     "test:backend": "cd backend && ./mvnw test",
     "lint": "eslint apps packages --ext .ts,.tsx",
     "format": "prettier --write \"apps//*.{ts,tsx,css}\" \"packages//*.ts\""
@@ -265,7 +265,7 @@ packages:
 
 ```JSON
 {
-  "name": "web",
+  "name": "@repo-pilot/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",

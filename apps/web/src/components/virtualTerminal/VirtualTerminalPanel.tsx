@@ -44,6 +44,7 @@ export function VirtualTerminalPanel({
       ro.disconnect();
       handle.dispose();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bootKey fingerprints bootLines; avoid unstable bootLines ref from parents
   }, [resolvedTheme, bootKey]);
 
   return (

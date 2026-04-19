@@ -85,18 +85,18 @@ pnpm dev:backend
 
 ## 常用命令
 
-| 命令                        | 描述                                        |
-| :-------------------------- | :------------------------------------------ |
-| `pnpm dev`                  | 启动前端与后端（后端默认 business）         |
-| `pnpm dev:frontend`         | 仅启动前端开发服务器                        |
-| `pnpm dev:backend`          | 一行启动后端 business（8080）               |
-| `pnpm dev:backend:prepare`  | 预热后端依赖（安装父 POM + common）         |
-| `pnpm dev:backend:business` | 启动 business（8080）                       |
-| `pnpm dev:backend:terminal` | 启动 terminal（8081）                       |
-| `pnpm dev:backend:gateway`  | 启动 gateway（9000）                        |
-| `pnpm build`                | 构建所有模块                                |
-| `pnpm lint`                 | 执行 ESLint 检查                            |
-| `pnpm format`               | 格式化代码                                  |
+| 命令                        | 描述                                |
+| :-------------------------- | :---------------------------------- |
+| `pnpm dev`                  | 启动前端与后端（后端默认 business） |
+| `pnpm dev:frontend`         | 仅启动前端开发服务器                |
+| `pnpm dev:backend`          | 一行启动后端 business（8080）       |
+| `pnpm dev:backend:prepare`  | 预热后端依赖（安装父 POM + common） |
+| `pnpm dev:backend:business` | 启动 business（8080）               |
+| `pnpm dev:backend:terminal` | 启动 terminal（8081）               |
+| `pnpm dev:backend:gateway`  | 启动 gateway（9000）                |
+| `pnpm build`                | 构建所有模块                        |
+| `pnpm lint`                 | 执行 ESLint 检查                    |
+| `pnpm format`               | 格式化代码                          |
 
 ## 项目结构
 

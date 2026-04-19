@@ -60,13 +60,13 @@ export function SiteHeader() {
 
         <Button
           type="text"
-          icon={<GithubOutlined style={{ fontSize: '24px' }} />}
+          icon={<GithubOutlined style={{ fontSize: "24px" }} />}
           href="https://github.com/yangling-happy/RepoPilot"
           target="_blank"
           rel="noreferrer noopener"
           aria-label={t("header.github")}
           className="flex items-center justify-center"
-          style={{ fontSize: '24px', width: 'auto', height: 'auto' }}
+          style={{ fontSize: "24px", width: "auto", height: "auto" }}
         />
 
         <LoginPlaceholder />

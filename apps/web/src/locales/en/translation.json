@@ -55,6 +55,7 @@
       }
     },
     "pipeline": {
+      "stepBadge": "STEP {{code}}",
       "step1": "GitLab push · webhook",
       "step2": "Incremental JavaDoc parse",
       "step3": "Structured docs persisted",
