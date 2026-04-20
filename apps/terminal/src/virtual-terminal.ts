@@ -1,6 +1,7 @@
 import { Terminal, type ITheme } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 import { WebLinksAddon } from "xterm-addon-web-links";
+import "xterm/css/xterm.css";
 
 export type VirtualTerminalColorScheme = "light" | "dark";
 
