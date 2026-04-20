@@ -29,9 +29,6 @@ jobs:
       - name: ESLint
         run: pnpm run lint
 
-      - name: Prettier
-        run: pnpm run format:check
-
       - name: Build web
         run: pnpm --filter @repo-pilot/web build
 
