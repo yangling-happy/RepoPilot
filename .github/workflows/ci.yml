@@ -26,14 +26,14 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Build terminal client
+        run: pnpm --filter @repo-pilot/terminal-client build
+
       - name: ESLint
         run: pnpm run lint
 
       - name: Build web
         run: pnpm --filter @repo-pilot/web build
-
-      - name: Build terminal client
-        run: pnpm --filter @repo-pilot/terminal-client build
 
       - name: Vitest (web)
         run: pnpm --filter @repo-pilot/web run test:ci

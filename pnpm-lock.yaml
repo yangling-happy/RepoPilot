@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@repo-pilot/terminal-client':
+        specifier: workspace:*
+        version: link:apps/terminal
       '@types/node':
         specifier: ^20.0.0
         version: 20.19.39
