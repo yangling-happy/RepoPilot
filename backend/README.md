@@ -46,9 +46,9 @@ backend/
 
 > [!Warning]
 >
-> 这里要注意，需要用Wsl下的mysql建表，避免后续出现数据库在Windows下的mysql，而环境在Wsl下的情况
+> 需要在 WSL 下的 MySQL 建库建表，避免出现“应用跑在 WSL，但数据库连到了 Windows MySQL”的错配。
 >
-> 我的做法是：Windows的mysql修改端口到3307，Wsl下保持3306，这样登录某个数据库可视化软件，连接3306端口看到的就是WSL下的数据库
+> 推荐做法：Windows MySQL 改为 `3307`，WSL MySQL 保持 `3306`。这样数据库工具连接 `3306` 时，默认就是 WSL 内的数据库实例。
 
 1. 创建数据库：
 
@@ -123,6 +123,9 @@ cd gateway
 
 - `POST /api/session/setGitlabToken` - 设置 GitLab Token
 
+### 仓库管理
+- `POST /api/repo/clone` - 克隆 GitLab 仓库到本地（projectId，默认分支 main）
+
 ### 文档管理
 
 - `POST /api/doc/webhook/gitlab` - GitLab Webhook
@@ -139,6 +142,24 @@ cd gateway
 - `GET /api/deploy/task` - 查询部署任务
 - `GET /api/deploy/log` - 查询部署日志
 - `POST /api/deploy/cancel` - 取消部署
+
+### 仓库克隆调用示例
+
+先调用 `POST /api/session/setGitlabToken` 设置会话 Token，再调用克隆接口：
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/repo/clone" -ContentType "application/json" -Body (@{
+  projectId = 123456
+  branch = "main"
+} | ConvertTo-Json)
+```
+
+说明：
+- `projectId` 必填，使用 GitLab 项目稳定 ID。
+- `branch` 可选，未传时默认 `main`。
+- 本地目录已存在时会直接返回错误，不会覆盖。
+- 默认落盘目录为 `business/workspace/repos/project-{projectId}`（按 README 的启动方式）。
+- 克隆目录已加入 `.gitignore`，不会提交到项目仓库。
 
 ## 写入接口结构速览
 

@@ -17,6 +17,7 @@ target/
 # IDEs
 .idea/
 .vscode/
+**/.vs/
 
 # OS / editor temp files
 .DS_Store
