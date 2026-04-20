@@ -18,31 +18,34 @@ MVP 范围与约束如下：
 
 ## 2.1 整体技术栈与项目结构
 
-系统采用 React 前端 + Xterm 中台 + Java Spring Boot 后端的混合技术栈架构，通过 pnpm workspace 管理所有 JS/TS 代码（前端+中台），Maven管理 Java 后端，两者在根目录下平行共存。
+系统采用 React 前端 + Xterm 中台 + Java Spring Boot 后端的混合技术栈架构，通过 pnpm workspace 管理所有 JS/TS 代码（前端+中台），Maven 管理 Java 后端，两者在根目录下平行共存。
 
 **技术栈总览**：
 
 - 前端：React + TypeScript + Ant Design + Xterm.js + Vite + pnpm workspace
-- 后端：Java Spring Boot + Pty4J + Maven + Docker(待定)
+- 后端：Java Spring Boot + Pty4J + Maven + Docker（待定）
 
 **参考产品**：打包部署功能参考 Vercel 的设计思路——关联 GitLab 仓库的交互模式、Build Log 的实时展示方式、部署流程的视觉反馈。
 
 项目目录结构：
 
 ```Bash
-RepoPilot/
-├── .vscode/                    # VS Code 配置
-│   └── settings.json
+my_project/
+├── .github/                    # GitHub Actions CI/CD 配置
+│   ├── workflows/
+│   │   ├── frontend.yml        # 前端构建测试
+│   │   ├── backend.yml         # 后端构建测试
+│   │   └── e2e.yml             # 端到端测试
+│   └── CODEOWNERS              # 代码归属权（后端/前端分开）
 │
 ├── apps/                       # 应用层（由 pnpm 管理）
 │   ├── web/                    # React 前端应用
 │   │   ├── src/
-│   │   │   ├── App.tsx
-│   │   │   └── main.tsx
-│   │   ├── index.html
+│   │   ├── public/
 │   │   ├── package.json
 │   │   ├── tsconfig.json
-│   │   └── vite.config.ts
+│   │   ├── vite.config.ts
+│   │   └── index.html
 │   │
 │   └── terminal/               # Xterm 中台（独立应用）
 │       ├── src/
@@ -51,122 +54,68 @@ RepoPilot/
 │       │   └── types.ts
 │       ├── package.json
 │       ├── tsconfig.json
-│       └── vite.config.ts
+│       └── rollup.config.js
 │
 ├── packages/                   # 共享库（由 pnpm 管理）
-│   └── shared-types/           # TypeScript 类型定义（前后端共享）
-│       ├── src/
-│       │   ├── api.ts          # API 请求/响应类型
-│       │   ├── api.js
-│       │   └── api.d.ts
+│   ├── shared-types/           # TypeScript 类型定义（前后端共享）
+│   │   ├── src/
+│   │   │   ├── api.ts          # API 请求/响应类型
+│   │   │   ├── websocket.ts    # WebSocket 消息类型
+│   │   │   └── terminal.ts     # 终端相关类型
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   │
+│   ├── ui-components/          # React 组件库
+│   │   ├── src/
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   │
+│   └── config-eslint/          # 共享 ESLint 配置
 │       ├── package.json
-│       ├── tsconfig.json
-│       └── tsconfig.tsbuildinfo
+│       └── index.js
 │
-├── backend/                    # Java Spring Boot 后端（Maven管理）
-│   ├── .mvn/                   # Maven 包装器
-│   │   └── wrapper/
-│   │       └── maven-wrapper.properties
-│   ├── .gitignore
-│   ├── README.md
+├── backend/                    # Java Spring Boot 后端（Maven 管理）
+│   ├── pom.xml                 # Maven 父 POM
 │   ├── mvnw
 │   ├── mvnw.cmd
-│   ├── pom.xml                 # Maven 父 POM
 │   │
-│   ├── gateway/                # Spring Cloud Gateway（可选）
+│   ├── gateway-service/        # Spring Cloud Gateway（可选）
 │   │   ├── pom.xml
 │   │   └── src/
-│   │       ├── main/
-│   │       │   ├── java/
-│   │       │   │   └── com/
-│   │       │   │       └── repopilot/
-│   │       │   │           └── gateway/
-│   │       │   │               ├── config/
-│   │       │   │               ├── filter/
-│   │       │   │               └── GatewayServiceApplication.java
-│   │       │   └── resources/
-│   │       │       └── application.yml
-│   │       └── test/
-│   │           └── java/
-│   │               └── com/
-│   │                   └── repopilot/
-│   │                       └── gateway/
 │   │
-│   ├── terminal/               # 终端服务（WebSocket 处理）
+│   ├── terminal-service/       # 终端服务（WebSocket 处理）
 │   │   ├── pom.xml
 │   │   └── src/
-│   │       ├── main/
-│   │       │   ├── java/
-│   │       │   │   └── com/
-│   │       │   │       └── repopilot/
-│   │       │   │           └── terminal/
-│   │       │   │               ├── config/
-│   │       │   │               ├── controller/
-│   │       │   │               ├── handler/
-│   │       │   │               ├── service/
-│   │       │   │               └── TerminalServiceApplication.java
-│   │       │   └── resources/
-│   │       │       └── application.yml
-│   │       └── test/
-│   │           └── java/
-│   │               └── com/
-│   │                   └── repopilot/
-│   │                       └── terminal/
+│   │       ├── main/java/
+│   │       └── main/resources/
 │   │
-│   ├── business/               # 业务服务
-│   │   ├── pom.xml
-│   │   └── src/
-│   │       ├── main/
-│   │       │   ├── java/
-│   │       │   │   └── com/
-│   │       │   │       └── repopilot/
-│   │       │   │           └── business/
-│   │       │   │               ├── controller/
-│   │       │   │               ├── dto/
-│   │       │   │               ├── entity/
-│   │       │   │               ├── mapper/
-│   │       │   │               └── BusinessServiceApplication.java
-│   │       │   └── resources/
-│   │       │       ├── mapper/
-│   │       │       ├── scripts/
-│   │       │       └── application.yml
-│   │       └── test/
-│   │           └── java/
-│   │               └── com/
-│   │                   └── repopilot/
-│   │                       └── business/
-│   │
-│   └── common/                 # 公共服务
+│   └── business-service/       # 业务服务
 │       ├── pom.xml
 │       └── src/
-│           ├── main/
-│           │   ├── java/
-│           │   │   └── com/
-│           │   │       └── repopilot/
-│           │   │           └── common/
-│           │   │               ├── config/
-│           │   │               ├── constant/
-│           │   │               ├── dto/
-│           │   │               ├── entity/
-│           │   │               ├── enums/
-│           │   │               ├── exception/
-│           │   │               └── util/
-│           │   └── resources/
-│           └── test/
-│               └── java/
-│                   └── com/
-│                       └── repopilot/
-│                           └── common/
+│
+├── docker/                     # Docker 配置文件
+│   ├── Dockerfile.frontend
+│   ├── Dockerfile.terminal
+│   ├── Dockerfile.backend
+│   └── docker-compose.yml
+│
+├── scripts/                    # 辅助脚本
+│   ├── generate-api-types.sh   # 从 Java 注解生成 TS 类型
+│   └── dev-init.sh
 │
 ├── docs/                       # 项目文档
-│   ├── arch.md
-│   └── 评审材料.pdf
+│   ├── architecture.md
+│   ├── api.md
+│   └── development.md
 │
 ├── .gitignore
-├── README.md
+├── .prettierrc
+├── .eslintrc.js
+├── pnpm-workspace.yaml         # pnpm workspace 配置
 ├── package.json                # 根 package.json
-├── pnpm-lock.yaml
-└── pnpm-workspace.yaml         # pnpm workspace 配置
+├── turbo.json                  # Turborepo 配置（可选）
+├── README.md
+└── LICENSE
 ```
 
 **关键配置文件**：
@@ -177,7 +126,7 @@ RepoPilot/
 packages:
   - 'apps/'
   - 'packages/'
-  # backend 目录不在此列表，由 Maven 独立管理
+# backend 目录不在此列表，由 Maven 独立管理
 ```
 
 根目录 `package.json`（统一命令入口）：
@@ -188,20 +137,20 @@ packages:
   "private": true,
   "scripts": {
     "dev": "pnpm run dev:all",
-    "dev:frontend": "pnpm --filter @repo-pilot/web dev",
-    "dev:terminal": "pnpm --filter @repo-pilot/terminal-client dev",
+    "dev:frontend": "pnpm --filter web dev",
+    "dev:terminal": "pnpm --filter terminal dev",
     "dev:backend": "cd backend && ./mvnw spring-boot:run",
     "dev:all": "concurrently \"pnpm:dev:frontend\" \"pnpm:dev:terminal\" \"pnpm:dev:backend\"",
     "build": "pnpm run build:all",
-    "build:frontend": "pnpm --filter @repo-pilot/web build",
-    "build:terminal": "pnpm --filter @repo-pilot/terminal-client build",
+    "build:frontend": "pnpm --filter web build",
+    "build:terminal": "pnpm --filter terminal build",
     "build:backend": "cd backend && ./mvnw clean package",
     "build:all": "pnpm run build:frontend && pnpm run build:terminal && pnpm run build:backend",
     "test": "pnpm run test:frontend && pnpm run test:backend",
-    "test:frontend": "pnpm --filter @repo-pilot/web test",
+    "test:frontend": "pnpm --filter web test",
     "test:backend": "cd backend && ./mvnw test",
     "lint": "eslint apps packages --ext .ts,.tsx",
-    "format": "prettier --write \"apps//*.{ts,tsx,css}\" \"packages//*.ts\""
+    "format": "prettier --write \"apps/**/*. {ts,tsx,css}\" \"packages/**/*.ts\""
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -223,15 +172,14 @@ packages:
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.repopilot</groupId>
-    <artifactId>repopilot-backend</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <groupId>com.myapp</groupId>
+    <artifactId>myapp-backend</artifactId>
+    <version>0.0.1</version>
     <packaging>pom</packaging>
     <modules>
-        <module>gateway</module>
-        <module>terminal</module>
-        <module>business</module>
-        <module>common</module>
+        <module>gateway-service</module>
+        <module>terminal-service</module>
+        <module>business-service</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -239,17 +187,16 @@ packages:
         <version>3.2.0</version>
     </parent>
     <properties>
-        <java.version>17</java.version>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <spring-cloud.version>2023.0.0</spring-cloud.version>
-        <pty4j.version>0.12.13</pty4j.version>
-        <gitlab4j.version>5.5.0</gitlab4j.version>
-        <mybatis-plus.version>3.5.5</mybatis-plus.version>
+        <java.version>21</java.version>
     </properties>
 </project>
 ```
+
+## 2.2 架构图
+
+- 后端架构图：展示 App、GitLab、MySQL、缓存、打包流程之间的交互关系。
+- 代码注释转文档时序图：描述从前端/回调触发，到 GitLab API 拉取变更文件、解析、缓存、入库、查询展示的全链路。
+- 一键部署打包时序图：描述前端触发部署、后端创建任务、PTY 执行脚本、日志实时推送、状态回写的完整过程。
 
 ## 2.3 总体架构
 
@@ -265,7 +212,7 @@ packages:
 
 ```JSON
 {
-  "name": "@repo-pilot/web",
+  "name": "web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -276,8 +223,10 @@ packages:
     "test": "vitest"
   },
   "dependencies": {
-    "react": "18.2.0",
-    "react-dom": "18.2.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@myapp/shared-types": "workspace:*",
+    "@myapp/terminal-client": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.0.0",
@@ -287,13 +236,13 @@ packages:
 }
 ```
 
-前端采用 React 18 + TypeScript + Vite 构建。
+前端采用 React 18 + TypeScript + Vite 构建，通过 workspace 协议引用共享类型包和终端客户端包。
 
 `apps/terminal`（Xterm 中台）：
 
 ```JSON
 {
-  "name": "@repo-pilot/terminal-client",
+  "name": "@myapp/terminal-client",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -305,9 +254,9 @@ packages:
     }
   },
   "scripts": {
-    "dev": "tsc --watch",
-    "build": "tsc",
-    "test": "echo \"No tests configured\""
+    "dev": "vite build --watch",
+    "build": "tsc && vite build",
+    "test": "vitest"
   },
   "dependencies": {
     "xterm": "^5.3.0",
@@ -327,7 +276,7 @@ packages:
 
 ```TypeScript
 {
-  "name": "@repo-pilot/shared-types",
+  "name": "@myapp/shared-types",
   "version": "0.0.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -340,7 +289,22 @@ packages:
     "typescript": "^5.0.0"
   }
 }
+
 共享类型示例（api.ts）：
+
+// 前后端共享的类型定义
+export interface TerminalSession {
+  id: string;
+  createdAt: Date;
+  status: 'active' | 'closed';
+}
+
+export interface WebSocketMessage {
+  type: 'stdin' | 'stdout' | 'resize';
+  data: string | number[];
+  sessionId: string;
+}
+
 export interface ApiResponse<T> {
   code: number;
   message: string;
@@ -400,19 +364,19 @@ npx openapi-typescript /tmp/openapi.json -o packages/shared-types/src/generated/
 
 **逻辑**：
 
-1. GitLab 克隆仓库到达后端
-2. 提取 project、branch、commitId，过滤仅处理 Java 文件变更（默认规则：filePath 以 `.java` 结尾）
-3. 调用 GitLab API 拉取变更文件内容（仅增量，避免全仓再次克隆）
-4. 调用 JavaDoc 解析器
-5. 根据结构化的 JSON 提取结构体（类、方法、注释摘要、参数、返回值）
-6. 以 project + branch + filePath + commitId 写入数据库
-7. 先比对 commitId 与缓存中的 latestCommitId；相同则不刷新，不同才刷新
-8. 对外提供查询 API（按项目、分支、文件、commit 查询）
+1. GitLab 克隆仓库到达后端。
+2. 提取 project、branch、commitId，过滤仅处理 Java 文件变更（默认规则：filePath 以 `.java` 结尾；后续可按后缀扩展到 `.py`、配置文件等）。
+3. 调用 GitLab API 拉取变更文件内容（仅增量，避免全仓再次克隆）。
+4. 调用 JavaDoc 解析器。
+5. 根据结构化的 JSON 提取结构体（类、方法、注释摘要、参数、返回值）。
+6. 以 project + branch + filePath + commitId 写入数据库。
+7. 先比对 commitId 与缓存中的 latestCommitId；相同则不刷新，不同才刷新。
+8. 对外提供查询 API（按项目、分支、文件、commit 查询）。
 
 **关键设计**：
 
-- 每条文档记录保留 commitId 与 author，支持比较和回滚
-- 解析失败不阻断主流程，落失败状态并告警
+- 每条文档记录保留 commitId 与 author，支持比较和回滚。
+- 解析失败不阻断主流程，落失败状态并告警。
 
 **多语言扩展细节**：先看后缀，`.java` 就先走 Javadoc；后续多语言在后端放一个 Map（后缀 → 工具），没有命中的文件写警告信息，不直接报错中断。
 
@@ -434,13 +398,14 @@ npx openapi-typescript /tmp/openapi.json -o packages/shared-types/src/generated/
 
 ```TypeScript
 // apps/web/src/hooks/useTerminal.ts
-import { TerminalClient } from '@repo-pilot/terminal-client';
+import { TerminalClient } from '@myapp/terminal-client';
+import type { WebSocketMessage } from '@myapp/shared-types';
 
 export const useTerminal = (sessionId: string) => {
   const ws = new WebSocket(`ws://localhost:8080/ws/terminal/${sessionId}`);
   const client = new TerminalClient(ws);
 
-  client.onMessage((msg: any) => {
+  client.onMessage((msg: WebSocketMessage) => {
     if (msg.type === 'stdout') {
       // 处理终端输出
     }
@@ -452,49 +417,135 @@ export const useTerminal = (sessionId: string) => {
 
 **逻辑**：
 
-1. 前端调用“触发部署”API，传入项目、分支、环境、部署参数
-2. 后端创建 deployTask 记录，状态置为 Running
-3. 后端通过 PTY 启动部署脚本（deploy.sh）
-4. 执行输出推送到 WebSocket，前端实时展示日志
-5. 脚本完成后更新任务状态为 SUCCESS/FAILED，并记录结束时间
-6. 如果有产物路径/下载信息，回写 result 字段供后续下载或外传
+1. 前端调用“触发部署”API，传入项目、分支、环境、部署参数。
+2. 后端创建 deployTask 记录，状态置为 Running。
+3. 后端通过 PTY 启动部署脚本（deploy.sh），后续可支持 SSH 远程执行与并行任务。
+4. 执行输出推送到 WebSocket，前端实时展示日志。
+5. 脚本完成后更新任务状态为 SUCCESS/FAILED，并记录结束时间。
+6. 如果有产物路径/下载信息，回写 result 字段供后续下载或外传。
 
 **关键设计**：
 
 - 状态转换：RUNNING → SUCCESS/FAILED
-- **防重复部署**：同一 project + branch + commitId 同时仅允许一个 RUNNING 任务，避免互相覆盖环境
-- **超时保护**：每个任务设置超时（如 5 分钟或 10 分钟），超时后自动标记 FAILED，并尝试 kill 执行进程，防止一直占资源
+- **防重复部署**：同一 project + branch + commitId 同时仅允许一个 RUNNING 任务，避免互相覆盖环境。
+- **超时保护**：每个任务设置超时（如 5 分钟或 10 分钟），超时后自动标记 FAILED，并尝试 kill 执行进程，防止一直占资源。
+- **状态判断扩展**：任务完成状态后续可结合日志解析进行辅助判断。
 
 ## 2.7 当前版本约束
 
-- GitLab Group 固定为后端常量，不从前端透传
-- Session 中保存 gitlabToken，调用 GitLab API 时优先取 Session Token
-- 无登录界面
+- GitLab Group 固定为后端常量，不从前端透传。
+- Session 中保存 gitlabToken，调用 GitLab API 时优先取 Session Token。
+- 无登录界面。
 
 # 三、存储设计
 
 ## 3.1 数据库选型与职责
 
-- **MySQL**：任务主数据、文档索引、审计信息
+- **MySQL**：任务主数据、文档索引、审计信息。
 
 ## 3.2 核心表设计
 
-> MVP 先不考虑日志功能，后续还要加上日志相关的表
+> MVP 需要考虑日志功能。
 
-**核心表**：
+### 3.2.1 文档任务表（doc_task）
 
-- `docTask`：文档任务（eventId、project、branch、commitId、status、duration）
-- `docFile`：文档结果（project、branch、filePath、commitId、docJson、docMarkdown、updateTime）
-- `deployTask`：部署任务（taskId、project、branch、scriptName、args、status、operator、startTime、endTime）
+用于记录代码注释转文档的任务流水和状态。
+
+| 字段名 | 类型 | 是否必填 | 说明 |
+|---|---|---|---|
+| id | bigint | 是 | 主键 |
+| event_id | varchar(64) | 是 | 事件 ID |
+| project | varchar(128) | 是 | 项目名 |
+| branch | varchar(128) | 是 | 分支名 |
+| commit_id | varchar(64) | 是 | 提交 ID |
+| status | varchar(32) | 是 | 状态 |
+| create_time | datetime | 是 | 创建时间 |
+| duration | bigint | 否 | 执行时长 |
+
+### 3.2.2 文档明细表（doc_file_dtl）
+
+用于存储单个源码文件对应的文档解析结果索引信息，作为文档的主表明细。
+
+注意：不再直接将解析后的 JSON 内容存入数据库，而是将解析结果落为日志/产物文件，数据库中仅保存对应的文件目录或文件路径。
+
+| 字段名 | 类型 | 是否必填 | 说明 |
+|---|---|---|---|
+| id | bigint | 是 | 主键 ID |
+| task_id | varchar(64) | 是 | 关联文档任务 ID，对应 doc_task.task_id |
+| project_name | varchar(128) | 是 | 项目名称 |
+| branch_name | varchar(128) | 是 | 分支名称 |
+| commit_id | varchar(64) | 是 | 提交版本 ID |
+| file_path | varchar(512) | 是 | 源 Java 文件路径 |
+| doc_file_path | varchar(512) | 是 | 文档解析结果文件路径，例如 `/data/doc-json/projectA/xxx.json` |
+| parse_status | varchar(32) | 是 | 解析状态，如 SUCCESS / FAILED |
+| parse_error_msg | varchar(1024) | 否 | 解析失败信息 |
+| create_time | datetime | 是 | 创建时间 |
+| update_time | datetime | 否 | 更新时间 |
+
+补充说明：
+
+1. `doc_file_path` 用于保存解析结果文件路径，替代原先直接存储 JSON 内容的方案。
+2. 文档内容查询时，先根据 `project_name + branch_name + file_path + commit_id` 定位记录，再读取对应文件。
+3. 同一版本的同一文件仅保留一条记录，通过唯一约束控制。
+
+### 3.2.3 部署任务表（deploy_task）
+
+用于记录一键部署打包的任务流水。
+
+| 字段名 | 类型 | 是否必填 | 说明 |
+|---|---|---|---|
+| id | bigint | 是 | 主键 ID |
+| deploy_task_id | varchar(64) | 是 | 部署任务 ID |
+| project_name | varchar(128) | 是 | 项目名称 |
+| branch_name | varchar(128) | 是 | 分支名称 |
+| commit_id | varchar(64) | 是 | 提交版本 ID |
+| deploy_params | text | 否 | 部署参数，建议存序列化后的参数文本 |
+| run_status | varchar(32) | 是 | 运行状态，如 RUNNING / SUCCESS / FAILED |
+| log_dir_path | varchar(512) | 否 | 日志目录路径 |
+| result_path | varchar(512) | 否 | 部署结果路径、制品地址或下载地址 |
+| error_msg | varchar(1024) | 否 | 部署失败信息 |
+| start_time | datetime | 否 | 开始时间 |
+| duration | bigint | 否 | 执行时长 |
+
+补充说明：
+
+1. 部署日志建议落盘到文件目录中，数据库仅记录 `log_dir_path`。
+2. `result_path` 可用于记录部署结果文件、制品地址或下载地址。
+
+### 3.2.4 构建任务表（build_task）
+
+用于记录代码编译构建环节的任务流水。
+
+| 字段名 | 类型 | 是否必填 | 说明 |
+|---|---|---|---|
+| id | bigint | 是 | 主键 ID |
+| build_task_id | varchar(64) | 是 | 构建任务 ID |
+| deploy_task_id | varchar(64) | 否 | 关联部署任务 ID，如该构建属于某次部署流程，则填写 |
+| project_name | varchar(128) | 是 | 项目名称 |
+| branch_name | varchar(128) | 是 | 分支名称 |
+| commit_id | varchar(64) | 是 | 提交版本 ID |
+| script_path | varchar(512) | 否 | 执行构建脚本路径 |
+| artifact_path | varchar(512) | 否 | 构建产物路径 |
+| log_dir_path | varchar(512) | 否 | 构建日志目录路径 |
+| run_status | varchar(32) | 是 | 运行状态，如 RUNNING / SUCCESS / FAILED |
+| error_msg | varchar(1024) | 否 | 构建失败信息 |
+| start_time | datetime | 否 | 开始时间 |
+| duration | bigint | 否 | 执行时长 |
+
+补充说明：
+
+1. 构建日志同样采用文件落盘，数据库只保存日志目录路径。
+2. 若后续出现多种构建模式需要统计分析，再补充 `build_type` 字段。
 
 **索引**：
 
-- `docFileUkProjectBranchFileCommit`：唯一索引（project + branch + filePath + commitId）
-- `deployTaskIdxProjectBranchStatusUpdateTime`：普通索引（project + branch + status + updateTime）
+- `uk_project_branch_file_commit`：文档唯一约束（project_name + branch_name + file_path + commit_id）
+- `idx_project_status_time`：部署查询索引（project_name + run_status + update_time）
+- `idx_deploy_task_id`：构建任务关联索引（deploy_task_id）
 
 ## 3.3 大表处理
 
-> MVP 先不考虑，后续的 docFile 和 deployLog 可能成为数据很多的大表
+> MVP 先不考虑，后续的 doc_file_dtl 和 deployLog 可能成为数据很多的大表。
 
 # 四、API 设计
 
@@ -502,17 +553,17 @@ export const useTerminal = (sessionId: string) => {
 
 **文档流水线**：
 
-- `POST /api/session/setGitlabToken`
-- `POST /api/doc/refresh`
-- `POST /api/doc/rebuild`
-- `GET /api/doc/query`
+- `POST /api/session/setGitlabToken`：获取用户 token
+- `POST /api/doc/refresh`：按 commit 增量刷新文档
+- `POST /api/doc/rebuild`：刷新操作
+- `GET /api/doc/query`：查询已存在的文档
 
 **部署流水线**：
 
-- `POST /api/deploy/trigger`
-- `GET /api/deploy/task`
-- `GET /api/deploy/log`
-- `POST /api/deploy/cancel`
+- `POST /api/deploy/trigger`：触发打包
+- `GET /api/deploy/task`：部署任务状态
+- `GET /api/deploy/log`：日志
+- 取消部署通过关闭 WebSocket 连接处理，不单独设计 API
 
 ## 4.2 鉴权与数据隔离模型
 
@@ -548,7 +599,7 @@ git clone <your-repo>
 pnpm install
 
 # 3. 构建共享包
-pnpm --filter @repo-pilot/shared-types build
+pnpm --filter @myapp/shared-types build
 
 # 4. 安装后端依赖
 cd backend && ./mvnw dependency:resolve
@@ -660,12 +711,21 @@ services:
 
 ## 7.1 查询性能影响与优化
 
-**影响点**：文档查询可能按项目/分支/路径高频访问
+**影响点**：文档查询可能按项目/分支/路径高频访问。
 
-**优化策略**：文档主查询命中索引（project + branch + filePath + commitId）
+**优化策略**：文档主查询命中索引（project + branch + filePath + commitId）。
 
 ## 7.2 入库性能影响与优化
 
-**影响点**：单次 push 可能包含多个 Java 文件，造成突发写入
+**影响点**：单次 push 可能包含多个 Java 文件，造成突发写入。
 
-**优化策略**：文档入库批量写
+**优化策略**：文档入库批量写。
+
+## 7.3 MVP 性能目标
+
+- 缓存加速 GitLab 获取仓库文件。
+- `docPipelineLatencyMs`（单次 commit < 20 个 Java 文件）：< 5000ms
+- `docQueryLatencyCacheHitMs`（命中缓存）：< 200ms
+- `docQueryLatencyCacheMissMs`（未命中缓存）：< 800ms
+- `deployTriggerApiLatencyMs`（触发部署 API 响应返回）：< 300ms
+
