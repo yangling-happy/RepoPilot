@@ -1,6 +1,6 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef } from "react";
-import { createVirtualTerminal } from "@repo-pilot/terminal-client";
+import { TerminalClient } from "@repo-pilot/terminal-client";
 
 const shellClass =
   "relative rounded-[2rem] border border-neutral-200/60 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.02] md:rounded-[2.5rem]";
@@ -21,6 +21,9 @@ export function VirtualTerminalPanel({
 }: Props) {
   const { resolvedTheme } = useTheme();
   const hostRef = useRef<HTMLDivElement>(null);
+  const clientRef = useRef<TerminalClient | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const sessionIdRef = useRef<string>(createSessionId());
 
   const bootKey = bootLines.join("\u0000");
 
@@ -28,21 +31,31 @@ export function VirtualTerminalPanel({
     const host = hostRef.current;
     if (!host) return;
 
+    if (clientRef.current || wsRef.current) return;
+
     const colorScheme = resolvedTheme === "dark" ? "dark" : "light";
-    const handle = createVirtualTerminal({
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${window.location.host}/ws/terminal/${sessionIdRef.current}`;
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    const client = new TerminalClient(ws, {
       colorScheme,
       initialLines: [...bootLines],
     });
-    handle.open(host);
+    clientRef.current = client;
+    client.attach(host);
 
     const ro = new ResizeObserver(() => {
-      handle.fit();
+      client.fit();
     });
     ro.observe(host);
 
     return () => {
       ro.disconnect();
-      handle.dispose();
+      client.dispose();
+      wsRef.current = null;
+      clientRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bootKey fingerprints bootLines; avoid unstable bootLines ref from parents
   }, [resolvedTheme, bootKey]);
@@ -68,4 +81,15 @@ export function VirtualTerminalPanel({
       </div>
     </section>
   );
+}
+
+function createSessionId() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
