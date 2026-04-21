@@ -6,7 +6,7 @@
     "dev": "pnpm run dev:all",
     "dev:frontend": "pnpm --filter @repo-pilot/web dev",
     "dev:terminal": "pnpm --filter @repo-pilot/terminal-client dev",
-    "dev:backend": "pnpm run dev:backend:business",
+    "dev:backend": "concurrently \"pnpm:dev:backend:business\" \"pnpm:dev:backend:terminal\"",
     "dev:backend:prepare": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f common/pom.xml install -DskipTests\"",
     "dev:backend:business": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f common/pom.xml install -DskipTests && ./mvnw -f business/pom.xml spring-boot:run -DskipTests\"",
     "dev:backend:terminal": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f common/pom.xml install -DskipTests && ./mvnw -f terminal/pom.xml spring-boot:run -DskipTests\"",
@@ -38,7 +38,7 @@
     ]
   },
   "devDependencies": {
-    "@repo-pilot/terminal-client": "workspace:*" ,
+    "@repo-pilot/terminal-client": "workspace:*",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^8.24.0",
     "@typescript-eslint/parser": "^8.24.0",

@@ -3,12 +3,11 @@ package com.repopilot.terminal.service;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -25,12 +24,7 @@ public class PtySession {
 
     public PtySession(String sessionId, Consumer<String> stdoutConsumer) throws IOException {
         this.sessionId = sessionId;
-        ProcessBuilder processBuilder = new ProcessBuilder("/bin/bash");
-        processBuilder.directory(new File(System.getProperty("user.dir")));
-        processBuilder.redirectErrorStream(true);
-        Map<String, String> environment = processBuilder.environment();
-        environment.putAll(System.getenv());
-        this.process = processBuilder.start();
+        this.process = startShellProcess();
         this.processInput = process.getOutputStream();
         this.outputPumpThread = startOutputPump(stdoutConsumer);
     }
@@ -46,7 +40,7 @@ public class PtySession {
 
     public void resize(int cols, int rows) {
         // Keep API compatibility for frontend resize messages.
-        // Current minimal Linux shell session doesn't apply terminal size.
+        // script-wrapped shell currently doesn't apply terminal size.
     }
 
     public void close() {
@@ -67,6 +61,39 @@ public class PtySession {
         thread.setDaemon(true);
         thread.start();
         return thread;
+    }
+
+    private Process startShellProcess() throws IOException {
+        ProcessBuilder processBuilder = new ProcessBuilder(createShellCommand());
+        processBuilder.directory(new java.io.File(System.getProperty("user.dir")));
+        processBuilder.redirectErrorStream(true);
+        processBuilder.environment().putAll(System.getenv());
+
+        try {
+            return processBuilder.start();
+        } catch (IOException firstError) {
+            if (!isWindows()) {
+                ProcessBuilder fallback = new ProcessBuilder("/bin/bash", "-i");
+                fallback.directory(new java.io.File(System.getProperty("user.dir")));
+                fallback.redirectErrorStream(true);
+                fallback.environment().putAll(System.getenv());
+                return fallback.start();
+            }
+            throw firstError;
+        }
+    }
+
+    private boolean isWindows() {
+        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        return osName.contains("win");
+    }
+
+    private String[] createShellCommand() {
+        if (isWindows()) {
+            return new String[] { "powershell.exe" };
+        }
+        // script allocates a pseudo terminal so shell input has visible echo.
+        return new String[] { "script", "-qfc", "/bin/bash", "/dev/null" };
     }
 
     private void pumpOutput(Consumer<String> stdoutConsumer) {

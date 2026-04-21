@@ -47,6 +47,8 @@ pnpm --filter @repo-pilot/shared-types build
 
 ### 4. 启动服务
 
+###注意：要在wsl中输入命令！
+
 #### 启动前端
 
 ```bash
@@ -59,7 +61,7 @@ pnpm dev:frontend
 > 根脚本基于 `bash + ./mvnw`，请在仓库根目录执行（Git Bash / WSL 终端）。
 
 ```bash
-# 默认启动 business（8080）
+# 默认启动 business（8080）+ terminal（8081）
 pnpm dev:backend
 
 # 仅做后端依赖预热（安装父 POM + common）
@@ -82,14 +84,15 @@ pnpm dev:backend
 
 - **前端界面**：http://localhost:3000
 - **后端接口**：http://localhost:8080
+- **终端服务**：http://localhost:8081
 
 ## 常用命令
 
 | 命令                        | 描述                                |
 | :-------------------------- | :---------------------------------- |
-| `pnpm dev`                  | 启动前端与后端（后端默认 business） |
+| `pnpm dev`                  | 启动前端与后端（后端默认 business + terminal） |
 | `pnpm dev:frontend`         | 仅启动前端开发服务器                |
-| `pnpm dev:backend`          | 一行启动后端 business（8080）       |
+| `pnpm dev:backend`          | 一行启动后端 business（8080）+ terminal（8081） |
 | `pnpm dev:backend:prepare`  | 预热后端依赖（安装父 POM + common） |
 | `pnpm dev:backend:business` | 启动 business（8080）               |
 | `pnpm dev:backend:terminal` | 启动 terminal（8081）               |

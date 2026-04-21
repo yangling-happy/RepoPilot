@@ -1,6 +1,6 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef } from "react";
-import { TerminalClient } from "@repo-pilot/terminal-client";
+import { TerminalClient } from "../../../../terminal/src";
 
 const shellClass =
   "relative rounded-[2rem] border border-neutral-200/60 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.02] md:rounded-[2.5rem]";

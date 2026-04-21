@@ -58,20 +58,31 @@ export function createVirtualTerminal(
   terminal.loadAddon(new WebLinksAddon());
 
   const initialLines = options.initialLines ?? [];
+  let mountedContainer: HTMLElement | null = null;
+  const focusTerminal = () => terminal.focus();
 
   return {
     terminal,
     open(container: HTMLElement) {
+      mountedContainer = container;
       terminal.open(container);
       fitAddon.fit();
       for (const line of initialLines) {
         terminal.writeln(line);
       }
+      terminal.focus();
+      container.addEventListener("mousedown", focusTerminal);
+      container.addEventListener("touchstart", focusTerminal, { passive: true });
     },
     fit() {
       fitAddon.fit();
     },
     dispose() {
+      if (mountedContainer) {
+        mountedContainer.removeEventListener("mousedown", focusTerminal);
+        mountedContainer.removeEventListener("touchstart", focusTerminal);
+        mountedContainer = null;
+      }
       terminal.dispose();
     },
   };
