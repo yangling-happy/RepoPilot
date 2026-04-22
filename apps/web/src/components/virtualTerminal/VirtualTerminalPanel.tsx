@@ -34,8 +34,7 @@ export function VirtualTerminalPanel({
     if (clientRef.current || wsRef.current) return;
 
     const colorScheme = resolvedTheme === "dark" ? "dark" : "light";
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/ws/terminal/${sessionIdRef.current}`;
+    const wsUrl = resolveTerminalWsUrl(sessionIdRef.current);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -92,4 +91,20 @@ function createSessionId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function resolveTerminalWsUrl(sessionId: string) {
+  const configured = import.meta.env.VITE_TERMINAL_WS_URL?.trim();
+  if (configured) {
+    return `${configured.replace(/\/+$/, "")}/${encodeURIComponent(sessionId)}`;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const { hostname, host, port } = window.location;
+  const isLocalDevHost = hostname === "localhost" || hostname === "127.0.0.1";
+  if (isLocalDevHost && port === "3000") {
+    return `${protocol}//${hostname}:8081/ws/terminal/${encodeURIComponent(sessionId)}`;
+  }
+
+  return `${protocol}//${host}/ws/terminal/${encodeURIComponent(sessionId)}`;
 }

@@ -8,6 +8,7 @@ export class TerminalClient {
   private handle: VirtualTerminalHandle;
   private ws: WebSocket;
   private pendingMessages: string[] = [];
+  private disposed = false;
 
   private readonly handleOpen = () => {
     this.flushPendingMessages();
@@ -54,6 +55,9 @@ export class TerminalClient {
   }
 
   private send(payload: unknown) {
+    if (this.disposed) {
+      return;
+    }
     const message = JSON.stringify(payload);
     if (this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(message);
@@ -81,6 +85,9 @@ export class TerminalClient {
   }
 
   fit() {
+    if (this.disposed) {
+      return;
+    }
     this.handle.fit();
   }
 
@@ -89,6 +96,10 @@ export class TerminalClient {
   }
 
   dispose() {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.ws.removeEventListener("open", this.handleOpen);
     this.ws.removeEventListener("message", this.handleMessage);
     this.ws.removeEventListener("close", this.handleClose);

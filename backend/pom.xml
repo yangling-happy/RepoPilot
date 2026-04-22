@@ -60,12 +60,6 @@
                 <groupId>org.jetbrains.pty4j</groupId>
                 <artifactId>pty4j</artifactId>
                 <version>${pty4j.version}</version>
-                <exclusions>
-                    <exclusion>
-                        <groupId>org.jetbrains.pty4j</groupId>
-                        <artifactId>purejavacomm</artifactId>
-                    </exclusion>
-                </exclusions>
             </dependency>
 
             <!-- GitLab API -->
@@ -83,6 +77,20 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <repositories>
+        <repository>
+            <id>jetbrains-intellij-dependencies</id>
+            <name>JetBrains IntelliJ Dependencies</name>
+            <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
 
     <build>
         <pluginManagement>

@@ -38,7 +38,12 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
         }
 
         session.getAttributes().put(SESSION_ID_ATTR, sessionId);
-        ptySessionManager.create(sessionId, output -> sendStdout(session, sessionId, output));
+        try {
+            ptySessionManager.create(sessionId, output -> sendStdout(session, sessionId, output));
+        } catch (IOException e) {
+            log.error("Failed to create PTY session {}", sessionId, e);
+            closeSilently(session, CloseStatus.SERVER_ERROR.withReason("Failed to create PTY session"));
+        }
     }
 
     @Override

@@ -1,4 +1,4 @@
 /**
- * REST endpoints for terminal lifecycle and queries.
+ * 包说明文件，声明包名
  */
 package com.repopilot.terminal.controller;

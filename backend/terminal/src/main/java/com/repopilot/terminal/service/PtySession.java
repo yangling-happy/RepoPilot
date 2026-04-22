@@ -1,5 +1,8 @@
 package com.repopilot.terminal.service;
 
+import com.pty4j.PtyProcess;
+import com.pty4j.PtyProcessBuilder;
+import com.pty4j.WinSize;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -7,6 +10,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -14,17 +18,20 @@ import java.util.function.Consumer;
 @Slf4j
 public class PtySession {
 
+    private static final int DEFAULT_COLUMNS = 80;
+    private static final int DEFAULT_ROWS = 24;
+
     @Getter
     private final String sessionId;
 
-    private final Process process;
+    private final PtyProcess process;
     private final OutputStream processInput;
     private final Thread outputPumpThread;
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
     public PtySession(String sessionId, Consumer<String> stdoutConsumer) throws IOException {
         this.sessionId = sessionId;
-        this.process = startShellProcess();
+        this.process = startPtyProcess();
         this.processInput = process.getOutputStream();
         this.outputPumpThread = startOutputPump(stdoutConsumer);
     }
@@ -39,8 +46,17 @@ public class PtySession {
     }
 
     public void resize(int cols, int rows) {
-        // Keep API compatibility for frontend resize messages.
-        // script-wrapped shell currently doesn't apply terminal size.
+        if (closed.get()) {
+            return;
+        }
+
+        int safeCols = Math.max(1, cols);
+        int safeRows = Math.max(1, rows);
+        try {
+            process.setWinSize(new WinSize(safeCols, safeRows));
+        } catch (Exception e) {
+            log.debug("Failed to resize PTY for session {}", sessionId, e);
+        }
     }
 
     public void close() {
@@ -63,24 +79,14 @@ public class PtySession {
         return thread;
     }
 
-    private Process startShellProcess() throws IOException {
-        ProcessBuilder processBuilder = new ProcessBuilder(createShellCommand());
-        processBuilder.directory(new java.io.File(System.getProperty("user.dir")));
-        processBuilder.redirectErrorStream(true);
-        processBuilder.environment().putAll(System.getenv());
-
-        try {
-            return processBuilder.start();
-        } catch (IOException firstError) {
-            if (!isWindows()) {
-                ProcessBuilder fallback = new ProcessBuilder("/bin/bash", "-i");
-                fallback.directory(new java.io.File(System.getProperty("user.dir")));
-                fallback.redirectErrorStream(true);
-                fallback.environment().putAll(System.getenv());
-                return fallback.start();
-            }
-            throw firstError;
-        }
+    private PtyProcess startPtyProcess() throws IOException {
+        return new PtyProcessBuilder(createShellCommand())
+                .setDirectory(System.getProperty("user.dir"))
+                .setEnvironment(new HashMap<>(System.getenv()))
+                .setRedirectErrorStream(true)
+                .setInitialColumns(DEFAULT_COLUMNS)
+                .setInitialRows(DEFAULT_ROWS)
+                .start();
     }
 
     private boolean isWindows() {
@@ -90,10 +96,9 @@ public class PtySession {
 
     private String[] createShellCommand() {
         if (isWindows()) {
-            return new String[] { "powershell.exe" };
+            return new String[] { "powershell.exe", "-NoLogo" };
         }
-        // script allocates a pseudo terminal so shell input has visible echo.
-        return new String[] { "script", "-qfc", "/bin/bash", "/dev/null" };
+        return new String[] { "/bin/bash", "-i" };
     }
 
     private void pumpOutput(Consumer<String> stdoutConsumer) {

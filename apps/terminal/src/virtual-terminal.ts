@@ -59,14 +59,35 @@ export function createVirtualTerminal(
 
   const initialLines = options.initialLines ?? [];
   let mountedContainer: HTMLElement | null = null;
+  let disposed = false;
   const focusTerminal = () => terminal.focus();
+
+  const safeFit = () => {
+    if (disposed || !mountedContainer || !mountedContainer.isConnected) {
+      return;
+    }
+    if (mountedContainer.clientWidth <= 0 || mountedContainer.clientHeight <= 0) {
+      return;
+    }
+    try {
+      fitAddon.fit();
+    } catch {
+      // Ignore transient xterm race during React dev remount and teardown.
+    }
+  };
 
   return {
     terminal,
     open(container: HTMLElement) {
+      if (disposed) {
+        return;
+      }
       mountedContainer = container;
       terminal.open(container);
-      fitAddon.fit();
+      safeFit();
+      requestAnimationFrame(() => {
+        safeFit();
+      });
       for (const line of initialLines) {
         terminal.writeln(line);
       }
@@ -75,9 +96,13 @@ export function createVirtualTerminal(
       container.addEventListener("touchstart", focusTerminal, { passive: true });
     },
     fit() {
-      fitAddon.fit();
+      safeFit();
     },
     dispose() {
+      if (disposed) {
+        return;
+      }
+      disposed = true;
       if (mountedContainer) {
         mountedContainer.removeEventListener("mousedown", focusTerminal);
         mountedContainer.removeEventListener("touchstart", focusTerminal);
