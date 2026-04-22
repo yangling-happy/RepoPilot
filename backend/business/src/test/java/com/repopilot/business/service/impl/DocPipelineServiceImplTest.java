@@ -24,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -73,7 +74,7 @@ class DocPipelineServiceImplTest {
                 .thenReturn(List.of("c2", "c3"));
         when(docTaskMapper.selectCount(any())).thenReturn(1L, 0L);
 
-        when(docTaskMapper.insert(any())).thenReturn(1);
+        stubTaskInsertWithId(42L);
         when(docTaskMapper.updateById(any())).thenReturn(1);
         when(gitLabDocClient.listCommitFileChanges("token", "proj", "c3")).thenReturn(List.of(
                 new CommitFileChange(null, "src/Test.java", CommitFileChange.ChangeType.MODIFIED)
@@ -90,9 +91,15 @@ class DocPipelineServiceImplTest {
         assertThat(result.getCreatedTaskCommitIds()).containsExactly("c3");
         assertThat(result.getFailedTaskCommitIds()).isEmpty();
 
+        ArgumentCaptor<DocTask> taskCaptor = ArgumentCaptor.forClass(DocTask.class);
+        verify(docTaskMapper).insert(taskCaptor.capture());
+        DocTask savedTask = taskCaptor.getValue();
+        assertThat(savedTask.getEventId()).startsWith("doc-refresh-c3-");
+
         ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
         verify(docFileMapper).insert(fileCaptor.capture());
         DocFile saved = fileCaptor.getValue();
+        assertThat(saved.getTaskId()).isEqualTo(42L);
         assertThat(saved.getProject()).isEqualTo("proj");
         assertThat(saved.getBranch()).isEqualTo("main");
         assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
@@ -109,7 +116,7 @@ class DocPipelineServiceImplTest {
         when(gitLabDocClient.listCommitIdsSince("token", "proj", "c1", "c2")).thenReturn(List.of("c2"));
         when(docTaskMapper.selectCount(any())).thenReturn(0L);
 
-        when(docTaskMapper.insert(any())).thenReturn(1);
+        stubTaskInsertWithId(43L);
         when(docTaskMapper.updateById(any())).thenReturn(1);
         when(gitLabDocClient.listCommitFileChanges("token", "proj", "c2")).thenReturn(List.of(
                 new CommitFileChange(null, "README.md", CommitFileChange.ChangeType.MODIFIED)
@@ -130,7 +137,7 @@ class DocPipelineServiceImplTest {
         when(gitLabDocClient.listCommitIdsSince("token", "proj", "c1", "c2")).thenReturn(List.of("c2"));
         when(docTaskMapper.selectCount(any())).thenReturn(0L);
 
-        when(docTaskMapper.insert(any())).thenReturn(1);
+        stubTaskInsertWithId(44L);
         when(docTaskMapper.updateById(any())).thenReturn(1);
         when(gitLabDocClient.listCommitFileChanges("token", "proj", "c2")).thenReturn(List.of(
                 new CommitFileChange("src/OldFile.java", null, CommitFileChange.ChangeType.DELETED)
@@ -146,6 +153,7 @@ class DocPipelineServiceImplTest {
         ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
         verify(docFileMapper).insert(fileCaptor.capture());
         DocFile saved = fileCaptor.getValue();
+        assertThat(saved.getTaskId()).isEqualTo(44L);
         assertThat(saved.getFilePath()).isEqualTo("src/OldFile.java");
         assertThat(saved.getDocFilePath()).isNull();
         assertThat(saved.getParseErrorMsg()).isEqualTo("File deleted");
@@ -158,6 +166,14 @@ class DocPipelineServiceImplTest {
         task.setCommitId(commitId);
         task.setStatus(status);
         return task;
+    }
+
+    private void stubTaskInsertWithId(long id) {
+        doAnswer(invocation -> {
+            DocTask task = invocation.getArgument(0);
+            task.setId(id);
+            return 1;
+        }).when(docTaskMapper).insert(any(DocTask.class));
     }
 
     private void setField(String name, Object value) throws Exception {

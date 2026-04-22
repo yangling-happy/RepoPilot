@@ -149,6 +149,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
     private String runExtractionTask(String project, String branch, String commitId, String token) {
         DocTask task = new DocTask();
+        task.setEventId(buildTaskEventId(commitId));
         task.setProject(project);
         task.setBranch(branch);
         task.setCommitId(commitId);
@@ -159,7 +160,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         long start = System.currentTimeMillis();
         try {
             List<CommitFileChange> changes = gitLabDocClient.listCommitFileChanges(token, project, commitId);
-            int handledDocFiles = applyChanges(project, branch, commitId, token, changes);
+            int handledDocFiles = applyChanges(project, branch, commitId, task.getId(), token, changes);
 
             String finalStatus = handledDocFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
             task.setStatus(finalStatus);
@@ -178,6 +179,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private int applyChanges(String project,
                              String branch,
                              String commitId,
+                             Long taskId,
                              String token,
                              List<CommitFileChange> changes) {
         if (changes == null || changes.isEmpty()) {
@@ -188,7 +190,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         for (CommitFileChange change : changes) {
             switch (change.getChangeType()) {
                 case ADDED, MODIFIED -> {
-                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, token)) {
+                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, taskId, token)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -196,7 +198,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
                 case DELETED -> {
                     if (isSupportedDocFile(change.getOldPath())) {
-                        upsertDeletedDoc(project, branch, change.getOldPath(), commitId);
+                        upsertDeletedDoc(project, branch, change.getOldPath(), commitId, taskId);
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getOldPath());
@@ -204,12 +206,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
                 case RENAMED -> {
                     if (isSupportedDocFile(change.getOldPath())) {
-                        upsertDeletedDoc(project, branch, change.getOldPath(), commitId);
+                        upsertDeletedDoc(project, branch, change.getOldPath(), commitId, taskId);
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getOldPath());
                     }
-                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, token)) {
+                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, taskId, token)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -221,7 +223,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return handled;
     }
 
-    private boolean upsertActiveDoc(String project, String branch, String filePath, String commitId, String token) {
+    private boolean upsertActiveDoc(String project,
+                                    String branch,
+                                    String filePath,
+                                    String commitId,
+                                    Long taskId,
+                                    String token) {
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
             return false;
@@ -238,18 +245,19 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .outputRoot(resolveDocOutputRoot())
                 .build());
 
-        upsertDocFile(project, branch, filePath, commitId, result.getDocFilePath(), null);
+        upsertDocFile(project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
         return true;
     }
 
-    private void upsertDeletedDoc(String project, String branch, String filePath, String commitId) {
-        upsertDocFile(project, branch, filePath, commitId, null, "File deleted");
+    private void upsertDeletedDoc(String project, String branch, String filePath, String commitId, Long taskId) {
+        upsertDocFile(project, branch, filePath, commitId, taskId, null, "File deleted");
     }
 
     private void upsertDocFile(String project,
                                String branch,
                                String filePath,
                                String commitId,
+                               Long taskId,
                                String docFilePath,
                                String parseErrorMsg) {
         LambdaQueryWrapper<DocFile> query = new LambdaQueryWrapper<>();
@@ -262,6 +270,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         DocFile existing = docFileMapper.selectOne(query);
         if (existing == null) {
             DocFile item = new DocFile();
+            item.setTaskId(taskId);
             item.setProjectName(project);
             item.setBranchName(branch);
             item.setFilePath(filePath);
@@ -273,10 +282,16 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             return;
         }
 
+        existing.setTaskId(taskId);
         existing.setDocFilePath(docFilePath);
         existing.setParseStatus(STATUS_SUCCESS);
         existing.setParseErrorMsg(parseErrorMsg);
         docFileMapper.updateById(existing);
+    }
+
+    private String buildTaskEventId(String commitId) {
+        String safeCommitId = StringUtils.hasText(commitId) ? commitId.trim() : "unknown";
+        return "doc-refresh-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
     private String findBaselineCommit(String project, String branch) {

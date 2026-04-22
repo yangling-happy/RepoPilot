@@ -30,16 +30,13 @@ backend/
 - JDK 17+
 - MySQL 8.0+（仅 business 服务必需）
 
-说明：仓库已包含 Maven Wrapper（`mvnw` / `mvnw.cmd`），可不预装 Maven。
+说明：仓库已包含 Maven Wrapper（`mvnw`），可不预装 Maven。
 
 ### 构建项目
 
 ```bash
-# Linux / macOS
+# WSL / Linux / macOS
 ./mvnw clean install
-
-# Windows PowerShell
-.\mvnw.cmd clean install
 ```
 
 ### 配置数据库
@@ -61,6 +58,12 @@ CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```bash
 # Linux / macOS / WSL
 mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/01_init_tables.sql
+```
+
+如果本地数据库是旧版本已经建过表，再执行一次迁移脚本对齐字段：
+
+```bash
+mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/02_migrate_doc_schema.sql
 ```
 
 3. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
@@ -129,6 +132,7 @@ cd gateway
 ### 文档管理
 
 - `POST /api/doc/webhook/gitlab` - GitLab Webhook
+- `POST /api/doc/refresh` - 拉取 GitLab 提交差异，按文件后缀生成解析文档并写入 `doc_file_dtl`
 - `POST /api/doc/rebuild` - 重新构建文档
 - `GET /api/doc/query` - 查询文档
 - `POST /api/doc/task/create` - 写入文档任务（doc_task）
@@ -143,23 +147,102 @@ cd gateway
 - `GET /api/deploy/log` - 查询部署日志
 - `POST /api/deploy/cancel` - 取消部署
 
-### 仓库克隆调用示例
+### Gitlet 示例：克隆仓库并生成解析文档
 
-先调用 `POST /api/session/setGitlabToken` 设置会话 Token，再调用克隆接口：
+以下示例以 GitLab 项目 `Gitlet` 为例，`projectId = 2`，分支为 `main`。
 
-```powershell
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/repo/clone" -ContentType "application/json" -Body (@{
-  projectId = 123456
-  branch = "main"
-} | ConvertTo-Json)
+如果使用本地 GitLab，需要先把 business 服务的 GitLab API 地址指向本地实例。默认配置是 `https://gitlab.com/api/v4`，本地环境可按下面方式启动：
+
+```bash
+cd backend/business
+../mvnw spring-boot:run -Dspring-boot.run.arguments=--gitlab.api-url=http://localhost:8081/api/v4
 ```
 
+`/api/session/setGitlabToken` 使用 `HttpSession` 保存 Token，所以后续 clone、refresh 请求要复用同一个 cookie 文件：
+
+```bash
+BASE_URL="http://localhost:8080/api"
+COOKIE_JAR="$(mktemp)"
+TOKEN="<YOUR_GITLAB_TOKEN>"
+
+curl -sS -X POST -c "$COOKIE_JAR" \
+  --data-urlencode "token=${TOKEN}" \
+  "${BASE_URL}/session/setGitlabToken"
+```
+
+克隆 Gitlet 到本地：
+
+```bash
+curl -sS -X POST -b "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -d '{"projectId":2,"branch":"main"}' \
+  "${BASE_URL}/repo/clone"
+```
+
+默认克隆目录为：
+
+```text
+backend/business/workspace/repos/project-2
+```
+
+如果接口提示目录已存在，说明仓库已经克隆过；可以直接继续执行文档刷新。
+
+基于已经克隆到本地的 Gitlet 仓库生成解析文档：
+
+```bash
+curl -sS -X POST -b "$COOKIE_JAR" \
+  -H "Content-Type: application/json" \
+  -d '{"project":"2","branch":"main"}' \
+  "${BASE_URL}/doc/refresh"
+```
+
+这里 `project` 建议传 GitLab 项目 ID 字符串 `"2"`。文档生成逻辑会用它定位本地仓库 `workspace/repos/project-2`，并把该目录加入 javadoc 的 `sourcepath`，这样 Gitlet 的 Java 文件在解析依赖类型时能看到同仓库源码。
+
+生成结果会写入数据库表 `doc_file_dtl`：
+
+- `file_path`：原始源码文件路径，例如 `gitlet/Repository.java`
+- `commit_id`：本次 GitLab diff 对应的提交
+- `doc_file_path`：javadoc 生成出来的主 HTML 文件本地路径
+- `parse_status`：`SUCCESS` 表示生成成功，`FAILED` 表示生成失败
+- `parse_error_msg`：失败原因；文件删除场景会记录 `File deleted`
+
+同时，javadoc 文件会落盘到：
+
+```text
+backend/business/workspace/docs/2/main/{commitId}/{filePathHash}/...
+```
+
+例如某次生成后，`doc_file_path` 可能指向：
+
+```text
+/path/to/RepoPilot/backend/business/workspace/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/gitlet/Repository.html
+```
+
+查询当前可展示的文档：
+
+```bash
+curl -sS -b "$COOKIE_JAR" "${BASE_URL}/doc/query?project=2&branch=main"
+```
+
+在本地查看生成文件：
+
+```bash
+cd backend/business
+find ./workspace/docs/2/main -name '*.html' -print
+```
+
+判断功能是否正确，可以看三处：
+
+- `/doc/refresh` 返回成功，且 `processedCount`/`successCount` 有符合预期的数量。
+- `/doc/query?project=2&branch=main` 返回的条目里，Java 文件有 `docFilePath` 且 `parseStatus = SUCCESS`。
+- `docFilePath` 指向的 HTML 文件真实存在，浏览器打开后是 javadoc 页面。
+
 说明：
-- `projectId` 必填，使用 GitLab 项目稳定 ID。
-- `branch` 可选，未传时默认 `main`。
-- 本地目录已存在时会直接返回错误，不会覆盖。
-- 默认落盘目录为 `business/workspace/repos/project-{projectId}`（按 README 的启动方式）。
-- 克隆目录已加入 `.gitignore`，不会提交到项目仓库。
+- 当前已接入 `.java` 后缀，对应生成工具为 `javadoc`；其它语言后续只需要新增对应 `DocGenerator` 并注册支持后缀。
+- 目前 `.md`、`.py` 等未支持后缀会被跳过并记录日志，不会生成 `doc_file_dtl` 成功文档。
+- `workspace/repos` 和 `workspace/docs` 都已加入 `.gitignore`，不会提交到项目仓库。
+- 克隆根目录可通过 `REPO_CLONE_ROOT` 或 `--repo.clone.root-dir=...` 覆盖。
+- 文档生成根目录可通过 `DOC_OUTPUT_ROOT` 或 `--doc.output.root-dir=...` 覆盖。
 
 ## 写入接口结构速览
 
@@ -209,49 +292,56 @@ Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/repo/clone" -Cont
 
 ## 写入验证样例
 
-以下示例用于快速验证新增写入接口（Windows PowerShell）：
+以下示例用于快速验证新增写入接口（bash）：
 
-```powershell
-$ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
-$deployTaskId = "dep-$ts"
-$buildTaskId = "bld-$ts"
-$deployCommitId = "commit-$ts"
-$docCommitId = "doc-$ts"
-$docFilePath = "src/main/java/com/repopilot/demo/Sample$ts.java"
+```bash
+BASE_URL="http://localhost:8080/api"
+ts="$(date +%s%3N)"
+deployTaskId="dep-${ts}"
+buildTaskId="bld-${ts}"
+deployCommitId="commit-${ts}"
+docCommitId="doc-${ts}"
+docFilePath="src/main/java/com/repopilot/demo/Sample${ts}.java"
 
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/deploy/task/create" -ContentType "application/json" -Body (@{
-  deployTaskId = $deployTaskId
-  projectName = "RepoPilot"
-  branchName = "main"
-  commitId = $deployCommitId
-  deployParams = "--profile=test"
-  runStatus = "SUCCESS"
-  logDirPath = "logs/deploy/$deployTaskId"
-  resultPath = "output/$deployTaskId.json"
-  duration = 42
-} | ConvertTo-Json)
+curl -sS -X POST "${BASE_URL}/deploy/task/create" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"deployTaskId\": \"${deployTaskId}\",
+    \"projectName\": \"RepoPilot\",
+    \"branchName\": \"main\",
+    \"commitId\": \"${deployCommitId}\",
+    \"deployParams\": \"--profile=test\",
+    \"runStatus\": \"SUCCESS\",
+    \"logDirPath\": \"logs/deploy/${deployTaskId}\",
+    \"resultPath\": \"output/${deployTaskId}.json\",
+    \"duration\": 42
+  }"
 
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/deploy/build/task/create" -ContentType "application/json" -Body (@{
-  buildTaskId = $buildTaskId
-  deployTaskId = $deployTaskId
-  projectName = "RepoPilot"
-  branchName = "main"
-  commitId = $deployCommitId
-  scriptPath = "scripts/build.sh"
-  artifactPath = "dist/app.jar"
-  logDirPath = "logs/build/$buildTaskId"
-  runStatus = "SUCCESS"
-  duration = 21
-} | ConvertTo-Json)
+curl -sS -X POST "${BASE_URL}/deploy/build/task/create" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"buildTaskId\": \"${buildTaskId}\",
+    \"deployTaskId\": \"${deployTaskId}\",
+    \"projectName\": \"RepoPilot\",
+    \"branchName\": \"main\",
+    \"commitId\": \"${deployCommitId}\",
+    \"scriptPath\": \"scripts/build.sh\",
+    \"artifactPath\": \"dist/app.jar\",
+    \"logDirPath\": \"logs/build/${buildTaskId}\",
+    \"runStatus\": \"SUCCESS\",
+    \"duration\": 21
+  }"
 
-Invoke-RestMethod -Method Post -Uri "http://localhost:8080/api/doc/file/create" -ContentType "application/json" -Body (@{
-  projectName = "RepoPilot"
-  branchName = "main"
-  filePath = $docFilePath
-  commitId = $docCommitId
-  docFilePath = "docs/Sample$ts.md"
-  parseStatus = "SUCCESS"
-} | ConvertTo-Json)
+curl -sS -X POST "${BASE_URL}/doc/file/create" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"projectName\": \"RepoPilot\",
+    \"branchName\": \"main\",
+    \"filePath\": \"${docFilePath}\",
+    \"commitId\": \"${docCommitId}\",
+    \"docFilePath\": \"workspace/docs/RepoPilot/main/${docCommitId}/Sample${ts}.html\",
+    \"parseStatus\": \"SUCCESS\"
+  }"
 ```
 
 ## 数据库表结构

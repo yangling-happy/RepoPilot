@@ -38,6 +38,6 @@ build/
 *.log
 logs/
 
-### Local cloned repositories ###
-workspace/repos/
-business/workspace/repos/
+### Local runtime workspace ###
+workspace/
+business/workspace/
