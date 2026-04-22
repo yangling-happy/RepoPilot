@@ -1,8 +1,6 @@
 package com.repopilot.business.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repopilot.business.dto.DocQueryItem;
 import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
@@ -10,24 +8,29 @@ import com.repopilot.business.entity.DocTask;
 import com.repopilot.business.mapper.DocFileMapper;
 import com.repopilot.business.mapper.DocTaskMapper;
 import com.repopilot.business.service.DocPipelineService;
+import com.repopilot.business.service.docgen.DocGenerationContext;
+import com.repopilot.business.service.docgen.DocGenerationResult;
+import com.repopilot.business.service.docgen.DocGenerator;
+import com.repopilot.business.service.docgen.DocGeneratorRegistry;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
 import com.repopilot.business.service.gitlab.model.CommitFileChange;
 import com.repopilot.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-// 基于 commit 的文档流水线实现。
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -37,14 +40,18 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_SKIPPED = "SKIPPED";
-    private static final Pattern JAVADOC_PATTERN = Pattern.compile("/\\*\\*.*?\\*/", Pattern.DOTALL);
 
     private final DocTaskMapper docTaskMapper;
     private final DocFileMapper docFileMapper;
     private final GitLabDocClient gitLabDocClient;
-    private final ObjectMapper objectMapper;
+    private final DocGeneratorRegistry docGeneratorRegistry;
 
-    // 按 commit 顺序检测未处理记录并执行提取任务。
+    @Value("${repo.clone.root-dir:./workspace/repos}")
+    private String repoCloneRoot;
+
+    @Value("${doc.output.root-dir:./workspace/docs}")
+    private String docOutputRoot;
+
     @Override
     public DocRefreshResult refresh(String project, String branch, String token) {
         validateProjectAndBranch(project, branch);
@@ -91,7 +98,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return result;
     }
 
-    // 对指定 commit 强制提取，失败时向调用方抛错。
     @Override
     public void rebuild(String project, String branch, String commitId, String token) {
         validateProjectAndBranch(project, branch);
@@ -105,7 +111,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
-    // 返回指定 commit 记录，或按文件维度返回最新未删除快照。
     @Override
     public List<DocQueryItem> query(String project, String branch, String filePath, String commitId) {
         if (!StringUtils.hasText(project)) {
@@ -137,12 +142,11 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
 
         return latestByFile.values().stream()
-                .filter(row -> !Boolean.TRUE.equals(row.getDeleted()))
+                .filter(row -> StringUtils.hasText(row.getDocFilePath()))
                 .map(this::toQueryItem)
                 .collect(Collectors.toList());
     }
 
-    // 创建任务日志并执行单个 commit 的文件变更处理。
     private String runExtractionTask(String project, String branch, String commitId, String token) {
         DocTask task = new DocTask();
         task.setProject(project);
@@ -155,9 +159,9 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         long start = System.currentTimeMillis();
         try {
             List<CommitFileChange> changes = gitLabDocClient.listCommitFileChanges(token, project, commitId);
-            int handledJavaFiles = applyChanges(project, branch, commitId, token, changes);
+            int handledDocFiles = applyChanges(project, branch, commitId, token, changes);
 
-            String finalStatus = handledJavaFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
+            String finalStatus = handledDocFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
             task.setStatus(finalStatus);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
@@ -171,7 +175,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
-    // 应用单个 commit 的文件级变更，并返回处理文件数量。
     private int applyChanges(String project,
                              String branch,
                              String commitId,
@@ -185,25 +188,31 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         for (CommitFileChange change : changes) {
             switch (change.getChangeType()) {
                 case ADDED, MODIFIED -> {
-                    if (isJavaFile(change.getNewPath())) {
-                        upsertActiveDoc(project, branch, change.getNewPath(), commitId, token);
+                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, token)) {
                         handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getNewPath());
                     }
                 }
                 case DELETED -> {
-                    if (isJavaFile(change.getOldPath())) {
+                    if (isSupportedDocFile(change.getOldPath())) {
                         upsertDeletedDoc(project, branch, change.getOldPath(), commitId);
                         handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getOldPath());
                     }
                 }
                 case RENAMED -> {
-                    if (isJavaFile(change.getOldPath())) {
+                    if (isSupportedDocFile(change.getOldPath())) {
                         upsertDeletedDoc(project, branch, change.getOldPath(), commitId);
                         handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getOldPath());
                     }
-                    if (isJavaFile(change.getNewPath())) {
-                        upsertActiveDoc(project, branch, change.getNewPath(), commitId, token);
+                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, token)) {
                         handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getNewPath());
                     }
                 }
             }
@@ -212,47 +221,40 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return handled;
     }
 
-    // 解析当前文件内容并写入有效文档记录。
-    private void upsertActiveDoc(String project, String branch, String filePath, String commitId, String token) {
+    private boolean upsertActiveDoc(String project, String branch, String filePath, String commitId, String token) {
+        DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
+        if (generator == null) {
+            return false;
+        }
+
         String fileContent = gitLabDocClient.readFileContent(token, project, filePath, commitId);
-        List<String> javaDocBlocks = extractJavaDocBlocks(fileContent);
+        DocGenerationResult result = generator.generate(DocGenerationContext.builder()
+                .project(project)
+                .branch(branch)
+                .commitId(commitId)
+                .filePath(filePath)
+                .sourceContent(fileContent)
+                .sourceRoot(resolveSourceRoot(project))
+                .outputRoot(resolveDocOutputRoot())
+                .build());
 
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("project", project);
-        payload.put("branch", branch);
-        payload.put("filePath", filePath);
-        payload.put("commitId", commitId);
-        payload.put("deleted", false);
-        payload.put("commentCount", javaDocBlocks.size());
-        payload.put("comments", javaDocBlocks);
-
-        String markdown = toMarkdown(filePath, javaDocBlocks);
-        upsertDocFile(project, branch, filePath, commitId, toJson(payload), markdown, false);
+        upsertDocFile(project, branch, filePath, commitId, result.getDocFilePath(), null);
+        return true;
     }
 
-    // 为本次 commit 删除的文件写入删除标记记录。
     private void upsertDeletedDoc(String project, String branch, String filePath, String commitId) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("project", project);
-        payload.put("branch", branch);
-        payload.put("filePath", filePath);
-        payload.put("commitId", commitId);
-        payload.put("deleted", true);
-
-        upsertDocFile(project, branch, filePath, commitId, toJson(payload), null, true);
+        upsertDocFile(project, branch, filePath, commitId, null, "File deleted");
     }
 
-    // 按 project/branch/file/commit upsert 一条 doc_file_dtl 记录。
     private void upsertDocFile(String project,
                                String branch,
                                String filePath,
                                String commitId,
-                               String docJson,
-                               String docMarkdown,
-                               boolean deleted) {
+                               String docFilePath,
+                               String parseErrorMsg) {
         LambdaQueryWrapper<DocFile> query = new LambdaQueryWrapper<>();
         query.eq(DocFile::getProjectName, project)
-            .eq(DocFile::getBranchName, branch)
+                .eq(DocFile::getBranchName, branch)
                 .eq(DocFile::getFilePath, filePath)
                 .eq(DocFile::getCommitId, commitId)
                 .last("LIMIT 1");
@@ -264,20 +266,19 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             item.setBranchName(branch);
             item.setFilePath(filePath);
             item.setCommitId(commitId);
-            item.setDocJson(docJson);
-            item.setDocMarkdown(docMarkdown);
-            item.setDeleted(deleted);
+            item.setDocFilePath(docFilePath);
+            item.setParseStatus(STATUS_SUCCESS);
+            item.setParseErrorMsg(parseErrorMsg);
             docFileMapper.insert(item);
             return;
         }
 
-        existing.setDocJson(docJson);
-        existing.setDocMarkdown(docMarkdown);
-        existing.setDeleted(deleted);
+        existing.setDocFilePath(docFilePath);
+        existing.setParseStatus(STATUS_SUCCESS);
+        existing.setParseErrorMsg(parseErrorMsg);
         docFileMapper.updateById(existing);
     }
 
-    // 读取最近成功基线 commit，用于增量比对。
     private String findBaselineCommit(String project, String branch) {
         LambdaQueryWrapper<DocTask> query = new LambdaQueryWrapper<>();
         query.eq(DocTask::getProject, project)
@@ -290,7 +291,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return latestTask == null ? null : latestTask.getCommitId();
     }
 
-    // 检查同一分支下该 commit 是否已处理。
     private boolean alreadyHandled(String project, String branch, String commitId) {
         LambdaQueryWrapper<DocTask> query = new LambdaQueryWrapper<>();
         query.eq(DocTask::getProject, project)
@@ -301,68 +301,48 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return docTaskMapper.selectCount(query) > 0;
     }
 
-    // 从源码中提取 JavaDoc 块注释。
-    private List<String> extractJavaDocBlocks(String sourceCode) {
-        if (!StringUtils.hasText(sourceCode)) {
-            return List.of();
-        }
-
-        Matcher matcher = JAVADOC_PATTERN.matcher(sourceCode);
-        List<String> blocks = new java.util.ArrayList<>();
-        while (matcher.find()) {
-            blocks.add(matcher.group());
-        }
-        return blocks;
+    private boolean isSupportedDocFile(String path) {
+        return docGeneratorRegistry.supports(path);
     }
 
-    // 将提取出的 JavaDoc 注释转换为简要 markdown 文档。
-    private String toMarkdown(String filePath, List<String> javaDocBlocks) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("# ").append(filePath).append("\n\n");
-
-        if (javaDocBlocks.isEmpty()) {
-            builder.append("No JavaDoc comments found.\n");
-            return builder.toString();
-        }
-
-        for (int i = 0; i < javaDocBlocks.size(); i++) {
-            builder.append("## JavaDoc ").append(i + 1).append("\n\n");
-            builder.append("```java\n");
-            builder.append(javaDocBlocks.get(i)).append("\n");
-            builder.append("```\n\n");
-        }
-        return builder.toString();
-    }
-
-    // 将 payload 序列化为 JSON，存入 doc_json。
-    private String toJson(Map<String, Object> payload) {
-        try {
-            return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
-            throw new BusinessException(500, "Failed to serialize doc payload");
+    private void logUnsupportedFile(String project, String commitId, String filePath) {
+        if (StringUtils.hasText(filePath)) {
+            log.warn("Skip unsupported doc file. project={}, commitId={}, filePath={}", project, commitId, filePath);
         }
     }
 
-    // 当前 MVP 仅处理 Java 文件。
-    private boolean isJavaFile(String path) {
-        return StringUtils.hasText(path) && path.endsWith(".java");
+    private Path resolveSourceRoot(String project) {
+        if (!StringUtils.hasText(project) || !project.trim().matches("\\d+")) {
+            return null;
+        }
+
+        String rootDir = StringUtils.hasText(repoCloneRoot) ? repoCloneRoot : "./workspace/repos";
+        Path root = Paths.get(rootDir).toAbsolutePath().normalize();
+        Path candidate = root.resolve("project-" + project.trim()).normalize();
+        if (!candidate.startsWith(root) || !Files.isDirectory(candidate)) {
+            return null;
+        }
+        return candidate;
     }
 
-    // 将持久化模型映射为查询返回模型。
+    private Path resolveDocOutputRoot() {
+        String rootDir = StringUtils.hasText(docOutputRoot) ? docOutputRoot : "./workspace/docs";
+        return Paths.get(rootDir).toAbsolutePath().normalize();
+    }
+
     private DocQueryItem toQueryItem(DocFile row) {
         DocQueryItem item = new DocQueryItem();
         item.setProject(row.getProjectName());
         item.setBranch(row.getBranchName());
         item.setFilePath(row.getFilePath());
         item.setCommitId(row.getCommitId());
-        item.setDocJson(row.getDocJson());
-        item.setDocMarkdown(row.getDocMarkdown());
-        item.setDeleted(row.getDeleted());
+        item.setDocFilePath(row.getDocFilePath());
+        item.setParseStatus(row.getParseStatus());
+        item.setParseErrorMsg(row.getParseErrorMsg());
         item.setUpdateTime(row.getUpdateTime());
         return item;
     }
 
-    // 校验 refresh/rebuild 的必填参数。
     private void validateProjectAndBranch(String project, String branch) {
         if (!StringUtils.hasText(project) || !StringUtils.hasText(branch)) {
             throw new BusinessException(400, "project and branch are required");

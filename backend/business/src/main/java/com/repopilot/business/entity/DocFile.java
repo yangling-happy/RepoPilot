@@ -19,10 +19,6 @@ public class DocFile {
     private String docFilePath;
     private String parseStatus;
     private String parseErrorMsg;
-    private String docJson;
-    private String docMarkdown;
-    @TableField("is_deleted")
-    private Boolean deleted;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 

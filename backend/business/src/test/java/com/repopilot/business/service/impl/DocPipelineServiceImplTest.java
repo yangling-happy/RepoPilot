@@ -1,11 +1,12 @@
 package com.repopilot.business.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
 import com.repopilot.business.entity.DocTask;
 import com.repopilot.business.mapper.DocFileMapper;
 import com.repopilot.business.mapper.DocTaskMapper;
+import com.repopilot.business.service.docgen.DocGeneratorRegistry;
+import com.repopilot.business.service.docgen.JavaDocGenerator;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
 import com.repopilot.business.service.gitlab.model.CommitFileChange;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,6 +16,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,10 +40,14 @@ class DocPipelineServiceImplTest {
     private GitLabDocClient gitLabDocClient;
 
     private DocPipelineServiceImpl service;
+    private Path docOutputRoot;
 
     @BeforeEach
-    void setUp() {
-        service = new DocPipelineServiceImpl(docTaskMapper, docFileMapper, gitLabDocClient, new ObjectMapper());
+    void setUp() throws Exception {
+        DocGeneratorRegistry registry = new DocGeneratorRegistry(List.of(new JavaDocGenerator()));
+        service = new DocPipelineServiceImpl(docTaskMapper, docFileMapper, gitLabDocClient, registry);
+        docOutputRoot = Files.createTempDirectory("repopilot-doc-test-");
+        setField("docOutputRoot", docOutputRoot.toString());
     }
 
     @Test
@@ -90,8 +97,30 @@ class DocPipelineServiceImplTest {
         assertThat(saved.getBranch()).isEqualTo("main");
         assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
         assertThat(saved.getCommitId()).isEqualTo("c3");
-        assertThat(saved.getDeleted()).isFalse();
-        assertThat(saved.getDocMarkdown()).contains("JavaDoc 1");
+        assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
+        assertThat(saved.getDocFilePath()).isNotBlank();
+        assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+    }
+
+    @Test
+    void refresh_shouldSkipUnsupportedFileSuffix_withoutReadingContent() {
+        when(gitLabDocClient.getHeadCommit("token", "proj", "main")).thenReturn("c2");
+        when(docTaskMapper.selectOne(any())).thenReturn(task("c1", "SUCCESS"));
+        when(gitLabDocClient.listCommitIdsSince("token", "proj", "c1", "c2")).thenReturn(List.of("c2"));
+        when(docTaskMapper.selectCount(any())).thenReturn(0L);
+
+        when(docTaskMapper.insert(any())).thenReturn(1);
+        when(docTaskMapper.updateById(any())).thenReturn(1);
+        when(gitLabDocClient.listCommitFileChanges("token", "proj", "c2")).thenReturn(List.of(
+                new CommitFileChange(null, "README.md", CommitFileChange.ChangeType.MODIFIED)
+        ));
+
+        DocRefreshResult result = service.refresh("proj", "main", "token");
+
+        assertThat(result.getCreatedTaskCommitIds()).containsExactly("c2");
+        assertThat(result.getFailedTaskCommitIds()).isEmpty();
+        verify(gitLabDocClient, never()).readFileContent(eq("token"), eq("proj"), eq("README.md"), eq("c2"));
+        verifyNoInteractions(docFileMapper);
     }
 
     @Test
@@ -118,8 +147,8 @@ class DocPipelineServiceImplTest {
         verify(docFileMapper).insert(fileCaptor.capture());
         DocFile saved = fileCaptor.getValue();
         assertThat(saved.getFilePath()).isEqualTo("src/OldFile.java");
-        assertThat(saved.getDeleted()).isTrue();
-        assertThat(saved.getDocMarkdown()).isNull();
+        assertThat(saved.getDocFilePath()).isNull();
+        assertThat(saved.getParseErrorMsg()).isEqualTo("File deleted");
 
         verify(gitLabDocClient, never()).readFileContent(eq("token"), eq("proj"), eq("src/OldFile.java"), eq("c2"));
     }
@@ -129,6 +158,12 @@ class DocPipelineServiceImplTest {
         task.setCommitId(commitId);
         task.setStatus(status);
         return task;
+    }
+
+    private void setField(String name, Object value) throws Exception {
+        java.lang.reflect.Field field = DocPipelineServiceImpl.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(service, value);
     }
 }
 //这是一个测试文件，用于测试DocPipelineServiceImpl类的refresh方法。它使用Mockito框架模拟了GitLabDocClient、DocTaskMapper和DocFileMapper的行为，并验证了在不同情况下refresh方法的逻辑是否正确。测试覆盖了以下场景：

@@ -324,8 +324,7 @@ export interface DocFile {
   branch: string;
   filePath: string;
   commitId: string;
-  docJson: string;
-  docMarkdown: string;
+  docFilePath: string;
   updateTime: Date;
 }
 

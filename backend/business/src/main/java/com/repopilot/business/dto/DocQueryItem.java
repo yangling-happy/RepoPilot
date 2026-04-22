@@ -12,8 +12,8 @@ public class DocQueryItem {
     private String branch;
     private String filePath;
     private String commitId;
-    private String docJson;
-    private String docMarkdown;
-    private Boolean deleted;
+    private String docFilePath;
+    private String parseStatus;
+    private String parseErrorMsg;
     private LocalDateTime updateTime;
 }
