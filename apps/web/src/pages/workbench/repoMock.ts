@@ -3,7 +3,8 @@ export type WorkbenchRepo = {
   name: string;
   visibility: "private" | "internal";
   stack: string;
-  descriptionKey: string;
+  descriptionKey?: string;
+  description?: string;
   branch: string;
   owner: string;
   lastUpdatedAt: string;

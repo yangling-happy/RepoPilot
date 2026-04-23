@@ -9,17 +9,35 @@ import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
 import { WORKBENCH_REPOS } from "./repoMock";
+import { loadClonedRepos } from "./repoLocalStore";
 
 export function WorkbenchPageView() {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const repositories = useMemo(() => {
+    const clonedRepos = loadClonedRepos();
+    const merged = [...clonedRepos, ...WORKBENCH_REPOS];
+    const seen = new Set<string>();
+    return merged.filter((repo) => {
+      if (seen.has(repo.id)) {
+        return false;
+      }
+      seen.add(repo.id);
+      return true;
+    });
+  }, []);
+
   const selectedRepoId = searchParams.get("repo");
 
   const selectedRepo = useMemo(
-    () => WORKBENCH_REPOS.find((repo) => repo.id === selectedRepoId),
-    [selectedRepoId],
+    () => repositories.find((repo) => repo.id === selectedRepoId),
+    [repositories, selectedRepoId],
   );
+
+  const selectedRepoDescription = selectedRepo?.descriptionKey
+    ? t(`pages.dashboard.repoDescriptions.${selectedRepo.descriptionKey}`)
+    : selectedRepo?.description || "-";
 
   const openDetails = (repoId: string) => {
     setSearchParams({ repo: repoId });
@@ -65,22 +83,23 @@ export function WorkbenchPageView() {
         },
         {
           label: t("pages.dashboard.detail.docsEndpoint"),
-          value: (
-            <a
-              href={selectedRepo.docsEndpoint}
-              target="_blank"
-              rel="noreferrer"
-              className="text-neutral-950 underline decoration-neutral-300 underline-offset-4 transition hover:decoration-neutral-950 dark:text-white dark:decoration-white/30 dark:hover:decoration-white"
-            >
-              {selectedRepo.docsEndpoint}
-            </a>
-          ),
+          value:
+            selectedRepo.docsEndpoint === "-" ? (
+              "-"
+            ) : (
+              <a
+                href={selectedRepo.docsEndpoint}
+                target="_blank"
+                rel="noreferrer"
+                className="text-neutral-950 underline decoration-neutral-300 underline-offset-4 transition hover:decoration-neutral-950 dark:text-white dark:decoration-white/30 dark:hover:decoration-white"
+              >
+                {selectedRepo.docsEndpoint}
+              </a>
+            ),
         },
         {
           label: t("pages.dashboard.detail.summary"),
-          value: t(
-            `pages.dashboard.repoDescriptions.${selectedRepo.descriptionKey}`,
-          ),
+          value: selectedRepoDescription,
         },
       ]
     : [];
@@ -97,7 +116,7 @@ export function WorkbenchPageView() {
       </header>
 
       <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {WORKBENCH_REPOS.map((repo) => (
+        {repositories.map((repo) => (
           <article
             key={repo.id}
             role="button"
@@ -125,7 +144,9 @@ export function WorkbenchPageView() {
               </div>
 
               <p className="text-sm leading-snug text-neutral-600 dark:text-neutral-400">
-                {t(`pages.dashboard.repoDescriptions.${repo.descriptionKey}`)}
+                {repo.descriptionKey
+                  ? t(`pages.dashboard.repoDescriptions.${repo.descriptionKey}`)
+                  : repo.description || "-"}
               </p>
               <p className="text-xs text-neutral-500 dark:text-neutral-500">
                 {repo.stack}

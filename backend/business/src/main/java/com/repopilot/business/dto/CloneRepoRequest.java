@@ -7,4 +7,5 @@ public class CloneRepoRequest {
 
     private Long projectId;
     private String branch;
+    private String terminalSessionId;
 }

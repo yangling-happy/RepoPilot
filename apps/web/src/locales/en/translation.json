@@ -80,6 +80,38 @@
       "title": "Documentation",
       "lede": "RepoPilot turns JavaDoc and repository metadata into always-up-to-date internal documentation. GitLab webhooks trigger incremental rebuilds; parse issues surface as alerts without blocking your delivery pipeline.",
       "contextRepo": "Repository · {{repo}}",
+      "actions": {
+        "title": "Documentation loop",
+        "token": "GitLab token",
+        "projectId": "GitLab project ID",
+        "branch": "Branch",
+        "saveToken": "Save token",
+        "savingToken": "Saving...",
+        "clone": "Clone repository",
+        "cloning": "Cloning...",
+        "scanLocal": "Generate local docs",
+        "scanning": "Generating...",
+        "success": {
+          "tokenSaved": "Token saved for this browser session.",
+          "cloneCompleted": "Clone completed: {{projectPath}}. Synced to dashboard list.",
+          "scanCompleted": "Documentation generated successfully. Generated files: {{generated}}."
+        },
+        "errors": {
+          "tokenRequired": "Please enter a GitLab token first.",
+          "projectIdInvalid": "Please enter a project ID greater than 0.",
+          "projectIdRequiredForDoc": "Project ID is required before generating docs.",
+          "unexpected": "Unexpected error"
+        },
+        "terminal": {
+          "tokenSaved": "[session] GitLab token saved.",
+          "cloneStarted": "[clone] start cloning project={{projectId}}, branch={{branch}}",
+          "cloneCompleted": "[clone] completed, local path: {{localPath}}",
+          "cloneFailed": "[clone] failed: {{message}}",
+          "scanStarted": "[doc] start scanning project={{project}}, branch={{branch}}",
+          "scanCompleted": "[doc] completed, scanned={{scanned}}, generated={{generated}}, skipped={{skipped}}",
+          "scanFailed": "[doc] failed: {{message}}"
+        }
+      },
       "terminal": {
         "title": "Virtual console",
         "subtitle": "Doc generation and webhook-driven rebuilds stream here once a session is attached.",

@@ -40,3 +40,7 @@ repo:
 doc:
   output:
     root-dir: ${DOC_OUTPUT_ROOT:./workspace/docs}
+
+terminal:
+  relay:
+    base-url: ${TERMINAL_RELAY_BASE_URL:http://localhost:8081/internal/terminal/sessions}

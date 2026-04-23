@@ -28,7 +28,7 @@ public class RepoController {
 
         String token = (String) session.getAttribute("gitlabToken");
         CloneRepoResponse response = gitlabRepoCloneService.cloneByProjectId(
-                request.getProjectId(), request.getBranch(), token);
+            request.getProjectId(), request.getBranch(), token, request.getTerminalSessionId());
 
         log.info("Repository cloned successfully, projectId={}, branch={}", response.getProjectId(),
                 response.getBranch());

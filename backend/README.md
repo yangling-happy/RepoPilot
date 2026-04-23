@@ -47,6 +47,18 @@ backend/
 >
 > 推荐做法：Windows MySQL 改为 `3307`，WSL MySQL 保持 `3306`。这样数据库工具连接 `3306` 时，默认就是 WSL 内的数据库实例。
 
+0. （如未安装）在 WSL 安装并启动 MySQL：
+
+```bash
+# Ubuntu / Debian (WSL)
+sudo apt update
+sudo apt install -y mysql-server
+sudo service mysql start
+
+# 可选：检查状态
+sudo service mysql status
+```
+
 1. 创建数据库：
 
 ```sql
@@ -71,21 +83,30 @@ mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scrip
 ```yaml
 spring:
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:repopilot}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
-    username: ${DB_USER:root}
-    password: ${DB_PASSWORD:}
+    url: ${REPOPILOT_DB_URL:jdbc:mysql://127.0.0.1:3306/repopilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
+    username: ${REPOPILOT_DB_USERNAME:root}
+    password: ${REPOPILOT_DB_PASSWORD:}
 ```
 
 4. 在本机注入环境变量（使用各自账号密码）：
 
 ```bash
 # Linux / macOS / WSL（当前终端生效）
-export DB_USER=your_db_user #这里要改成你的账户  比如root
-export DB_PASSWORD=your_db_password  ##这里要改成账户对应的密码
+export REPOPILOT_DB_USERNAME=your_db_user # 例如 root
+export REPOPILOT_DB_PASSWORD=your_db_password
 
 # 可选：写入 ~/.bashrc 持久生效
-echo 'export DB_USER=your_db_user' >> ~/.bashrc
-echo 'export DB_PASSWORD=your_db_password' >> ~/.bashrc
+echo 'export REPOPILOT_DB_USERNAME=your_db_user' >> ~/.bashrc
+echo 'export REPOPILOT_DB_PASSWORD=your_db_password' >> ~/.bashrc
+```
+
+项目根目录也可使用 `.env`（已加入 `.gitignore`）维护本机占位变量：
+
+```dotenv
+REPOPILOT_DB_URL=jdbc:mysql://127.0.0.1:3306/repopilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+REPOPILOT_DB_USERNAME=root
+REPOPILOT_DB_PASSWORD=change_me
+TERMINAL_RELAY_BASE_URL=http://localhost:8081/internal/terminal/sessions
 ```
 
 5. 团队协作约定：
@@ -127,7 +148,8 @@ cd gateway
 - `POST /api/session/setGitlabToken` - 设置 GitLab Token
 
 ### 仓库管理
-- `POST /api/repo/clone` - 克隆 GitLab 仓库到本地（projectId，默认分支 main）
+
+- `POST /api/repo/clone` - 克隆 GitLab 仓库到本地（projectId，默认分支 main；可选 `terminalSessionId` 将执行日志中继到虚拟终端）
 
 ### 文档管理
 
@@ -176,7 +198,7 @@ curl -sS -X POST -c "$COOKIE_JAR" \
 ```bash
 curl -sS -X POST -b "$COOKIE_JAR" \
   -H "Content-Type: application/json" \
-  -d '{"projectId":2,"branch":"main"}' \
+  -d '{"projectId":2,"branch":"main","terminalSessionId":"docs-session-001"}' \
   "${BASE_URL}/repo/clone"
 ```
 
@@ -248,6 +270,7 @@ find ./workspace/docs/2/main -name '*.html' -print
 - `docFilePath` 指向的 HTML 文件真实存在，浏览器打开后是 javadoc 页面。
 
 说明：
+
 - 当前已接入 `.java` 后缀，对应生成工具为 `javadoc`；其它语言后续只需要新增对应 `DocGenerator` 并注册支持后缀。
 - 目前 `.md`、`.py` 等未支持后缀会被跳过并记录日志，不会生成 `doc_file_dtl` 成功文档。
 - `/doc/scan-local` 是本地仓库全量扫描；`/doc/refresh` 是 GitLab 提交差异增量解析，两者会共用同一套后缀分发和文档生成器。

@@ -11,11 +11,13 @@ import java.util.function.Consumer;
 public class PtySessionManager {
 
     private final ConcurrentMap<String, PtySession> sessions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Consumer<String>> stdoutConsumers = new ConcurrentHashMap<>();
 
     public PtySession create(String sessionId, Consumer<String> stdoutConsumer) throws IOException {
         remove(sessionId);
         PtySession session = new PtySession(sessionId, stdoutConsumer);
         sessions.put(sessionId, session);
+        stdoutConsumers.put(sessionId, stdoutConsumer);
         return session;
     }
 
@@ -25,8 +27,18 @@ public class PtySessionManager {
 
     public void remove(String sessionId) {
         PtySession session = sessions.remove(sessionId);
+        stdoutConsumers.remove(sessionId);
         if (session != null) {
             session.close();
         }
+    }
+
+    public boolean emitStdout(String sessionId, String output) {
+        Consumer<String> consumer = stdoutConsumers.get(sessionId);
+        if (consumer == null) {
+            return false;
+        }
+        consumer.accept(output);
+        return true;
     }
 }

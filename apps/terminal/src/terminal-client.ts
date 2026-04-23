@@ -91,6 +91,13 @@ export class TerminalClient {
     this.handle.fit();
   }
 
+  sendStdin(data: string) {
+    this.send({
+      type: "stdin",
+      data,
+    });
+  }
+
   detach() {
     this.dispose();
   }

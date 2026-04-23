@@ -2,6 +2,7 @@ package com.repopilot.business.service.gitlab;
 
 import com.repopilot.business.config.RepoCloneProperties;
 import com.repopilot.business.dto.CloneRepoResponse;
+import com.repopilot.business.service.terminal.TerminalRelayClient;
 import com.repopilot.common.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import org.eclipse.jgit.api.CloneCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.api.errors.TransportException;
+import org.eclipse.jgit.lib.ProgressMonitor;
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -33,11 +35,12 @@ public class GitlabRepoCloneService {
 
     private final RepoCloneProperties repoCloneProperties;
     private final ObjectMapper objectMapper;
+    private final TerminalRelayClient terminalRelayClient;
 
     @Value("${gitlab.api-url:https://gitlab.com/api/v4}")
     private String gitlabApiUrl;
 
-    public CloneRepoResponse cloneByProjectId(Long projectId, String branch, String token) {
+    public CloneRepoResponse cloneByProjectId(Long projectId, String branch, String token, String terminalSessionId) {
         if (projectId == null || projectId <= 0) {
             throw new BusinessException(400, "projectId must be greater than 0");
         }
@@ -57,15 +60,20 @@ public class GitlabRepoCloneService {
             throw new BusinessException(400, "Invalid clone target path");
         }
 
+        emitTerminal(terminalSessionId, "[clone] request accepted, projectId=" + projectId + ", branch=" + effectiveBranch);
+
         try {
             Files.createDirectories(cloneRoot);
             if (Files.exists(targetPath)) {
+                emitTerminal(terminalSessionId, "[clone] skipped, local directory already exists: " + targetPath);
                 throw new BusinessException(409, "Local directory already exists: " + targetPath);
             }
 
             ProjectInfo project = fetchProject(projectId, normalizedToken);
             String cloneUrl = normalizeCloneUrl(project.cloneUrl);
             String branchRef = toBranchRef(effectiveBranch);
+
+            emitTerminal(terminalSessionId, "[clone] start cloning " + project.pathWithNamespace + " -> " + targetPath);
 
             CloneCommand cloneCommand = Git.cloneRepository()
                     .setURI(cloneUrl)
@@ -74,6 +82,7 @@ public class GitlabRepoCloneService {
                     .setBranchesToClone(List.of(branchRef))
                     .setBranch(branchRef)
                     .setCredentialsProvider(new UsernamePasswordCredentialsProvider("git", normalizedToken))
+                    .setProgressMonitor(new TerminalProgressMonitor(terminalSessionId))
                     .setTimeout(repoCloneProperties.getTimeoutSeconds());
 
             try (Git git = cloneCommand.call()) {
@@ -86,21 +95,31 @@ public class GitlabRepoCloneService {
                 response.setCloneUrl(cloneUrl);
                 response.setLocalPath(targetPath.toString());
                 response.setCommitId(headCommit);
+                emitTerminal(terminalSessionId, "[clone] completed, HEAD=" + headCommit);
                 return response;
             } catch (RefNotFoundException e) {
+                emitTerminal(terminalSessionId, "[clone] failed, branch not found: " + effectiveBranch);
                 throw new BusinessException(400, "Branch not found: " + effectiveBranch);
             } catch (TransportException e) {
+                emitTerminal(terminalSessionId, "[clone] failed, invalid token or insufficient permission");
                 throw new BusinessException(401, "Clone failed, please check token and repository permissions");
             }
         } catch (BusinessException e) {
+            emitTerminal(terminalSessionId, "[clone] failed, code=" + e.getCode() + ", message=" + e.getMessage());
             throw e;
         } catch (IOException e) {
             log.error("Clone repo failed with IO error, projectId={}", projectId, e);
+            emitTerminal(terminalSessionId, "[clone] failed, local file operation error");
             throw new BusinessException(500, "Local file operation failed during clone");
         } catch (Exception e) {
             log.error("Clone repo failed, projectId={}", projectId, e);
+            emitTerminal(terminalSessionId, "[clone] failed, unexpected error: " + e.getMessage());
             throw new BusinessException(500, "Clone repository failed");
         }
+    }
+
+    private void emitTerminal(String sessionId, String line) {
+        terminalRelayClient.emit(sessionId, line);
     }
 
     private ProjectInfo fetchProject(Long projectId, String token) throws IOException, InterruptedException {
@@ -171,5 +190,60 @@ public class GitlabRepoCloneService {
     }
 
     private record ProjectInfo(long id, String pathWithNamespace, String cloneUrl) {
+    }
+
+    private class TerminalProgressMonitor implements ProgressMonitor {
+
+        private final String sessionId;
+        private String taskTitle = "";
+        private int totalWork = UNKNOWN;
+        private int completed;
+        private int nextProgressMark = 10;
+
+        private TerminalProgressMonitor(String sessionId) {
+            this.sessionId = sessionId;
+        }
+
+        @Override
+        public void start(int totalTasks) {
+            emitTerminal(sessionId, "[clone] progress started, tasks=" + totalTasks);
+        }
+
+        @Override
+        public void beginTask(String title, int totalWork) {
+            this.taskTitle = title;
+            this.totalWork = totalWork;
+            this.completed = 0;
+            this.nextProgressMark = 10;
+            emitTerminal(sessionId, "[clone] " + title + " started");
+        }
+
+        @Override
+        public void update(int completed) {
+            if (totalWork <= 0 || totalWork == UNKNOWN) {
+                return;
+            }
+            this.completed += completed;
+            int progress = (int) Math.min(100, Math.round(this.completed * 100.0 / totalWork));
+            while (progress >= nextProgressMark && nextProgressMark <= 100) {
+                emitTerminal(sessionId, "[clone] " + taskTitle + " " + nextProgressMark + "%");
+                nextProgressMark += 10;
+            }
+        }
+
+        @Override
+        public void endTask() {
+            emitTerminal(sessionId, "[clone] " + taskTitle + " finished");
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public void showDuration(boolean enabled) {
+            // no-op
+        }
     }
 }

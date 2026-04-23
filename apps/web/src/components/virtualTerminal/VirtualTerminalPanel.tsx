@@ -10,6 +10,11 @@ type Props = {
   subtitle?: string;
   /** Lines shown after mount (e.g. boot banner) */
   bootLines: readonly string[];
+  sessionId?: string;
+  onSessionReady?: (context: {
+    sessionId: string;
+    client: TerminalClient;
+  }) => void;
   className?: string;
 };
 
@@ -17,13 +22,15 @@ export function VirtualTerminalPanel({
   title,
   subtitle,
   bootLines,
+  sessionId,
+  onSessionReady,
   className = "",
 }: Props) {
   const { resolvedTheme } = useTheme();
   const hostRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<TerminalClient | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const sessionIdRef = useRef<string>(createSessionId());
+  const sessionIdRef = useRef<string>(sessionId ?? createSessionId());
 
   const bootKey = bootLines.join("\u0000");
 
@@ -34,7 +41,8 @@ export function VirtualTerminalPanel({
     if (clientRef.current || wsRef.current) return;
 
     const colorScheme = resolvedTheme === "dark" ? "dark" : "light";
-    const wsUrl = resolveTerminalWsUrl(sessionIdRef.current);
+    const effectiveSessionId = sessionIdRef.current;
+    const wsUrl = resolveTerminalWsUrl(effectiveSessionId);
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
@@ -44,6 +52,7 @@ export function VirtualTerminalPanel({
     });
     clientRef.current = client;
     client.attach(host);
+    onSessionReady?.({ sessionId: effectiveSessionId, client });
 
     const ro = new ResizeObserver(() => {
       client.fit();
@@ -57,7 +66,7 @@ export function VirtualTerminalPanel({
       clientRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bootKey fingerprints bootLines; avoid unstable bootLines ref from parents
-  }, [resolvedTheme, bootKey]);
+  }, [resolvedTheme, bootKey, onSessionReady]);
 
   return (
     <section className={`${shellClass} ${className}`}>

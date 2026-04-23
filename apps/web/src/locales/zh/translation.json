@@ -80,6 +80,38 @@
       "title": "文档",
       "lede": "RepoPilot 将 JavaDoc 与仓库元数据转化为持续更新的内部文档站。GitLab Webhook 触发增量重建；解析异常以告警形式呈现，不阻断主线路交付。",
       "contextRepo": "仓库 · {{repo}}",
+      "actions": {
+        "title": "文档闭环",
+        "token": "GitLab Token",
+        "projectId": "GitLab 项目 ID",
+        "branch": "分支",
+        "saveToken": "保存 Token",
+        "savingToken": "保存中...",
+        "clone": "克隆仓库",
+        "cloning": "克隆中...",
+        "scanLocal": "生成本地文档",
+        "scanning": "生成中...",
+        "success": {
+          "tokenSaved": "Token 已保存，会话可复用。",
+          "cloneCompleted": "克隆完成：{{projectPath}}。已同步到控制台列表。",
+          "scanCompleted": "文档生成完成，成功文件数：{{generated}}。"
+        },
+        "errors": {
+          "tokenRequired": "请先输入 GitLab Token。",
+          "projectIdInvalid": "请输入大于 0 的项目 ID。",
+          "projectIdRequiredForDoc": "生成文档前请先提供项目 ID。",
+          "unexpected": "发生未知错误"
+        },
+        "terminal": {
+          "tokenSaved": "[session] GitLab token 已保存。",
+          "cloneStarted": "[clone] 开始克隆 project={{projectId}}, branch={{branch}}",
+          "cloneCompleted": "[clone] 克隆成功，本地目录：{{localPath}}",
+          "cloneFailed": "[clone] 克隆失败：{{message}}",
+          "scanStarted": "[doc] 开始扫描 project={{project}}, branch={{branch}}",
+          "scanCompleted": "[doc] 扫描完成，scanned={{scanned}}, generated={{generated}}, skipped={{skipped}}",
+          "scanFailed": "[doc] 扫描失败：{{message}}"
+        }
+      },
       "terminal": {
         "title": "虚拟终端",
         "subtitle": "文档生成与 Webhook 驱动的重建日志将在此输出（会话接入后）。",
