@@ -1,5 +1,6 @@
 package com.repopilot.business.service.impl;
 
+import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
 import com.repopilot.business.entity.DocTask;
@@ -159,6 +160,53 @@ class DocPipelineServiceImplTest {
         assertThat(saved.getParseErrorMsg()).isEqualTo("File deleted");
 
         verify(gitLabDocClient, never()).readFileContent(eq("token"), eq("proj"), eq("src/OldFile.java"), eq("c2"));
+    }
+
+    @Test
+    void scanLocal_shouldGenerateDocsFromLocalRepository_withoutGitlabApi() throws Exception {
+        String commitId = "1234567890abcdef1234567890abcdef12345678";
+        Path cloneRoot = Files.createTempDirectory("repopilot-repos-test-");
+        Path repo = cloneRoot.resolve("project-2");
+        Files.createDirectories(repo.resolve(".git/refs/heads"));
+        Files.writeString(repo.resolve(".git/HEAD"), "ref: refs/heads/main\n");
+        Files.writeString(repo.resolve(".git/refs/heads/main"), commitId + "\n");
+        Files.createDirectories(repo.resolve("src"));
+        Files.writeString(repo.resolve("src/Test.java"), "/** hello */\npublic class Test {}\n");
+        Files.writeString(repo.resolve("README.md"), "# Test\n");
+        setField("repoCloneRoot", cloneRoot.toString());
+
+        stubTaskInsertWithId(55L);
+        when(docTaskMapper.updateById(any())).thenReturn(1);
+        when(docFileMapper.selectOne(any())).thenReturn(null);
+        when(docFileMapper.insert(any())).thenReturn(1);
+
+        DocLocalScanResult result = service.scanLocal("2", "main");
+
+        assertThat(result.getProject()).isEqualTo("2");
+        assertThat(result.getBranch()).isEqualTo("main");
+        assertThat(result.getCommitId()).isEqualTo(commitId);
+        assertThat(result.getScannedFileCount()).isEqualTo(2);
+        assertThat(result.getGeneratedFileCount()).isEqualTo(1);
+        assertThat(result.getSkippedFileCount()).isEqualTo(1);
+        assertThat(result.getFailedFileCount()).isZero();
+        assertThat(result.getGeneratedFilePaths()).containsExactly("src/Test.java");
+
+        ArgumentCaptor<DocTask> taskCaptor = ArgumentCaptor.forClass(DocTask.class);
+        verify(docTaskMapper).insert(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getEventId()).startsWith("doc-local-scan-" + commitId + "-");
+
+        ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
+        verify(docFileMapper).insert(fileCaptor.capture());
+        DocFile saved = fileCaptor.getValue();
+        assertThat(saved.getTaskId()).isEqualTo(55L);
+        assertThat(saved.getProject()).isEqualTo("2");
+        assertThat(saved.getBranch()).isEqualTo("main");
+        assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
+        assertThat(saved.getCommitId()).isEqualTo(commitId);
+        assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
+        assertThat(saved.getDocFilePath()).isNotBlank();
+        assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+        verifyNoInteractions(gitLabDocClient);
     }
 
     private static DocTask task(String commitId, String status) {

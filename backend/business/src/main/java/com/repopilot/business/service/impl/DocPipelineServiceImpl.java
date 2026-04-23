@@ -1,6 +1,7 @@
 package com.repopilot.business.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocQueryItem;
 import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
@@ -21,15 +22,20 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -112,6 +118,81 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     @Override
+    public DocLocalScanResult scanLocal(String project, String branch) {
+        validateProjectAndBranch(project, branch);
+
+        Path sourceRoot = resolveSourceRoot(project);
+        if (sourceRoot == null) {
+            throw new BusinessException(400, "Local repository not found for project: " + project);
+        }
+
+        String commitId = resolveLocalHeadCommit(sourceRoot);
+        DocLocalScanResult result = new DocLocalScanResult();
+        result.setProject(project);
+        result.setBranch(branch);
+        result.setCommitId(commitId);
+        result.setLocalRepoPath(sourceRoot.toString());
+
+        DocTask task = new DocTask();
+        task.setEventId(buildTaskEventId("doc-local-scan", commitId));
+        task.setProject(project);
+        task.setBranch(branch);
+        task.setCommitId(commitId);
+        task.setStatus(STATUS_RUNNING);
+        task.setDuration(0);
+        docTaskMapper.insert(task);
+
+        long start = System.currentTimeMillis();
+        try {
+            List<Path> files = listLocalRepoFiles(sourceRoot);
+            result.setScannedFileCount(files.size());
+
+            for (Path file : files) {
+                String filePath = toRepoRelativePath(sourceRoot, file);
+                if (!isSupportedDocFile(filePath)) {
+                    result.setSkippedFileCount(result.getSkippedFileCount() + 1);
+                    continue;
+                }
+
+                try {
+                    generateLocalDoc(project, branch, commitId, task.getId(), sourceRoot, file, filePath);
+                    result.setGeneratedFileCount(result.getGeneratedFileCount() + 1);
+                    result.getGeneratedFilePaths().add(filePath);
+                } catch (Exception ex) {
+                    log.error("Local doc generation failed. project={}, branch={}, filePath={}",
+                            project, branch, filePath, ex);
+                    result.setFailedFileCount(result.getFailedFileCount() + 1);
+                    result.getFailedFilePaths().add(filePath);
+                    upsertDocFile(project, branch, filePath, commitId, task.getId(),
+                            STATUS_FAILED, null, summarizeError(ex));
+                }
+            }
+
+            String finalStatus = localScanStatus(result);
+            task.setStatus(finalStatus);
+            task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
+            docTaskMapper.updateById(task);
+            result.setMessage(String.format(
+                    "Scanned %d file(s), generated %d doc(s), skipped %d file(s), failed %d file(s).",
+                    result.getScannedFileCount(),
+                    result.getGeneratedFileCount(),
+                    result.getSkippedFileCount(),
+                    result.getFailedFileCount()
+            ));
+            return result;
+        } catch (Exception ex) {
+            log.error("Local doc scan failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
+            task.setStatus(STATUS_FAILED);
+            task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
+            docTaskMapper.updateById(task);
+            if (ex instanceof RuntimeException runtimeException) {
+                throw runtimeException;
+            }
+            throw new BusinessException(500, "Local doc scan failed");
+        }
+    }
+
+    @Override
     public List<DocQueryItem> query(String project, String branch, String filePath, String commitId) {
         if (!StringUtils.hasText(project)) {
             throw new BusinessException(400, "project is required");
@@ -149,7 +230,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
     private String runExtractionTask(String project, String branch, String commitId, String token) {
         DocTask task = new DocTask();
-        task.setEventId(buildTaskEventId(commitId));
+        task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setProject(project);
         task.setBranch(branch);
         task.setCommitId(commitId);
@@ -249,6 +330,32 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return true;
     }
 
+    private void generateLocalDoc(String project,
+                                  String branch,
+                                  String commitId,
+                                  Long taskId,
+                                  Path sourceRoot,
+                                  Path sourceFile,
+                                  String filePath) throws IOException {
+        DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
+        if (generator == null) {
+            return;
+        }
+
+        String fileContent = Files.readString(sourceFile, StandardCharsets.UTF_8);
+        DocGenerationResult result = generator.generate(DocGenerationContext.builder()
+                .project(project)
+                .branch(branch)
+                .commitId(commitId)
+                .filePath(filePath)
+                .sourceContent(fileContent)
+                .sourceRoot(sourceRoot)
+                .outputRoot(resolveDocOutputRoot())
+                .build());
+
+        upsertDocFile(project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
+    }
+
     private void upsertDeletedDoc(String project, String branch, String filePath, String commitId, Long taskId) {
         upsertDocFile(project, branch, filePath, commitId, taskId, null, "File deleted");
     }
@@ -258,6 +365,17 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                                String filePath,
                                String commitId,
                                Long taskId,
+                               String docFilePath,
+                               String parseErrorMsg) {
+        upsertDocFile(project, branch, filePath, commitId, taskId, STATUS_SUCCESS, docFilePath, parseErrorMsg);
+    }
+
+    private void upsertDocFile(String project,
+                               String branch,
+                               String filePath,
+                               String commitId,
+                               Long taskId,
+                               String parseStatus,
                                String docFilePath,
                                String parseErrorMsg) {
         LambdaQueryWrapper<DocFile> query = new LambdaQueryWrapper<>();
@@ -276,7 +394,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             item.setFilePath(filePath);
             item.setCommitId(commitId);
             item.setDocFilePath(docFilePath);
-            item.setParseStatus(STATUS_SUCCESS);
+            item.setParseStatus(parseStatus);
             item.setParseErrorMsg(parseErrorMsg);
             docFileMapper.insert(item);
             return;
@@ -284,14 +402,14 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         existing.setTaskId(taskId);
         existing.setDocFilePath(docFilePath);
-        existing.setParseStatus(STATUS_SUCCESS);
+        existing.setParseStatus(parseStatus);
         existing.setParseErrorMsg(parseErrorMsg);
         docFileMapper.updateById(existing);
     }
 
-    private String buildTaskEventId(String commitId) {
+    private String buildTaskEventId(String prefix, String commitId) {
         String safeCommitId = StringUtils.hasText(commitId) ? commitId.trim() : "unknown";
-        return "doc-refresh-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
+        return prefix + "-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
     private String findBaselineCommit(String project, String branch) {
@@ -324,6 +442,115 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         if (StringUtils.hasText(filePath)) {
             log.warn("Skip unsupported doc file. project={}, commitId={}, filePath={}", project, commitId, filePath);
         }
+    }
+
+    private List<Path> listLocalRepoFiles(Path sourceRoot) throws IOException {
+        Path normalizedRoot = sourceRoot.toAbsolutePath().normalize();
+        Path gitDir = normalizedRoot.resolve(".git").normalize();
+        try (Stream<Path> stream = Files.walk(normalizedRoot)) {
+            return stream.filter(Files::isRegularFile)
+                    .filter(path -> !path.toAbsolutePath().normalize().startsWith(gitDir))
+                    .sorted(Comparator.comparing(path -> toRepoRelativePath(normalizedRoot, path)))
+                    .collect(Collectors.toList());
+        }
+    }
+
+    private String toRepoRelativePath(Path sourceRoot, Path file) {
+        return sourceRoot.toAbsolutePath().normalize()
+                .relativize(file.toAbsolutePath().normalize())
+                .toString()
+                .replace('\\', '/');
+    }
+
+    private String localScanStatus(DocLocalScanResult result) {
+        if (result.getFailedFileCount() > 0) {
+            return STATUS_FAILED;
+        }
+        return result.getGeneratedFileCount() == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
+    }
+
+    private String resolveLocalHeadCommit(Path sourceRoot) {
+        try {
+            Path gitDir = resolveGitDir(sourceRoot);
+            Path headFile = gitDir.resolve("HEAD");
+            if (!Files.isRegularFile(headFile)) {
+                throw new BusinessException(400, "Local repository HEAD not found: " + sourceRoot);
+            }
+
+            String head = Files.readString(headFile, StandardCharsets.UTF_8).trim();
+            if (!head.startsWith("ref:")) {
+                if (StringUtils.hasText(head)) {
+                    return head;
+                }
+                throw new BusinessException(400, "Local repository HEAD is empty: " + sourceRoot);
+            }
+
+            String refName = head.substring("ref:".length()).trim();
+            Path refFile = gitDir.resolve(refName).normalize();
+            if (refFile.startsWith(gitDir) && Files.isRegularFile(refFile)) {
+                String commitId = Files.readString(refFile, StandardCharsets.UTF_8).trim();
+                if (StringUtils.hasText(commitId)) {
+                    return commitId;
+                }
+            }
+
+            String packedCommit = readPackedRef(gitDir, refName);
+            if (StringUtils.hasText(packedCommit)) {
+                return packedCommit;
+            }
+            throw new BusinessException(400, "Local repository ref not found: " + refName);
+        } catch (IOException e) {
+            throw new BusinessException(500, "Failed to read local repository HEAD");
+        }
+    }
+
+    private Path resolveGitDir(Path sourceRoot) throws IOException {
+        Path gitPath = sourceRoot.toAbsolutePath().normalize().resolve(".git");
+        if (Files.isDirectory(gitPath)) {
+            return gitPath;
+        }
+        if (Files.isRegularFile(gitPath)) {
+            String gitFile = Files.readString(gitPath, StandardCharsets.UTF_8).trim();
+            if (gitFile.startsWith("gitdir:")) {
+                Path gitDir = Paths.get(gitFile.substring("gitdir:".length()).trim());
+                if (!gitDir.isAbsolute()) {
+                    gitDir = sourceRoot.resolve(gitDir);
+                }
+                Path normalized = gitDir.toAbsolutePath().normalize();
+                if (Files.isDirectory(normalized)) {
+                    return normalized;
+                }
+            }
+        }
+        throw new BusinessException(400, "Local repository is not a Git repository: " + sourceRoot);
+    }
+
+    private String readPackedRef(Path gitDir, String refName) throws IOException {
+        Path packedRefs = gitDir.resolve("packed-refs");
+        if (!Files.isRegularFile(packedRefs)) {
+            return null;
+        }
+
+        for (String line : Files.readAllLines(packedRefs, StandardCharsets.UTF_8)) {
+            String trimmed = line.trim();
+            if (!StringUtils.hasText(trimmed) || trimmed.startsWith("#") || trimmed.startsWith("^")) {
+                continue;
+            }
+            String[] parts = trimmed.split("\\s+", 2);
+            if (parts.length == 2 && refName.equals(parts[1])) {
+                return parts[0];
+            }
+        }
+        return null;
+    }
+
+    private String summarizeError(Exception ex) {
+        String message = ex.getMessage();
+        if (!StringUtils.hasText(message)) {
+            message = ex.getClass().getSimpleName();
+        }
+        String normalized = message.replaceAll("\\s+", " ").trim();
+        return normalized.length() <= 500 ? normalized : normalized.substring(0, 500);
     }
 
     private Path resolveSourceRoot(String project) {

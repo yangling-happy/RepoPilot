@@ -133,6 +133,7 @@ cd gateway
 
 - `POST /api/doc/webhook/gitlab` - GitLab Webhook
 - `POST /api/doc/refresh` - 拉取 GitLab 提交差异，按文件后缀生成解析文档并写入 `doc_file_dtl`
+- `POST /api/doc/scan-local` - 扫描已克隆到本地的仓库，按文件后缀全量生成解析文档并写入 `doc_file_dtl`
 - `POST /api/doc/rebuild` - 重新构建文档
 - `GET /api/doc/query` - 查询文档
 - `POST /api/doc/task/create` - 写入文档任务（doc_task）
@@ -185,9 +186,20 @@ curl -sS -X POST -b "$COOKIE_JAR" \
 backend/business/workspace/repos/project-2
 ```
 
-如果接口提示目录已存在，说明仓库已经克隆过；可以直接继续执行文档刷新。
+如果接口提示目录已存在，说明仓库已经克隆过；可以直接继续执行文档扫描或刷新。
 
-基于已经克隆到本地的 Gitlet 仓库生成解析文档：
+基于已经克隆到本地的 Gitlet 仓库全量扫描并生成解析文档：
+
+```bash
+curl -sS -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"project":"2","branch":"main"}' \
+  "${BASE_URL}/doc/scan-local"
+```
+
+这里 `project` 建议传 GitLab 项目 ID 字符串 `"2"`。本地扫描逻辑会用它定位本地仓库 `workspace/repos/project-2`，递归扫描仓库中的文件，当前只处理 `.java`，并把该仓库目录加入 javadoc 的 `sourcepath`，这样 Gitlet 的 Java 文件在解析依赖类型时能看到同仓库源码。`scan-local` 不需要 GitLab Token；只要仓库已经克隆到本地即可。
+
+如果需要按 GitLab 提交差异做增量解析，仍然使用 `refresh`。该接口会访问 GitLab API，所以需要复用上面保存 Token 的 cookie 文件：
 
 ```bash
 curl -sS -X POST -b "$COOKIE_JAR" \
@@ -195,8 +207,6 @@ curl -sS -X POST -b "$COOKIE_JAR" \
   -d '{"project":"2","branch":"main"}' \
   "${BASE_URL}/doc/refresh"
 ```
-
-这里 `project` 建议传 GitLab 项目 ID 字符串 `"2"`。文档生成逻辑会用它定位本地仓库 `workspace/repos/project-2`，并把该目录加入 javadoc 的 `sourcepath`，这样 Gitlet 的 Java 文件在解析依赖类型时能看到同仓库源码。
 
 生成结果会写入数据库表 `doc_file_dtl`：
 
@@ -233,13 +243,14 @@ find ./workspace/docs/2/main -name '*.html' -print
 
 判断功能是否正确，可以看三处：
 
-- `/doc/refresh` 返回成功，且 `processedCount`/`successCount` 有符合预期的数量。
+- `/doc/scan-local` 返回成功，且 `scannedFileCount`、`generatedFileCount`、`skippedFileCount` 有符合预期的数量。
 - `/doc/query?project=2&branch=main` 返回的条目里，Java 文件有 `docFilePath` 且 `parseStatus = SUCCESS`。
 - `docFilePath` 指向的 HTML 文件真实存在，浏览器打开后是 javadoc 页面。
 
 说明：
 - 当前已接入 `.java` 后缀，对应生成工具为 `javadoc`；其它语言后续只需要新增对应 `DocGenerator` 并注册支持后缀。
 - 目前 `.md`、`.py` 等未支持后缀会被跳过并记录日志，不会生成 `doc_file_dtl` 成功文档。
+- `/doc/scan-local` 是本地仓库全量扫描；`/doc/refresh` 是 GitLab 提交差异增量解析，两者会共用同一套后缀分发和文档生成器。
 - `workspace/repos` 和 `workspace/docs` 都已加入 `.gitignore`，不会提交到项目仓库。
 - 克隆根目录可通过 `REPO_CLONE_ROOT` 或 `--repo.clone.root-dir=...` 覆盖。
 - 文档生成根目录可通过 `DOC_OUTPUT_ROOT` 或 `--doc.output.root-dir=...` 覆盖。

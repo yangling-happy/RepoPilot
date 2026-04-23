@@ -1,6 +1,7 @@
 package com.repopilot.business.service;
 
 import com.repopilot.business.dto.DocQueryItem;
+import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocRefreshResult;
 
 import java.util.List;
@@ -13,6 +14,9 @@ public interface DocPipelineService {
 
     // 对指定 commit 强制执行提取。
     void rebuild(String project, String branch, String commitId, String token);
+
+    // 扫描已经克隆到本地的仓库并全量生成文档。
+    DocLocalScanResult scanLocal(String project, String branch);
 
     // 查询最新快照或指定 commit 的文档记录。
     List<DocQueryItem> query(String project, String branch, String filePath, String commitId);

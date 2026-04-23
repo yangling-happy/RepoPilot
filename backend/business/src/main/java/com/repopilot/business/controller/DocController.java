@@ -2,6 +2,7 @@ package com.repopilot.business.controller;
 
 import com.repopilot.business.dto.CreateDocFileRequest;
 import com.repopilot.business.dto.CreateDocTaskRequest;
+import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocRefreshRequest;
 import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
@@ -49,6 +50,13 @@ public class DocController {
         log.info("Refresh doc request: project={}, branch={}", request.getProject(), request.getBranch());
         DocRefreshResult result = docPipelineService.refresh(request.getProject(), request.getBranch(), token);
         return ApiResponse.success("Refresh completed", result);
+    }
+
+    @PostMapping("/scan-local")
+    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocRefreshRequest request) {
+        log.info("Local doc scan request: project={}, branch={}", request.getProject(), request.getBranch());
+        DocLocalScanResult result = docPipelineService.scanLocal(request.getProject(), request.getBranch());
+        return ApiResponse.success("Local scan completed", result);
     }
 
     @PostMapping("/rebuild")
