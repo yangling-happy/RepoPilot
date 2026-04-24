@@ -1,9 +1,16 @@
 import { useTheme } from "next-themes";
 import { useEffect, useRef } from "react";
 import { TerminalClient } from "../../../../terminal/src";
+import { resolveTerminalWsUrl } from "./terminalWsUrl";
 
 const shellClass =
   "relative rounded-[2rem] border border-neutral-200/60 bg-white/50 shadow-sm backdrop-blur-md dark:border-white/5 dark:bg-white/[0.02] md:rounded-[2.5rem]";
+
+export type TerminalConnectionState =
+  | "connecting"
+  | "open"
+  | "closed"
+  | "error";
 
 type Props = {
   title: string;
@@ -15,6 +22,7 @@ type Props = {
     sessionId: string;
     client: TerminalClient;
   }) => void;
+  onConnectionStatusChange?: (state: TerminalConnectionState) => void;
   className?: string;
 };
 
@@ -24,6 +32,7 @@ export function VirtualTerminalPanel({
   bootLines,
   sessionId,
   onSessionReady,
+  onConnectionStatusChange,
   className = "",
 }: Props) {
   const { resolvedTheme } = useTheme();
@@ -42,9 +51,26 @@ export function VirtualTerminalPanel({
 
     const colorScheme = resolvedTheme === "dark" ? "dark" : "light";
     const effectiveSessionId = sessionIdRef.current;
-    const wsUrl = resolveTerminalWsUrl(effectiveSessionId);
+    const wsUrl = resolveTerminalWsUrl(effectiveSessionId, {
+      configuredBaseUrl: import.meta.env.VITE_TERMINAL_WS_URL,
+      location: window.location,
+    });
+    onConnectionStatusChange?.("connecting");
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
+
+    const handleOpen = () => {
+      onConnectionStatusChange?.("open");
+    };
+    const handleError = () => {
+      onConnectionStatusChange?.("error");
+    };
+    const handleClose = () => {
+      onConnectionStatusChange?.("closed");
+    };
+    ws.addEventListener("open", handleOpen);
+    ws.addEventListener("error", handleError);
+    ws.addEventListener("close", handleClose);
 
     const client = new TerminalClient(ws, {
       colorScheme,
@@ -61,12 +87,15 @@ export function VirtualTerminalPanel({
 
     return () => {
       ro.disconnect();
+      ws.removeEventListener("open", handleOpen);
+      ws.removeEventListener("error", handleError);
+      ws.removeEventListener("close", handleClose);
       client.dispose();
       wsRef.current = null;
       clientRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bootKey fingerprints bootLines; avoid unstable bootLines ref from parents
-  }, [resolvedTheme, bootKey, onSessionReady]);
+  }, [resolvedTheme, bootKey, onConnectionStatusChange, onSessionReady]);
 
   return (
     <section className={`${shellClass} ${className}`}>
@@ -100,20 +129,4 @@ function createSessionId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function resolveTerminalWsUrl(sessionId: string) {
-  const configured = import.meta.env.VITE_TERMINAL_WS_URL?.trim();
-  if (configured) {
-    return `${configured.replace(/\/+$/, "")}/${encodeURIComponent(sessionId)}`;
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const { hostname, host, port } = window.location;
-  const isLocalDevHost = hostname === "localhost" || hostname === "127.0.0.1";
-  if (isLocalDevHost && port === "3000") {
-    return `${protocol}//${hostname}:8081/ws/terminal/${encodeURIComponent(sessionId)}`;
-  }
-
-  return `${protocol}//${host}/ws/terminal/${encodeURIComponent(sessionId)}`;
 }

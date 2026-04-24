@@ -4,6 +4,22 @@ type ApiResponse<T> = {
   data: T;
 };
 
+export class ApiError extends Error {
+  readonly httpStatus: number;
+  readonly apiCode?: number;
+
+  constructor(
+    message: string,
+    options: { httpStatus: number; apiCode?: number },
+  ) {
+    super(message);
+    this.name = "ApiError";
+    this.httpStatus = options.httpStatus;
+    this.apiCode = options.apiCode;
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+}
+
 export type CloneRepoRequest = {
   projectId: number;
   branch?: string;
@@ -71,11 +87,16 @@ async function requestApi<T>(url: string, init: RequestInit): Promise<T> {
   try {
     json = (await response.json()) as ApiResponse<T>;
   } catch {
-    throw new Error(`HTTP ${response.status}`);
+    throw new ApiError(`HTTP ${response.status}`, {
+      httpStatus: response.status,
+    });
   }
 
   if (!response.ok || !json || json.code !== 200) {
-    throw new Error(json?.message || `HTTP ${response.status}`);
+    throw new ApiError(json?.message || `HTTP ${response.status}`, {
+      httpStatus: response.status,
+      apiCode: json?.code,
+    });
   }
 
   return json.data;

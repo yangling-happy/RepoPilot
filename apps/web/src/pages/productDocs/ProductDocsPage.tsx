@@ -2,20 +2,28 @@ import type { TerminalClient } from "../../../../terminal/src";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
-import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
 import {
+  type TerminalConnectionState,
+  VirtualTerminalPanel,
+} from "../../components/virtualTerminal/VirtualTerminalPanel";
+import {
+  ApiError,
   cloneRepo,
   scanLocalDoc,
   setGitlabToken,
   type CloneRepoResponse,
 } from "../../services/backendApi";
+import {
+  getCloneErrorMessage,
+  getTerminalUnavailableMessage,
+} from "./productDocsMessages";
 import { saveClonedRepo } from "../workbench/repoLocalStore";
 
 const TOKEN_STORAGE_KEY = "repopilot.gitlabToken";
 const TERMINAL_SESSION_STORAGE_KEY = "repopilot.docs.terminalSessionId";
 
 export function ProductDocsPage() {
-  const { t } = useTranslation();
+  const { i18n, t } = useTranslation();
   const [params] = useSearchParams();
   const repo = params.get("repo");
   const terminalClientRef = useRef<TerminalClient | null>(null);
@@ -42,6 +50,10 @@ export function ProductDocsPage() {
   } | null>(null);
   const [lastClone, setLastClone] = useState<CloneRepoResponse | null>(null);
   const [terminalSessionId] = useState(() => getOrCreateTerminalSessionId());
+  const [terminalConnectionState, setTerminalConnectionState] =
+    useState<TerminalConnectionState>("connecting");
+
+  const language = i18n.resolvedLanguage ?? i18n.language;
 
   const bootLines = useMemo(
     () => [
@@ -164,25 +176,26 @@ export function ProductDocsPage() {
         }),
       });
     } catch (error) {
+      const cloneErrorMessage = getCloneErrorMessage(
+        toErrorMessage(
+          error,
+          t("pages.documentation.actions.errors.unexpected"),
+        ),
+        language,
+      );
       appendTerminal(
         t("pages.documentation.actions.terminal.cloneFailed", {
-          message: toErrorMessage(
-            error,
-            t("pages.documentation.actions.errors.unexpected"),
-          ),
+          message: cloneErrorMessage,
         }),
       );
       setStatus({
         type: "error",
-        text: toErrorMessage(
-          error,
-          t("pages.documentation.actions.errors.unexpected"),
-        ),
+        text: cloneErrorMessage,
       });
     } finally {
       setCloning(false);
     }
-  }, [appendTerminal, branch, projectId, t, terminalSessionId, token]);
+  }, [appendTerminal, branch, language, projectId, t, terminalSessionId, token]);
 
   const handleScanLocal = useCallback(async () => {
     const project =
@@ -332,6 +345,12 @@ export function ProductDocsPage() {
             {status.text}
           </p>
         ) : null}
+        {terminalConnectionState === "error" ||
+        terminalConnectionState === "closed" ? (
+          <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
+            {getTerminalUnavailableMessage(language)}
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-14">
@@ -340,6 +359,7 @@ export function ProductDocsPage() {
           subtitle={t("pages.documentation.terminal.subtitle")}
           bootLines={bootLines}
           sessionId={terminalSessionId}
+          onConnectionStatusChange={setTerminalConnectionState}
           onSessionReady={onSessionReady}
         />
       </div>
@@ -396,6 +416,9 @@ function createSessionIdFallback() {
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.message) {
+    return error.message;
+  }
   if (error instanceof Error && error.message) {
     return error.message;
   }
