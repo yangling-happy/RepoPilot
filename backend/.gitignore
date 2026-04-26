@@ -39,5 +39,5 @@ build/
 logs/
 
 ### Local runtime workspace ###
-workspace/
-business/workspace/
+/workspace/
+/business/workspace/

@@ -32,4 +32,4 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local runtime workspace
-workspace/
+/workspace/
