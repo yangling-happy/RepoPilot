@@ -6,7 +6,11 @@ import com.repopilot.business.entity.BuildTask;
 import com.repopilot.business.entity.DeployTask;
 import com.repopilot.business.mapper.BuildTaskMapper;
 import com.repopilot.business.mapper.DeployTaskMapper;
+import com.repopilot.business.service.gitlab.GitLabSessionContextService;
+import com.repopilot.business.service.gitlab.GitLabUserContext;
 import com.repopilot.common.dto.ApiResponse;
+import com.repopilot.common.util.BizAssert;
+import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -26,25 +30,30 @@ public class DeployController {
 
     private final DeployTaskMapper deployTaskMapper;
     private final BuildTaskMapper buildTaskMapper;
+    private final GitLabSessionContextService gitLabSessionContextService;
 
     @PostMapping("/trigger")
     public ApiResponse<String> triggerDeploy(@RequestParam String project,
             @RequestParam String branch,
             @RequestParam String environment,
-            @RequestParam(required = false) String args) {
-        log.info("Deploy trigger: project={}, branch={}, env={}", project, branch, environment);
+            @RequestParam(required = false) String args,
+            HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Deploy trigger: username={}, project={}, branch={}, env={}",
+                context.username(), project, branch, environment);
         // TODO: Implement deploy trigger logic
         return ApiResponse.success("Deploy triggered", "task-id-placeholder");
     }
 
     @PostMapping("/task/create")
-    public ApiResponse<DeployTask> createDeployTask(@RequestBody CreateDeployTaskRequest request) {
+    public ApiResponse<DeployTask> createDeployTask(@RequestBody CreateDeployTaskRequest request,
+                                                    HttpSession session) {
         String validationError = validateCreateDeployTaskRequest(request);
-        if (validationError != null) {
-            return ApiResponse.error(400, validationError);
-        }
+        BizAssert.isTrue(validationError == null, 400, validationError);
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
 
         DeployTask deployTask = new DeployTask();
+        deployTask.setGitlabUsername(context.username());
         deployTask.setDeployTaskId(request.getDeployTaskId().trim());
         deployTask.setProjectName(request.getProjectName().trim());
         deployTask.setBranchName(request.getBranchName().trim());
@@ -56,24 +65,22 @@ public class DeployController {
         deployTask.setErrorMsg(trimToNull(request.getErrorMsg()));
         deployTask.setDuration(request.getDuration());
 
-        int affectedRows = deployTaskMapper.insert(deployTask);
-        if (affectedRows != 1) {
-            return ApiResponse.error("Insert deploy task failed");
-        }
+        BizAssert.affectedOne(deployTaskMapper.insert(deployTask), "Insert deploy task failed");
 
-        log.info("Deploy task created successfully, id={}, deployTaskId={}", deployTask.getId(),
-                deployTask.getDeployTaskId());
+        log.info("Deploy task created successfully, username={}, id={}, deployTaskId={}",
+                deployTask.getGitlabUsername(), deployTask.getId(), deployTask.getDeployTaskId());
         return ApiResponse.success("Deploy task created", deployTask);
     }
 
     @PostMapping("/build/task/create")
-    public ApiResponse<BuildTask> createBuildTask(@RequestBody CreateBuildTaskRequest request) {
+    public ApiResponse<BuildTask> createBuildTask(@RequestBody CreateBuildTaskRequest request,
+                                                  HttpSession session) {
         String validationError = validateCreateBuildTaskRequest(request);
-        if (validationError != null) {
-            return ApiResponse.error(400, validationError);
-        }
+        BizAssert.isTrue(validationError == null, 400, validationError);
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
 
         BuildTask buildTask = new BuildTask();
+        buildTask.setGitlabUsername(context.username());
         buildTask.setBuildTaskId(request.getBuildTaskId().trim());
         buildTask.setDeployTaskId(trimToNull(request.getDeployTaskId()));
         buildTask.setProjectName(request.getProjectName().trim());
@@ -86,33 +93,33 @@ public class DeployController {
         buildTask.setErrorMsg(trimToNull(request.getErrorMsg()));
         buildTask.setDuration(request.getDuration());
 
-        int affectedRows = buildTaskMapper.insert(buildTask);
-        if (affectedRows != 1) {
-            return ApiResponse.error("Insert build task failed");
-        }
+        BizAssert.affectedOne(buildTaskMapper.insert(buildTask), "Insert build task failed");
 
-        log.info("Build task created successfully, id={}, buildTaskId={}", buildTask.getId(),
-                buildTask.getBuildTaskId());
+        log.info("Build task created successfully, username={}, id={}, buildTaskId={}",
+                buildTask.getGitlabUsername(), buildTask.getId(), buildTask.getBuildTaskId());
         return ApiResponse.success("Build task created", buildTask);
     }
 
     @GetMapping("/task")
-    public ApiResponse<Object> getTask(@RequestParam String taskId) {
-        log.info("Get deploy task: taskId={}", taskId);
+    public ApiResponse<Object> getTask(@RequestParam String taskId, HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Get deploy task: username={}, taskId={}", context.username(), taskId);
         // TODO: Implement get task logic
         return ApiResponse.success(null);
     }
 
     @GetMapping("/log")
-    public ApiResponse<Object> getLog(@RequestParam String taskId) {
-        log.info("Get deploy log: taskId={}", taskId);
+    public ApiResponse<Object> getLog(@RequestParam String taskId, HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Get deploy log: username={}, taskId={}", context.username(), taskId);
         // TODO: Implement get log logic
         return ApiResponse.success(null);
     }
 
     @PostMapping("/cancel")
-    public ApiResponse<Void> cancelDeploy(@RequestParam String taskId) {
-        log.info("Cancel deploy: taskId={}", taskId);
+    public ApiResponse<Void> cancelDeploy(@RequestParam String taskId, HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Cancel deploy: username={}, taskId={}", context.username(), taskId);
         // TODO: Implement cancel logic
         return ApiResponse.success("Deploy cancelled", null);
     }

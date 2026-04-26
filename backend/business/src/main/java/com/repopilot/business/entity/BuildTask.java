@@ -14,6 +14,7 @@ public class BuildTask {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private String gitlabUsername;
     private String buildTaskId;
     private String deployTaskId;
     private String projectName;

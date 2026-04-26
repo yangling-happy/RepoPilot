@@ -1,5 +1,6 @@
 package com.repopilot.business.service.impl;
 
+import com.repopilot.business.config.UserWorkspaceProperties;
 import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocRefreshResult;
 import com.repopilot.business.entity.DocFile;
@@ -10,6 +11,7 @@ import com.repopilot.business.service.docgen.DocGeneratorRegistry;
 import com.repopilot.business.service.docgen.JavaDocGenerator;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
 import com.repopilot.business.service.gitlab.model.CommitFileChange;
+import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +36,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DocPipelineServiceImplTest {
 
+    private static final String USERNAME = "alice";
+
     @Mock
     private DocTaskMapper docTaskMapper;
     @Mock
@@ -42,14 +46,20 @@ class DocPipelineServiceImplTest {
     private GitLabDocClient gitLabDocClient;
 
     private DocPipelineServiceImpl service;
-    private Path docOutputRoot;
+    private Path workspaceBaseDir;
 
     @BeforeEach
     void setUp() throws Exception {
         DocGeneratorRegistry registry = new DocGeneratorRegistry(List.of(new JavaDocGenerator()));
-        service = new DocPipelineServiceImpl(docTaskMapper, docFileMapper, gitLabDocClient, registry);
-        docOutputRoot = Files.createTempDirectory("repopilot-doc-test-");
-        setField("docOutputRoot", docOutputRoot.toString());
+        workspaceBaseDir = Files.createTempDirectory("repopilot-workspace-test-");
+        UserWorkspaceProperties workspaceProperties = new UserWorkspaceProperties();
+        workspaceProperties.setBaseDir(workspaceBaseDir.toString());
+        service = new DocPipelineServiceImpl(
+                docTaskMapper,
+                docFileMapper,
+                gitLabDocClient,
+                registry,
+                new UserWorkspaceResolver(workspaceProperties));
     }
 
     @Test
@@ -57,8 +67,9 @@ class DocPipelineServiceImplTest {
         when(gitLabDocClient.getHeadCommit("token", "proj", "main")).thenReturn("c1");
         when(docTaskMapper.selectOne(any())).thenReturn(task("c1", "SUCCESS"));
 
-        DocRefreshResult result = service.refresh("proj", "main", "token");
+        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
 
+        assertThat(result.getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(result.getBaselineCommit()).isEqualTo("c1");
         assertThat(result.getHeadCommit()).isEqualTo("c1");
         assertThat(result.getNewCommitCount()).isEqualTo(0);
@@ -85,7 +96,7 @@ class DocPipelineServiceImplTest {
         when(docFileMapper.selectOne(any())).thenReturn(null);
         when(docFileMapper.insert(any())).thenReturn(1);
 
-        DocRefreshResult result = service.refresh("proj", "main", "token");
+        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
 
         assertThat(result.getDetectedCommitIds()).containsExactly("c2", "c3");
         assertThat(result.getSkippedCommitIds()).containsExactly("c2");
@@ -95,12 +106,14 @@ class DocPipelineServiceImplTest {
         ArgumentCaptor<DocTask> taskCaptor = ArgumentCaptor.forClass(DocTask.class);
         verify(docTaskMapper).insert(taskCaptor.capture());
         DocTask savedTask = taskCaptor.getValue();
+        assertThat(savedTask.getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(savedTask.getEventId()).startsWith("doc-refresh-c3-");
 
         ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
         verify(docFileMapper).insert(fileCaptor.capture());
         DocFile saved = fileCaptor.getValue();
         assertThat(saved.getTaskId()).isEqualTo(42L);
+        assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(saved.getProject()).isEqualTo("proj");
         assertThat(saved.getBranch()).isEqualTo("main");
         assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
@@ -123,7 +136,7 @@ class DocPipelineServiceImplTest {
                 new CommitFileChange(null, "README.md", CommitFileChange.ChangeType.MODIFIED)
         ));
 
-        DocRefreshResult result = service.refresh("proj", "main", "token");
+        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
 
         assertThat(result.getCreatedTaskCommitIds()).containsExactly("c2");
         assertThat(result.getFailedTaskCommitIds()).isEmpty();
@@ -146,7 +159,7 @@ class DocPipelineServiceImplTest {
         when(docFileMapper.selectOne(any())).thenReturn(null);
         when(docFileMapper.insert(any())).thenReturn(1);
 
-        DocRefreshResult result = service.refresh("proj", "main", "token");
+        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
 
         assertThat(result.getCreatedTaskCommitIds()).containsExactly("c2");
         assertThat(result.getFailedTaskCommitIds()).isEmpty();
@@ -155,6 +168,7 @@ class DocPipelineServiceImplTest {
         verify(docFileMapper).insert(fileCaptor.capture());
         DocFile saved = fileCaptor.getValue();
         assertThat(saved.getTaskId()).isEqualTo(44L);
+        assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(saved.getFilePath()).isEqualTo("src/OldFile.java");
         assertThat(saved.getDocFilePath()).isNull();
         assertThat(saved.getParseErrorMsg()).isEqualTo("File deleted");
@@ -165,23 +179,22 @@ class DocPipelineServiceImplTest {
     @Test
     void scanLocal_shouldGenerateDocsFromLocalRepository_withoutGitlabApi() throws Exception {
         String commitId = "1234567890abcdef1234567890abcdef12345678";
-        Path cloneRoot = Files.createTempDirectory("repopilot-repos-test-");
-        Path repo = cloneRoot.resolve("project-2");
+        Path repo = repoPath(USERNAME, "2");
         Files.createDirectories(repo.resolve(".git/refs/heads"));
         Files.writeString(repo.resolve(".git/HEAD"), "ref: refs/heads/main\n");
         Files.writeString(repo.resolve(".git/refs/heads/main"), commitId + "\n");
         Files.createDirectories(repo.resolve("src"));
         Files.writeString(repo.resolve("src/Test.java"), "/** hello */\npublic class Test {}\n");
         Files.writeString(repo.resolve("README.md"), "# Test\n");
-        setField("repoCloneRoot", cloneRoot.toString());
 
         stubTaskInsertWithId(55L);
         when(docTaskMapper.updateById(any())).thenReturn(1);
         when(docFileMapper.selectOne(any())).thenReturn(null);
         when(docFileMapper.insert(any())).thenReturn(1);
 
-        DocLocalScanResult result = service.scanLocal("2", "main");
+        DocLocalScanResult result = service.scanLocal(USERNAME, "2", "main");
 
+        assertThat(result.getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(result.getProject()).isEqualTo("2");
         assertThat(result.getBranch()).isEqualTo("main");
         assertThat(result.getCommitId()).isEqualTo(commitId);
@@ -193,12 +206,14 @@ class DocPipelineServiceImplTest {
 
         ArgumentCaptor<DocTask> taskCaptor = ArgumentCaptor.forClass(DocTask.class);
         verify(docTaskMapper).insert(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(taskCaptor.getValue().getEventId()).startsWith("doc-local-scan-" + commitId + "-");
 
         ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
         verify(docFileMapper).insert(fileCaptor.capture());
         DocFile saved = fileCaptor.getValue();
         assertThat(saved.getTaskId()).isEqualTo(55L);
+        assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
         assertThat(saved.getProject()).isEqualTo("2");
         assertThat(saved.getBranch()).isEqualTo("main");
         assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
@@ -206,6 +221,32 @@ class DocPipelineServiceImplTest {
         assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
         assertThat(saved.getDocFilePath()).isNotBlank();
         assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+        verifyNoInteractions(gitLabDocClient);
+    }
+
+    @Test
+    void scanLocal_shouldSkipFilesIgnoredByRootGitignore() throws Exception {
+        String commitId = "abcdef7890abcdef1234567890abcdef12345678";
+        Path repo = repoPath(USERNAME, "3");
+        Files.createDirectories(repo.resolve(".git/refs/heads"));
+        Files.writeString(repo.resolve(".git/HEAD"), "ref: refs/heads/main\n");
+        Files.writeString(repo.resolve(".git/refs/heads/main"), commitId + "\n");
+        Files.writeString(repo.resolve(".gitignore"), "target/\n");
+        Files.createDirectories(repo.resolve("src"));
+        Files.writeString(repo.resolve("src/Test.java"), "/** hello */\npublic class Test {}\n");
+        Files.createDirectories(repo.resolve("target"));
+        Files.writeString(repo.resolve("target/Ignored.java"), "/** ignored */\npublic class Ignored {}\n");
+
+        stubTaskInsertWithId(56L);
+        when(docTaskMapper.updateById(any())).thenReturn(1);
+        when(docFileMapper.selectOne(any())).thenReturn(null);
+        when(docFileMapper.insert(any())).thenReturn(1);
+
+        DocLocalScanResult result = service.scanLocal(USERNAME, "3", "main");
+
+        assertThat(result.getGeneratedFilePaths()).containsExactly("src/Test.java");
+        assertThat(result.getGeneratedFilePaths()).doesNotContain("target/Ignored.java");
+        assertThat(result.getGeneratedFileCount()).isEqualTo(1);
         verifyNoInteractions(gitLabDocClient);
     }
 
@@ -224,13 +265,7 @@ class DocPipelineServiceImplTest {
         }).when(docTaskMapper).insert(any(DocTask.class));
     }
 
-    private void setField(String name, Object value) throws Exception {
-        java.lang.reflect.Field field = DocPipelineServiceImpl.class.getDeclaredField(name);
-        field.setAccessible(true);
-        field.set(service, value);
+    private Path repoPath(String username, String projectId) {
+        return workspaceBaseDir.resolve("workspace").resolve(username).resolve("repos").resolve("project-" + projectId);
     }
 }
-//这是一个测试文件，用于测试DocPipelineServiceImpl类的refresh方法。它使用Mockito框架模拟了GitLabDocClient、DocTaskMapper和DocFileMapper的行为，并验证了在不同情况下refresh方法的逻辑是否正确。测试覆盖了以下场景：
-//1. 当基线提交和头提交相同时，应该返回没有新提交的结果，并且不调用listCommitIdsSince方法。
-//2. 当有新提交时，应该跳过已经处理过的提交，并且增量处理新的提交，最终保存新的文档文件内容到数据库。
-//3. 当提交的文件变更包含删除Java文件时，应该标记该文件为已删除，并且不尝试读取文件内容。

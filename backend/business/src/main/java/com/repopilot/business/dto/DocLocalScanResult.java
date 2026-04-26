@@ -9,6 +9,7 @@ import java.util.List;
 @Data
 public class DocLocalScanResult {
 
+    private String gitlabUsername;
     private String project;
     private String branch;
     private String commitId;

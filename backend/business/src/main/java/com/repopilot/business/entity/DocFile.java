@@ -12,6 +12,7 @@ public class DocFile {
     private Long id;
 
     private Long taskId;
+    private String gitlabUsername;
     private String projectName;
     private String branchName;
     private String filePath;

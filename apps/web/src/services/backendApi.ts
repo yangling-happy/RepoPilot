@@ -28,17 +28,28 @@ export type CloneRepoRequest = {
 
 export type CloneRepoResponse = {
   projectId: number;
+  gitlabUsername: string;
   projectPath: string;
   branch: string;
   cloneUrl: string;
+  workspacePath: string;
   localPath: string;
   commitId: string;
 };
 
 export type DocLocalScanResult = {
+  gitlabUsername: string;
+  project: string;
+  branch: string;
+  commitId: string;
+  localRepoPath: string;
   scannedFileCount: number;
   generatedFileCount: number;
   skippedFileCount: number;
+  failedFileCount: number;
+  generatedFilePaths: string[];
+  failedFilePaths: string[];
+  message: string;
 };
 
 export async function setGitlabToken(token: string): Promise<void> {

@@ -13,20 +13,23 @@ import com.repopilot.business.service.docgen.DocGenerationContext;
 import com.repopilot.business.service.docgen.DocGenerationResult;
 import com.repopilot.business.service.docgen.DocGenerator;
 import com.repopilot.business.service.docgen.DocGeneratorRegistry;
+import com.repopilot.business.service.gitignore.GitIgnoreMatcher;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
 import com.repopilot.business.service.gitlab.model.CommitFileChange;
+import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import com.repopilot.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -35,7 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -51,21 +53,18 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private final DocFileMapper docFileMapper;
     private final GitLabDocClient gitLabDocClient;
     private final DocGeneratorRegistry docGeneratorRegistry;
-
-    @Value("${repo.clone.root-dir:./workspace/repos}")
-    private String repoCloneRoot;
-
-    @Value("${doc.output.root-dir:./workspace/docs}")
-    private String docOutputRoot;
+    private final UserWorkspaceResolver userWorkspaceResolver;
 
     @Override
-    public DocRefreshResult refresh(String project, String branch, String token) {
+    public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
+        validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
 
         String headCommit = gitLabDocClient.getHeadCommit(token, project, branch);
-        String baselineCommit = findBaselineCommit(project, branch);
+        String baselineCommit = findBaselineCommit(gitlabUsername, project, branch);
 
         DocRefreshResult result = new DocRefreshResult();
+        result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
         result.setBranch(branch);
         result.setBaselineCommit(baselineCommit);
@@ -81,12 +80,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         result.setNewCommitCount(detectedCommitIds.size());
 
         for (String commitId : detectedCommitIds) {
-            if (alreadyHandled(project, branch, commitId)) {
+            if (alreadyHandled(gitlabUsername, project, branch, commitId)) {
                 result.getSkippedCommitIds().add(commitId);
                 continue;
             }
 
-            String status = runExtractionTask(project, branch, commitId, token);
+            String status = runExtractionTask(gitlabUsername, project, branch, commitId, token);
             if (STATUS_FAILED.equals(status)) {
                 result.getFailedTaskCommitIds().add(commitId);
             } else {
@@ -105,29 +104,32 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     @Override
-    public void rebuild(String project, String branch, String commitId, String token) {
+    public void rebuild(String gitlabUsername, String project, String branch, String commitId, String token) {
+        validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
         if (!StringUtils.hasText(commitId)) {
             throw new BusinessException(400, "commitId is required for rebuild");
         }
 
-        String status = runExtractionTask(project, branch, commitId, token);
+        String status = runExtractionTask(gitlabUsername, project, branch, commitId, token);
         if (STATUS_FAILED.equals(status)) {
             throw new BusinessException(500, "Rebuild failed for commit: " + commitId);
         }
     }
 
     @Override
-    public DocLocalScanResult scanLocal(String project, String branch) {
+    public DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch) {
+        validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
 
-        Path sourceRoot = resolveSourceRoot(project);
+        Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
 
         String commitId = resolveLocalHeadCommit(sourceRoot);
         DocLocalScanResult result = new DocLocalScanResult();
+        result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
         result.setBranch(branch);
         result.setCommitId(commitId);
@@ -135,6 +137,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-local-scan", commitId));
+        task.setGitlabUsername(gitlabUsername);
         task.setProject(project);
         task.setBranch(branch);
         task.setCommitId(commitId);
@@ -155,7 +158,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
 
                 try {
-                    generateLocalDoc(project, branch, commitId, task.getId(), sourceRoot, file, filePath);
+                    generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, file, filePath);
                     result.setGeneratedFileCount(result.getGeneratedFileCount() + 1);
                     result.getGeneratedFilePaths().add(filePath);
                 } catch (Exception ex) {
@@ -163,7 +166,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                             project, branch, filePath, ex);
                     result.setFailedFileCount(result.getFailedFileCount() + 1);
                     result.getFailedFilePaths().add(filePath);
-                    upsertDocFile(project, branch, filePath, commitId, task.getId(),
+                    upsertDocFile(gitlabUsername, project, branch, filePath, commitId, task.getId(),
                             STATUS_FAILED, null, summarizeError(ex));
                 }
             }
@@ -193,13 +196,15 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     @Override
-    public List<DocQueryItem> query(String project, String branch, String filePath, String commitId) {
+    public List<DocQueryItem> query(String gitlabUsername, String project, String branch, String filePath, String commitId) {
+        validateGitlabUsername(gitlabUsername);
         if (!StringUtils.hasText(project)) {
             throw new BusinessException(400, "project is required");
         }
 
         LambdaQueryWrapper<DocFile> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DocFile::getProjectName, project);
+        wrapper.eq(DocFile::getGitlabUsername, gitlabUsername)
+                .eq(DocFile::getProjectName, project);
         if (StringUtils.hasText(branch)) {
             wrapper.eq(DocFile::getBranchName, branch);
         }
@@ -228,9 +233,10 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .collect(Collectors.toList());
     }
 
-    private String runExtractionTask(String project, String branch, String commitId, String token) {
+    private String runExtractionTask(String gitlabUsername, String project, String branch, String commitId, String token) {
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
+        task.setGitlabUsername(gitlabUsername);
         task.setProject(project);
         task.setBranch(branch);
         task.setCommitId(commitId);
@@ -241,7 +247,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         long start = System.currentTimeMillis();
         try {
             List<CommitFileChange> changes = gitLabDocClient.listCommitFileChanges(token, project, commitId);
-            int handledDocFiles = applyChanges(project, branch, commitId, task.getId(), token, changes);
+            int handledDocFiles = applyChanges(gitlabUsername, project, branch, commitId, task.getId(), token, changes);
 
             String finalStatus = handledDocFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
             task.setStatus(finalStatus);
@@ -257,7 +263,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
-    private int applyChanges(String project,
+    private int applyChanges(String gitlabUsername,
+                             String project,
                              String branch,
                              String commitId,
                              Long taskId,
@@ -271,7 +278,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         for (CommitFileChange change : changes) {
             switch (change.getChangeType()) {
                 case ADDED, MODIFIED -> {
-                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, taskId, token)) {
+                    if (upsertActiveDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, token)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -279,7 +286,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
                 case DELETED -> {
                     if (isSupportedDocFile(change.getOldPath())) {
-                        upsertDeletedDoc(project, branch, change.getOldPath(), commitId, taskId);
+                        upsertDeletedDoc(gitlabUsername, project, branch, change.getOldPath(), commitId, taskId);
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getOldPath());
@@ -287,12 +294,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
                 case RENAMED -> {
                     if (isSupportedDocFile(change.getOldPath())) {
-                        upsertDeletedDoc(project, branch, change.getOldPath(), commitId, taskId);
+                        upsertDeletedDoc(gitlabUsername, project, branch, change.getOldPath(), commitId, taskId);
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getOldPath());
                     }
-                    if (upsertActiveDoc(project, branch, change.getNewPath(), commitId, taskId, token)) {
+                    if (upsertActiveDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, token)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -304,7 +311,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return handled;
     }
 
-    private boolean upsertActiveDoc(String project,
+    private boolean upsertActiveDoc(String gitlabUsername,
+                                    String project,
                                     String branch,
                                     String filePath,
                                     String commitId,
@@ -322,15 +330,16 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .commitId(commitId)
                 .filePath(filePath)
                 .sourceContent(fileContent)
-                .sourceRoot(resolveSourceRoot(project))
-                .outputRoot(resolveDocOutputRoot())
+                .sourceRoot(resolveSourceRoot(gitlabUsername, project))
+                .outputRoot(resolveDocOutputRoot(gitlabUsername))
                 .build());
 
-        upsertDocFile(project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
+        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
         return true;
     }
 
-    private void generateLocalDoc(String project,
+    private void generateLocalDoc(String gitlabUsername,
+                                  String project,
                                   String branch,
                                   String commitId,
                                   Long taskId,
@@ -350,27 +359,29 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .filePath(filePath)
                 .sourceContent(fileContent)
                 .sourceRoot(sourceRoot)
-                .outputRoot(resolveDocOutputRoot())
+                .outputRoot(resolveDocOutputRoot(gitlabUsername))
                 .build());
 
-        upsertDocFile(project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
+        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
     }
 
-    private void upsertDeletedDoc(String project, String branch, String filePath, String commitId, Long taskId) {
-        upsertDocFile(project, branch, filePath, commitId, taskId, null, "File deleted");
+    private void upsertDeletedDoc(String gitlabUsername, String project, String branch, String filePath, String commitId, Long taskId) {
+        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, null, "File deleted");
     }
 
-    private void upsertDocFile(String project,
+    private void upsertDocFile(String gitlabUsername,
+                               String project,
                                String branch,
                                String filePath,
                                String commitId,
                                Long taskId,
                                String docFilePath,
                                String parseErrorMsg) {
-        upsertDocFile(project, branch, filePath, commitId, taskId, STATUS_SUCCESS, docFilePath, parseErrorMsg);
+        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, STATUS_SUCCESS, docFilePath, parseErrorMsg);
     }
 
-    private void upsertDocFile(String project,
+    private void upsertDocFile(String gitlabUsername,
+                               String project,
                                String branch,
                                String filePath,
                                String commitId,
@@ -379,7 +390,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                                String docFilePath,
                                String parseErrorMsg) {
         LambdaQueryWrapper<DocFile> query = new LambdaQueryWrapper<>();
-        query.eq(DocFile::getProjectName, project)
+        query.eq(DocFile::getGitlabUsername, gitlabUsername)
+                .eq(DocFile::getProjectName, project)
                 .eq(DocFile::getBranchName, branch)
                 .eq(DocFile::getFilePath, filePath)
                 .eq(DocFile::getCommitId, commitId)
@@ -389,6 +401,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         if (existing == null) {
             DocFile item = new DocFile();
             item.setTaskId(taskId);
+            item.setGitlabUsername(gitlabUsername);
             item.setProjectName(project);
             item.setBranchName(branch);
             item.setFilePath(filePath);
@@ -412,9 +425,10 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return prefix + "-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
-    private String findBaselineCommit(String project, String branch) {
+    private String findBaselineCommit(String gitlabUsername, String project, String branch) {
         LambdaQueryWrapper<DocTask> query = new LambdaQueryWrapper<>();
-        query.eq(DocTask::getProject, project)
+        query.eq(DocTask::getGitlabUsername, gitlabUsername)
+                .eq(DocTask::getProject, project)
                 .eq(DocTask::getBranch, branch)
                 .in(DocTask::getStatus, Arrays.asList(STATUS_SUCCESS, STATUS_SKIPPED))
                 .orderByDesc(DocTask::getCreateTime)
@@ -424,9 +438,10 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return latestTask == null ? null : latestTask.getCommitId();
     }
 
-    private boolean alreadyHandled(String project, String branch, String commitId) {
+    private boolean alreadyHandled(String gitlabUsername, String project, String branch, String commitId) {
         LambdaQueryWrapper<DocTask> query = new LambdaQueryWrapper<>();
-        query.eq(DocTask::getProject, project)
+        query.eq(DocTask::getGitlabUsername, gitlabUsername)
+                .eq(DocTask::getProject, project)
                 .eq(DocTask::getBranch, branch)
                 .eq(DocTask::getCommitId, commitId)
                 .in(DocTask::getStatus, Arrays.asList(STATUS_RUNNING, STATUS_SUCCESS, STATUS_SKIPPED));
@@ -447,12 +462,38 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private List<Path> listLocalRepoFiles(Path sourceRoot) throws IOException {
         Path normalizedRoot = sourceRoot.toAbsolutePath().normalize();
         Path gitDir = normalizedRoot.resolve(".git").normalize();
-        try (Stream<Path> stream = Files.walk(normalizedRoot)) {
-            return stream.filter(Files::isRegularFile)
-                    .filter(path -> !path.toAbsolutePath().normalize().startsWith(gitDir))
-                    .sorted(Comparator.comparing(path -> toRepoRelativePath(normalizedRoot, path)))
-                    .collect(Collectors.toList());
-        }
+        GitIgnoreMatcher gitIgnoreMatcher = GitIgnoreMatcher.load(normalizedRoot);
+        List<Path> files = new ArrayList<>();
+
+        Files.walkFileTree(normalizedRoot, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                Path normalizedDir = dir.toAbsolutePath().normalize();
+                if (normalizedDir.equals(gitDir) || normalizedDir.startsWith(gitDir)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (!normalizedDir.equals(normalizedRoot) && gitIgnoreMatcher.isIgnored(normalizedDir, true)) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                Path normalizedFile = file.toAbsolutePath().normalize();
+                if (attrs.isRegularFile()
+                        && !normalizedFile.equals(gitDir)
+                        && !normalizedFile.startsWith(gitDir)
+                        && !gitIgnoreMatcher.isIgnored(normalizedFile, false)) {
+                    files.add(normalizedFile);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+
+        return files.stream()
+                .sorted(Comparator.comparing(path -> toRepoRelativePath(normalizedRoot, path)))
+                .collect(Collectors.toList());
     }
 
     private String toRepoRelativePath(Path sourceRoot, Path file) {
@@ -512,7 +553,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         if (Files.isRegularFile(gitPath)) {
             String gitFile = Files.readString(gitPath, StandardCharsets.UTF_8).trim();
             if (gitFile.startsWith("gitdir:")) {
-                Path gitDir = Paths.get(gitFile.substring("gitdir:".length()).trim());
+                Path gitDir = Path.of(gitFile.substring("gitdir:".length()).trim());
                 if (!gitDir.isAbsolute()) {
                     gitDir = sourceRoot.resolve(gitDir);
                 }
@@ -553,27 +594,25 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return normalized.length() <= 500 ? normalized : normalized.substring(0, 500);
     }
 
-    private Path resolveSourceRoot(String project) {
+    private Path resolveSourceRoot(String gitlabUsername, String project) {
         if (!StringUtils.hasText(project) || !project.trim().matches("\\d+")) {
             return null;
         }
 
-        String rootDir = StringUtils.hasText(repoCloneRoot) ? repoCloneRoot : "./workspace/repos";
-        Path root = Paths.get(rootDir).toAbsolutePath().normalize();
-        Path candidate = root.resolve("project-" + project.trim()).normalize();
-        if (!candidate.startsWith(root) || !Files.isDirectory(candidate)) {
+        Path candidate = userWorkspaceResolver.repoPath(gitlabUsername, project);
+        if (!Files.isDirectory(candidate)) {
             return null;
         }
         return candidate;
     }
 
-    private Path resolveDocOutputRoot() {
-        String rootDir = StringUtils.hasText(docOutputRoot) ? docOutputRoot : "./workspace/docs";
-        return Paths.get(rootDir).toAbsolutePath().normalize();
+    private Path resolveDocOutputRoot(String gitlabUsername) {
+        return userWorkspaceResolver.docOutputRoot(gitlabUsername);
     }
 
     private DocQueryItem toQueryItem(DocFile row) {
         DocQueryItem item = new DocQueryItem();
+        item.setGitlabUsername(row.getGitlabUsername());
         item.setProject(row.getProjectName());
         item.setBranch(row.getBranchName());
         item.setFilePath(row.getFilePath());
@@ -588,6 +627,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private void validateProjectAndBranch(String project, String branch) {
         if (!StringUtils.hasText(project) || !StringUtils.hasText(branch)) {
             throw new BusinessException(400, "project and branch are required");
+        }
+    }
+
+    private void validateGitlabUsername(String gitlabUsername) {
+        if (!StringUtils.hasText(gitlabUsername)) {
+            throw new BusinessException(400, "GitLab username is required");
         }
     }
 }

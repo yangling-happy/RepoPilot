@@ -11,6 +11,7 @@ public class DocTask {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private String gitlabUsername;
     private String eventId;
     private String project;
     private String branch;

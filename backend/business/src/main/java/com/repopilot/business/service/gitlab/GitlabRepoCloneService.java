@@ -3,6 +3,7 @@ package com.repopilot.business.service.gitlab;
 import com.repopilot.business.config.RepoCloneProperties;
 import com.repopilot.business.dto.CloneRepoResponse;
 import com.repopilot.business.service.terminal.TerminalRelayClient;
+import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import com.repopilot.common.exception.BusinessException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,7 +26,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
 @Slf4j
@@ -36,11 +36,16 @@ public class GitlabRepoCloneService {
     private final RepoCloneProperties repoCloneProperties;
     private final ObjectMapper objectMapper;
     private final TerminalRelayClient terminalRelayClient;
+    private final UserWorkspaceResolver userWorkspaceResolver;
 
     @Value("${gitlab.api-url:https://gitlab.com/api/v4}")
     private String gitlabApiUrl;
 
-    public CloneRepoResponse cloneByProjectId(Long projectId, String branch, String token, String terminalSessionId) {
+    public CloneRepoResponse cloneByProjectId(Long projectId,
+                                              String branch,
+                                              String token,
+                                              String gitlabUsername,
+                                              String terminalSessionId) {
         if (projectId == null || projectId <= 0) {
             throw new BusinessException(400, "projectId must be greater than 0");
         }
@@ -54,8 +59,8 @@ public class GitlabRepoCloneService {
             effectiveBranch = "main";
         }
 
-        Path cloneRoot = Paths.get(repoCloneProperties.getRootDir()).toAbsolutePath().normalize();
-        Path targetPath = cloneRoot.resolve("project-" + projectId).normalize();
+        Path cloneRoot = userWorkspaceResolver.repoRoot(gitlabUsername);
+        Path targetPath = userWorkspaceResolver.repoPath(gitlabUsername, projectId);
         if (!targetPath.startsWith(cloneRoot)) {
             throw new BusinessException(400, "Invalid clone target path");
         }
@@ -90,9 +95,11 @@ public class GitlabRepoCloneService {
 
                 CloneRepoResponse response = new CloneRepoResponse();
                 response.setProjectId(project.id);
+                response.setGitlabUsername(gitlabUsername);
                 response.setProjectPath(project.pathWithNamespace);
                 response.setBranch(effectiveBranch);
                 response.setCloneUrl(cloneUrl);
+                response.setWorkspacePath(userWorkspaceResolver.userWorkspace(gitlabUsername).toString());
                 response.setLocalPath(targetPath.toString());
                 response.setCommitId(headCommit);
                 emitTerminal(terminalSessionId, "[clone] completed, HEAD=" + headCommit);

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 @Data
 public class DocQueryItem {
 
+    private String gitlabUsername;
     private String project;
     private String branch;
     private String filePath;

@@ -10,8 +10,10 @@ import com.repopilot.business.entity.DocTask;
 import com.repopilot.business.mapper.DocFileMapper;
 import com.repopilot.business.mapper.DocTaskMapper;
 import com.repopilot.business.service.DocPipelineService;
+import com.repopilot.business.service.gitlab.GitLabSessionContextService;
+import com.repopilot.business.service.gitlab.GitLabUserContext;
 import com.repopilot.common.dto.ApiResponse;
-import com.repopilot.common.exception.BusinessException;
+import com.repopilot.common.util.BizAssert;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ public class DocController {
     private final DocTaskMapper docTaskMapper;
     private final DocFileMapper docFileMapper;
     private final DocPipelineService docPipelineService;
+    private final GitLabSessionContextService gitLabSessionContextService;
 
     @PostMapping("/webhook/gitlab")
     public ApiResponse<Void> handleGitlabWebhook(@RequestBody String payload) {
@@ -46,16 +49,24 @@ public class DocController {
     @PostMapping("/refresh")
     public ApiResponse<DocRefreshResult> refreshDoc(@RequestBody DocRefreshRequest request,
                                                     HttpSession session) {
-        String token = getGitlabToken(session);
-        log.info("Refresh doc request: project={}, branch={}", request.getProject(), request.getBranch());
-        DocRefreshResult result = docPipelineService.refresh(request.getProject(), request.getBranch(), token);
+        BizAssert.notNull(request, 400, "Request body is required");
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Refresh doc request: username={}, project={}, branch={}",
+                context.username(), request.getProject(), request.getBranch());
+        DocRefreshResult result = docPipelineService.refresh(
+                context.username(), request.getProject(), request.getBranch(), context.token());
         return ApiResponse.success("Refresh completed", result);
     }
 
     @PostMapping("/scan-local")
-    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocRefreshRequest request) {
-        log.info("Local doc scan request: project={}, branch={}", request.getProject(), request.getBranch());
-        DocLocalScanResult result = docPipelineService.scanLocal(request.getProject(), request.getBranch());
+    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocRefreshRequest request,
+                                                        HttpSession session) {
+        BizAssert.notNull(request, 400, "Request body is required");
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Local doc scan request: username={}, project={}, branch={}",
+                context.username(), request.getProject(), request.getBranch());
+        DocLocalScanResult result = docPipelineService.scanLocal(
+                context.username(), request.getProject(), request.getBranch());
         return ApiResponse.success("Local scan completed", result);
     }
 
@@ -64,9 +75,10 @@ public class DocController {
             @RequestParam String branch,
             @RequestParam String commitId,
             HttpSession session) {
-        String token = getGitlabToken(session);
-        log.info("Rebuild doc request: project={}, branch={}, commitId={}", project, branch, commitId);
-        docPipelineService.rebuild(project, branch, commitId, token);
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Rebuild doc request: username={}, project={}, branch={}, commitId={}",
+                context.username(), project, branch, commitId);
+        docPipelineService.rebuild(context.username(), project, branch, commitId, context.token());
         return ApiResponse.success("Rebuild triggered", null);
     }
 
@@ -74,19 +86,23 @@ public class DocController {
     public ApiResponse<Object> queryDoc(@RequestParam String project,
             @RequestParam(required = false) String branch,
             @RequestParam(required = false) String filePath,
-            @RequestParam(required = false) String commitId) {
-        log.info("Query doc: project={}, branch={}, filePath={}, commitId={}", project, branch, filePath, commitId);
-        return ApiResponse.success(docPipelineService.query(project, branch, filePath, commitId));
+            @RequestParam(required = false) String commitId,
+            HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        log.info("Query doc: username={}, project={}, branch={}, filePath={}, commitId={}",
+                context.username(), project, branch, filePath, commitId);
+        return ApiResponse.success(docPipelineService.query(context.username(), project, branch, filePath, commitId));
     }
 
     @PostMapping("/task/create")
-    public ApiResponse<DocTask> createDocTask(@RequestBody CreateDocTaskRequest request) {
+    public ApiResponse<DocTask> createDocTask(@RequestBody CreateDocTaskRequest request,
+                                              HttpSession session) {
         String validationError = validateCreateDocTaskRequest(request);
-        if (validationError != null) {
-            return ApiResponse.error(400, validationError);
-        }
+        BizAssert.isTrue(validationError == null, 400, validationError);
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
 
         DocTask task = new DocTask();
+        task.setGitlabUsername(context.username());
         task.setEventId(request.getEventId().trim());
         task.setProject(request.getProject().trim());
         task.setBranch(request.getBranch().trim());
@@ -94,24 +110,23 @@ public class DocController {
         task.setStatus(request.getStatus().trim().toUpperCase());
         task.setDuration(request.getDuration());
 
-        int affectedRows = docTaskMapper.insert(task);
-        if (affectedRows != 1) {
-            return ApiResponse.error("Insert doc task failed");
-        }
+        BizAssert.affectedOne(docTaskMapper.insert(task), "Insert doc task failed");
 
-        log.info("Doc task created successfully, id={}, eventId={}", task.getId(), task.getEventId());
+        log.info("Doc task created successfully, username={}, id={}, eventId={}",
+                task.getGitlabUsername(), task.getId(), task.getEventId());
         return ApiResponse.success("Doc task created", task);
     }
 
     @PostMapping("/file/create")
-    public ApiResponse<DocFile> createDocFile(@RequestBody CreateDocFileRequest request) {
+    public ApiResponse<DocFile> createDocFile(@RequestBody CreateDocFileRequest request,
+                                              HttpSession session) {
         String validationError = validateCreateDocFileRequest(request);
-        if (validationError != null) {
-            return ApiResponse.error(400, validationError);
-        }
+        BizAssert.isTrue(validationError == null, 400, validationError);
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
 
         DocFile docFile = new DocFile();
         docFile.setTaskId(request.getTaskId());
+        docFile.setGitlabUsername(context.username());
         docFile.setProjectName(request.getProjectName().trim());
         docFile.setBranchName(request.getBranchName().trim());
         docFile.setFilePath(request.getFilePath().trim());
@@ -120,21 +135,11 @@ public class DocController {
         docFile.setParseStatus(request.getParseStatus().trim().toUpperCase());
         docFile.setParseErrorMsg(hasText(request.getParseErrorMsg()) ? request.getParseErrorMsg().trim() : null);
 
-        int affectedRows = docFileMapper.insert(docFile);
-        if (affectedRows != 1) {
-            return ApiResponse.error("Insert doc file failed");
-        }
+        BizAssert.affectedOne(docFileMapper.insert(docFile), "Insert doc file failed");
 
-        log.info("Doc file created successfully, id={}, filePath={}", docFile.getId(), docFile.getFilePath());
+        log.info("Doc file created successfully, username={}, id={}, filePath={}",
+                docFile.getGitlabUsername(), docFile.getId(), docFile.getFilePath());
         return ApiResponse.success("Doc file created", docFile);
-    }
-
-    private String getGitlabToken(HttpSession session) {
-        String token = (String) session.getAttribute("gitlabToken");
-        if (!hasText(token)) {
-            throw new BusinessException(400, "GitLab token not found in session. Call /api/session/setGitlabToken first.");
-        }
-        return token;
     }
 
     private String validateCreateDocTaskRequest(CreateDocTaskRequest request) {

@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "repo.clone")
 public class RepoCloneProperties {
 
-    private String rootDir = "./workspace/repos";
     private String defaultBranch = "main";
     private Integer timeoutSeconds = 120;
 }

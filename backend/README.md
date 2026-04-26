@@ -76,6 +76,7 @@ mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scrip
 
 ```bash
 mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/02_migrate_doc_schema.sql
+mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/03_add_gitlab_username.sql
 ```
 
 3. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
@@ -205,7 +206,7 @@ curl -sS -X POST -b "$COOKIE_JAR" \
 默认克隆目录为：
 
 ```text
-backend/business/workspace/repos/project-2
+backend/business/workspace/{gitlabUsername}/repos/project-2
 ```
 
 如果接口提示目录已存在，说明仓库已经克隆过；可以直接继续执行文档扫描或刷新。
@@ -213,13 +214,13 @@ backend/business/workspace/repos/project-2
 基于已经克隆到本地的 Gitlet 仓库全量扫描并生成解析文档：
 
 ```bash
-curl -sS -X POST \
+curl -sS -X POST -b "$COOKIE_JAR" \
   -H "Content-Type: application/json" \
   -d '{"project":"2","branch":"main"}' \
   "${BASE_URL}/doc/scan-local"
 ```
 
-这里 `project` 建议传 GitLab 项目 ID 字符串 `"2"`。本地扫描逻辑会用它定位本地仓库 `workspace/repos/project-2`，递归扫描仓库中的文件，当前只处理 `.java`，并把该仓库目录加入 javadoc 的 `sourcepath`，这样 Gitlet 的 Java 文件在解析依赖类型时能看到同仓库源码。`scan-local` 不需要 GitLab Token；只要仓库已经克隆到本地即可。
+这里 `project` 建议传 GitLab 项目 ID 字符串 `"2"`。本地扫描逻辑会用它定位本地仓库 `workspace/{gitlabUsername}/repos/project-2`，递归扫描仓库中的文件，当前只处理 `.java`，并把该仓库目录加入 javadoc 的 `sourcepath`，这样 Gitlet 的 Java 文件在解析依赖类型时能看到同仓库源码。`scan-local` 不会调用 GitLab API，但需要复用上面保存 Token 的 cookie 来确定当前 `gitlabUsername`。
 
 如果需要按 GitLab 提交差异做增量解析，仍然使用 `refresh`。该接口会访问 GitLab API，所以需要复用上面保存 Token 的 cookie 文件：
 
@@ -241,13 +242,13 @@ curl -sS -X POST -b "$COOKIE_JAR" \
 同时，javadoc 文件会落盘到：
 
 ```text
-backend/business/workspace/docs/2/main/{commitId}/{filePathHash}/...
+backend/business/workspace/{gitlabUsername}/docs/2/main/{commitId}/{filePathHash}/...
 ```
 
 例如某次生成后，`doc_file_path` 可能指向：
 
 ```text
-/path/to/RepoPilot/backend/business/workspace/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/gitlet/Repository.html
+/path/to/RepoPilot/backend/business/workspace/{gitlabUsername}/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/gitlet/Repository.html
 ```
 
 查询当前可展示的文档：
@@ -260,7 +261,7 @@ curl -sS -b "$COOKIE_JAR" "${BASE_URL}/doc/query?project=2&branch=main"
 
 ```bash
 cd backend/business
-find ./workspace/docs/2/main -name '*.html' -print
+find ./workspace/{gitlabUsername}/docs/2/main -name '*.html' -print
 ```
 
 判断功能是否正确，可以看三处：
@@ -274,9 +275,8 @@ find ./workspace/docs/2/main -name '*.html' -print
 - 当前已接入 `.java` 后缀，对应生成工具为 `javadoc`；其它语言后续只需要新增对应 `DocGenerator` 并注册支持后缀。
 - 目前 `.md`、`.py` 等未支持后缀会被跳过并记录日志，不会生成 `doc_file_dtl` 成功文档。
 - `/doc/scan-local` 是本地仓库全量扫描；`/doc/refresh` 是 GitLab 提交差异增量解析，两者会共用同一套后缀分发和文档生成器。
-- `workspace/repos` 和 `workspace/docs` 都已加入 `.gitignore`，不会提交到项目仓库。
-- 克隆根目录可通过 `REPO_CLONE_ROOT` 或 `--repo.clone.root-dir=...` 覆盖。
-- 文档生成根目录可通过 `DOC_OUTPUT_ROOT` 或 `--doc.output.root-dir=...` 覆盖。
+- `workspace/{gitlabUsername}/repos` 和 `workspace/{gitlabUsername}/docs` 都在 `workspace` 忽略范围内，不会提交到项目仓库。
+- 用户工作区根目录可通过 `USER_WORKSPACE_BASE` 或 `--user.workspace.base-dir=...` 覆盖；默认从 business 服务工作目录下的 `workspace/{gitlabUsername}` 开始。
 
 ## 写入接口结构速览
 
@@ -373,7 +373,7 @@ curl -sS -X POST "${BASE_URL}/doc/file/create" \
     \"branchName\": \"main\",
     \"filePath\": \"${docFilePath}\",
     \"commitId\": \"${docCommitId}\",
-    \"docFilePath\": \"workspace/docs/RepoPilot/main/${docCommitId}/Sample${ts}.html\",
+    \"docFilePath\": \"workspace/{gitlabUsername}/docs/RepoPilot/main/${docCommitId}/Sample${ts}.html\",
     \"parseStatus\": \"SUCCESS\"
   }"
 ```

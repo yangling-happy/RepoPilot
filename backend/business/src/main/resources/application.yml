@@ -33,13 +33,12 @@ deploy:
 
 repo:
   clone:
-    root-dir: ${REPO_CLONE_ROOT:./workspace/repos}
     default-branch: main
     timeout-seconds: 120
 
-doc:
-  output:
-    root-dir: ${DOC_OUTPUT_ROOT:./workspace/docs}
+user:
+  workspace:
+    base-dir: ${USER_WORKSPACE_BASE:.}
 
 terminal:
   relay:
