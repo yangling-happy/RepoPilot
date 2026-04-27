@@ -10,8 +10,9 @@ import com.repopilot.business.mapper.DocTaskMapper;
 import com.repopilot.business.service.docgen.DocGeneratorRegistry;
 import com.repopilot.business.service.docgen.JavaDocGenerator;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
-import com.repopilot.business.service.gitlab.model.CommitFileChange;
 import com.repopilot.business.service.workspace.UserWorkspaceResolver;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,14 +20,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -63,117 +63,133 @@ class DocPipelineServiceImplTest {
     }
 
     @Test
-    void refresh_shouldReturnNoNewCommits_whenBaselineEqualsHead() {
-        when(gitLabDocClient.getHeadCommit("token", "proj", "main")).thenReturn("c1");
-        when(docTaskMapper.selectOne(any())).thenReturn(task("c1", "SUCCESS"));
+    void refresh_shouldReturnNoNewCommits_whenLocalHeadUnchangedAfterPull() throws Exception {
+        String projectId = "2";
+        String branch = "main";
+        Path origin = Files.createTempDirectory(workspaceBaseDir, "origin-refresh-nochange-");
 
-        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
+        try (Git originGit = Git.init().setDirectory(origin.toFile()).call()) {
+            String initialHead = commitFile(originGit, "src/Test.java", "/** hello */\npublic class Test {}\n", "init");
+            checkoutOrCreateBranch(originGit, branch);
+            cloneToWorkspace(origin, projectId, branch);
 
-        assertThat(result.getGitlabUsername()).isEqualTo(USERNAME);
-        assertThat(result.getBaselineCommit()).isEqualTo("c1");
-        assertThat(result.getHeadCommit()).isEqualTo("c1");
-        assertThat(result.getNewCommitCount()).isEqualTo(0);
-        assertThat(result.getMessage()).isEqualTo("No new commits.");
-        verify(gitLabDocClient, never()).listCommitIdsSince(anyString(), anyString(), any(), anyString());
-        verifyNoInteractions(docFileMapper);
+            DocRefreshResult result = service.refresh(USERNAME, projectId, branch, "token");
+
+            assertThat(result.getGitlabUsername()).isEqualTo(USERNAME);
+            assertThat(result.getProject()).isEqualTo(projectId);
+            assertThat(result.getBranch()).isEqualTo(branch);
+            assertThat(result.getBaselineCommit()).isEqualTo(initialHead);
+            assertThat(result.getHeadCommit()).isEqualTo(initialHead);
+            assertThat(result.getNewCommitCount()).isEqualTo(0);
+            assertThat(result.getMessage()).isEqualTo("No new commits.");
+            verifyNoInteractions(docTaskMapper, docFileMapper, gitLabDocClient);
+        }
     }
 
     @Test
-    void refresh_shouldSkipHandledCommit_andProcessNewCommitIncrementally() {
-        when(gitLabDocClient.getHeadCommit("token", "proj", "main")).thenReturn("c3");
-        when(docTaskMapper.selectOne(any())).thenReturn(task("c1", "SUCCESS"));
-        when(gitLabDocClient.listCommitIdsSince("token", "proj", "c1", "c3"))
-                .thenReturn(List.of("c2", "c3"));
-        when(docTaskMapper.selectCount(any())).thenReturn(1L, 0L);
+    void refresh_shouldGenerateDocFromLocalDiffAfterPull() throws Exception {
+        String projectId = "3";
+        String branch = "main";
+        Path origin = Files.createTempDirectory(workspaceBaseDir, "origin-refresh-modified-");
 
-        stubTaskInsertWithId(42L);
-        when(docTaskMapper.updateById(any())).thenReturn(1);
-        when(gitLabDocClient.listCommitFileChanges("token", "proj", "c3")).thenReturn(List.of(
-                new CommitFileChange(null, "src/Test.java", CommitFileChange.ChangeType.MODIFIED)
-        ));
-        when(gitLabDocClient.readFileContent("token", "proj", "src/Test.java", "c3"))
-                .thenReturn("/** hello */\npublic class Test {}\n");
-        when(docFileMapper.selectOne(any())).thenReturn(null);
-        when(docFileMapper.insert(any())).thenReturn(1);
+        try (Git originGit = Git.init().setDirectory(origin.toFile()).call()) {
+            String oldHead = commitFile(originGit, "src/Test.java", "/** hello */\npublic class Test {}\n", "init");
+            checkoutOrCreateBranch(originGit, branch);
+            cloneToWorkspace(origin, projectId, branch);
+            String newHead = commitFile(originGit, "src/Test.java", "/** updated */\npublic class Test {}\n", "update-test");
 
-        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
+            stubTaskInsertWithId(42L);
+            when(docTaskMapper.updateById(any())).thenReturn(1);
+            when(docFileMapper.selectOne(any())).thenReturn(null);
+            when(docFileMapper.insert(any())).thenReturn(1);
 
-        assertThat(result.getDetectedCommitIds()).containsExactly("c2", "c3");
-        assertThat(result.getSkippedCommitIds()).containsExactly("c2");
-        assertThat(result.getCreatedTaskCommitIds()).containsExactly("c3");
-        assertThat(result.getFailedTaskCommitIds()).isEmpty();
+            DocRefreshResult result = service.refresh(USERNAME, projectId, branch, "token");
 
-        ArgumentCaptor<DocTask> taskCaptor = ArgumentCaptor.forClass(DocTask.class);
-        verify(docTaskMapper).insert(taskCaptor.capture());
-        DocTask savedTask = taskCaptor.getValue();
-        assertThat(savedTask.getGitlabUsername()).isEqualTo(USERNAME);
-        assertThat(savedTask.getEventId()).startsWith("doc-refresh-c3-");
+            assertThat(result.getBaselineCommit()).isEqualTo(oldHead);
+            assertThat(result.getHeadCommit()).isEqualTo(newHead);
+            assertThat(result.getDetectedCommitIds()).contains(newHead);
+            assertThat(result.getCreatedTaskCommitIds()).containsExactly(newHead);
+            assertThat(result.getFailedTaskCommitIds()).isEmpty();
 
-        ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
-        verify(docFileMapper).insert(fileCaptor.capture());
-        DocFile saved = fileCaptor.getValue();
-        assertThat(saved.getTaskId()).isEqualTo(42L);
-        assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
-        assertThat(saved.getProject()).isEqualTo("proj");
-        assertThat(saved.getBranch()).isEqualTo("main");
-        assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
-        assertThat(saved.getCommitId()).isEqualTo("c3");
-        assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
-        assertThat(saved.getDocFilePath()).isNotBlank();
-        assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+            ArgumentCaptor<DocTask> taskCaptor = ArgumentCaptor.forClass(DocTask.class);
+            verify(docTaskMapper).insert(taskCaptor.capture());
+            DocTask savedTask = taskCaptor.getValue();
+            assertThat(savedTask.getGitlabUsername()).isEqualTo(USERNAME);
+            assertThat(savedTask.getEventId()).startsWith("doc-refresh-" + newHead + "-");
+
+            ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
+            verify(docFileMapper).insert(fileCaptor.capture());
+            DocFile saved = fileCaptor.getValue();
+            assertThat(saved.getTaskId()).isEqualTo(42L);
+            assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
+            assertThat(saved.getProject()).isEqualTo(projectId);
+            assertThat(saved.getBranch()).isEqualTo(branch);
+            assertThat(saved.getFilePath()).isEqualTo("src/Test.java");
+            assertThat(saved.getCommitId()).isEqualTo(newHead);
+            assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
+            assertThat(saved.getDocFilePath()).isNotBlank();
+            assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+            verifyNoInteractions(gitLabDocClient);
+        }
     }
 
     @Test
-    void refresh_shouldSkipUnsupportedFileSuffix_withoutReadingContent() {
-        when(gitLabDocClient.getHeadCommit("token", "proj", "main")).thenReturn("c2");
-        when(docTaskMapper.selectOne(any())).thenReturn(task("c1", "SUCCESS"));
-        when(gitLabDocClient.listCommitIdsSince("token", "proj", "c1", "c2")).thenReturn(List.of("c2"));
-        when(docTaskMapper.selectCount(any())).thenReturn(0L);
+    void refresh_shouldSkipUnsupportedFileSuffix_withoutReadingGitlabContent() throws Exception {
+        String projectId = "4";
+        String branch = "main";
+        Path origin = Files.createTempDirectory(workspaceBaseDir, "origin-refresh-unsupported-");
 
-        stubTaskInsertWithId(43L);
-        when(docTaskMapper.updateById(any())).thenReturn(1);
-        when(gitLabDocClient.listCommitFileChanges("token", "proj", "c2")).thenReturn(List.of(
-                new CommitFileChange(null, "README.md", CommitFileChange.ChangeType.MODIFIED)
-        ));
+        try (Git originGit = Git.init().setDirectory(origin.toFile()).call()) {
+            commitFile(originGit, "README.md", "# init\n", "init");
+            checkoutOrCreateBranch(originGit, branch);
+            cloneToWorkspace(origin, projectId, branch);
+            String newHead = commitFile(originGit, "README.md", "# changed\n", "update-readme");
 
-        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
+            stubTaskInsertWithId(43L);
+            when(docTaskMapper.updateById(any())).thenReturn(1);
 
-        assertThat(result.getCreatedTaskCommitIds()).containsExactly("c2");
-        assertThat(result.getFailedTaskCommitIds()).isEmpty();
-        verify(gitLabDocClient, never()).readFileContent(eq("token"), eq("proj"), eq("README.md"), eq("c2"));
-        verifyNoInteractions(docFileMapper);
+            DocRefreshResult result = service.refresh(USERNAME, projectId, branch, "token");
+
+            assertThat(result.getCreatedTaskCommitIds()).containsExactly(newHead);
+            assertThat(result.getFailedTaskCommitIds()).isEmpty();
+            verifyNoInteractions(docFileMapper);
+            verifyNoInteractions(gitLabDocClient);
+        }
     }
 
     @Test
-    void refresh_shouldMarkFileDeleted_whenDiffContainsDeletedJavaFile() {
-        when(gitLabDocClient.getHeadCommit("token", "proj", "main")).thenReturn("c2");
-        when(docTaskMapper.selectOne(any())).thenReturn(task("c1", "SUCCESS"));
-        when(gitLabDocClient.listCommitIdsSince("token", "proj", "c1", "c2")).thenReturn(List.of("c2"));
-        when(docTaskMapper.selectCount(any())).thenReturn(0L);
+    void refresh_shouldMarkFileDeleted_whenLocalDiffContainsDeletedJavaFile() throws Exception {
+        String projectId = "5";
+        String branch = "main";
+        Path origin = Files.createTempDirectory(workspaceBaseDir, "origin-refresh-deleted-");
 
-        stubTaskInsertWithId(44L);
-        when(docTaskMapper.updateById(any())).thenReturn(1);
-        when(gitLabDocClient.listCommitFileChanges("token", "proj", "c2")).thenReturn(List.of(
-                new CommitFileChange("src/OldFile.java", null, CommitFileChange.ChangeType.DELETED)
-        ));
-        when(docFileMapper.selectOne(any())).thenReturn(null);
-        when(docFileMapper.insert(any())).thenReturn(1);
+        try (Git originGit = Git.init().setDirectory(origin.toFile()).call()) {
+            commitFile(originGit, "src/OldFile.java", "/** old */\npublic class OldFile {}\n", "init");
+            checkoutOrCreateBranch(originGit, branch);
+            cloneToWorkspace(origin, projectId, branch);
+            String newHead = deleteFileAndCommit(originGit, "src/OldFile.java", "delete-old-file");
 
-        DocRefreshResult result = service.refresh(USERNAME, "proj", "main", "token");
+            stubTaskInsertWithId(44L);
+            when(docTaskMapper.updateById(any())).thenReturn(1);
+            when(docFileMapper.selectOne(any())).thenReturn(null);
+            when(docFileMapper.insert(any())).thenReturn(1);
 
-        assertThat(result.getCreatedTaskCommitIds()).containsExactly("c2");
-        assertThat(result.getFailedTaskCommitIds()).isEmpty();
+            DocRefreshResult result = service.refresh(USERNAME, projectId, branch, "token");
 
-        ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
-        verify(docFileMapper).insert(fileCaptor.capture());
-        DocFile saved = fileCaptor.getValue();
-        assertThat(saved.getTaskId()).isEqualTo(44L);
-        assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
-        assertThat(saved.getFilePath()).isEqualTo("src/OldFile.java");
-        assertThat(saved.getDocFilePath()).isNull();
-        assertThat(saved.getParseErrorMsg()).isEqualTo("File deleted");
+            assertThat(result.getCreatedTaskCommitIds()).containsExactly(newHead);
+            assertThat(result.getFailedTaskCommitIds()).isEmpty();
 
-        verify(gitLabDocClient, never()).readFileContent(eq("token"), eq("proj"), eq("src/OldFile.java"), eq("c2"));
+            ArgumentCaptor<DocFile> fileCaptor = ArgumentCaptor.forClass(DocFile.class);
+            verify(docFileMapper).insert(fileCaptor.capture());
+            DocFile saved = fileCaptor.getValue();
+            assertThat(saved.getTaskId()).isEqualTo(44L);
+            assertThat(saved.getGitlabUsername()).isEqualTo(USERNAME);
+            assertThat(saved.getFilePath()).isEqualTo("src/OldFile.java");
+            assertThat(saved.getDocFilePath()).isNull();
+            assertThat(saved.getParseErrorMsg()).isEqualTo("File deleted");
+
+            verify(gitLabDocClient, never()).readFileContent(any(), any(), any(), any());
+        }
     }
 
     @Test
@@ -250,19 +266,64 @@ class DocPipelineServiceImplTest {
         verifyNoInteractions(gitLabDocClient);
     }
 
-    private static DocTask task(String commitId, String status) {
-        DocTask task = new DocTask();
-        task.setCommitId(commitId);
-        task.setStatus(status);
-        return task;
-    }
-
     private void stubTaskInsertWithId(long id) {
         doAnswer(invocation -> {
             DocTask task = invocation.getArgument(0);
             task.setId(id);
             return 1;
         }).when(docTaskMapper).insert(any(DocTask.class));
+    }
+
+    private void checkoutOrCreateBranch(Git git, String branch) throws GitAPIException, IOException {
+        String localRef = "refs/heads/" + branch;
+        if (localRef.equals(git.getRepository().getFullBranch())) {
+            return;
+        }
+        if (git.getRepository().findRef(localRef) == null) {
+            git.checkout().setCreateBranch(true).setName(branch).call();
+            return;
+        }
+        git.checkout().setName(branch).call();
+    }
+
+    private String cloneToWorkspace(Path originRepo, String projectId, String branch) throws Exception {
+        Path localRepo = repoPath(USERNAME, projectId);
+        Files.createDirectories(localRepo.getParent());
+        try (Git cloned = Git.cloneRepository()
+                .setURI(originRepo.toUri().toString())
+                .setDirectory(localRepo.toFile())
+                .setBranch("refs/heads/" + branch)
+                .call()) {
+            return cloned.getRepository().resolve("HEAD").name();
+        }
+    }
+
+    private String commitFile(Git git, String relativePath, String content, String message) throws Exception {
+        Path target = git.getRepository().getWorkTree().toPath().resolve(relativePath);
+        Path parent = target.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.writeString(target, content);
+        git.add().addFilepattern(relativePath.replace('\\', '/')).call();
+        git.commit()
+                .setMessage(message)
+                .setAuthor("tester", "tester@example.com")
+                .setCommitter("tester", "tester@example.com")
+                .call();
+        return git.getRepository().resolve("HEAD").name();
+    }
+
+    private String deleteFileAndCommit(Git git, String relativePath, String message) throws Exception {
+        Path target = git.getRepository().getWorkTree().toPath().resolve(relativePath);
+        Files.deleteIfExists(target);
+        git.rm().addFilepattern(relativePath.replace('\\', '/')).call();
+        git.commit()
+                .setMessage(message)
+                .setAuthor("tester", "tester@example.com")
+                .setCommitter("tester", "tester@example.com")
+                .call();
+        return git.getRepository().resolve("HEAD").name();
     }
 
     private Path repoPath(String username, String projectId) {

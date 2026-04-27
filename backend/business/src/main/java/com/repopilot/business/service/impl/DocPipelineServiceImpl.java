@@ -20,6 +20,22 @@ import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import com.repopilot.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.jgit.api.CheckoutCommand;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PullResult;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.TransportException;
+import org.eclipse.jgit.diff.DiffEntry;
+import org.eclipse.jgit.diff.RenameDetector;
+import org.eclipse.jgit.lib.ObjectId;
+import org.eclipse.jgit.lib.ObjectReader;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.revwalk.RevCommit;
+import org.eclipse.jgit.revwalk.RevWalk;
+import org.eclipse.jgit.transport.RefSpec;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -31,7 +47,6 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,38 +74,61 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
+        validateToken(token);
 
-        String headCommit = gitLabDocClient.getHeadCommit(token, project, branch);
-        String baselineCommit = findBaselineCommit(gitlabUsername, project, branch);
+        Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
+        if (sourceRoot == null) {
+            throw new BusinessException(400, "Local repository not found for project: " + project);
+        }
+
+        String normalizedBranch = normalizeBranchName(branch);
+        String oldHead;
+        String newHead;
+        List<String> detectedCommitIds = List.of();
+        List<CommitFileChange> changes = List.of();
+
+        try (Git git = Git.open(sourceRoot.toFile())) {
+            checkoutLocalBranch(git, normalizedBranch);
+
+            oldHead = resolveLocalHeadCommit(sourceRoot);
+            fetchAndPullBranch(git, normalizedBranch, token.trim());
+            newHead = resolveLocalHeadCommit(sourceRoot);
+
+            if (!Objects.equals(oldHead, newHead)) {
+                detectedCommitIds = listCommitIdsInRange(git.getRepository(), oldHead, newHead);
+                if (detectedCommitIds.isEmpty()) {
+                    detectedCommitIds = List.of(newHead);
+                }
+                changes = listLocalDiffChanges(git, oldHead, newHead);
+            }
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (IOException | GitAPIException ex) {
+            log.error("Local doc refresh failed. project={}, branch={}, sourceRoot={}",
+                    project, normalizedBranch, sourceRoot, ex);
+            throw new BusinessException(500, "Local repository refresh failed");
+        }
 
         DocRefreshResult result = new DocRefreshResult();
         result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
-        result.setBranch(branch);
-        result.setBaselineCommit(baselineCommit);
-        result.setHeadCommit(headCommit);
+        result.setBranch(normalizedBranch);
+        result.setBaselineCommit(oldHead);
+        result.setHeadCommit(newHead);
 
-        if (Objects.equals(baselineCommit, headCommit)) {
+        if (Objects.equals(oldHead, newHead)) {
             result.setMessage("No new commits.");
             return result;
         }
 
-        List<String> detectedCommitIds = gitLabDocClient.listCommitIdsSince(token, project, baselineCommit, headCommit);
         result.setDetectedCommitIds(detectedCommitIds);
         result.setNewCommitCount(detectedCommitIds.size());
 
-        for (String commitId : detectedCommitIds) {
-            if (alreadyHandled(gitlabUsername, project, branch, commitId)) {
-                result.getSkippedCommitIds().add(commitId);
-                continue;
-            }
-
-            String status = runExtractionTask(gitlabUsername, project, branch, commitId, token);
-            if (STATUS_FAILED.equals(status)) {
-                result.getFailedTaskCommitIds().add(commitId);
-            } else {
-                result.getCreatedTaskCommitIds().add(commitId);
-            }
+        String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes);
+        if (STATUS_FAILED.equals(status)) {
+            result.getFailedTaskCommitIds().add(newHead);
+        } else {
+            result.getCreatedTaskCommitIds().add(newHead);
         }
 
         result.setMessage(String.format(
@@ -263,6 +301,88 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    private String runLocalExtractionTask(String gitlabUsername,
+                                          String project,
+                                          String branch,
+                                          String commitId,
+                                          Path sourceRoot,
+                                          List<CommitFileChange> changes) {
+        DocTask task = new DocTask();
+        task.setEventId(buildTaskEventId("doc-refresh", commitId));
+        task.setGitlabUsername(gitlabUsername);
+        task.setProject(project);
+        task.setBranch(branch);
+        task.setCommitId(commitId);
+        task.setStatus(STATUS_RUNNING);
+        task.setDuration(0);
+        docTaskMapper.insert(task);
+
+        long start = System.currentTimeMillis();
+        try {
+            int handledDocFiles = applyLocalChanges(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, changes);
+
+            String finalStatus = handledDocFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
+            task.setStatus(finalStatus);
+            task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
+            docTaskMapper.updateById(task);
+            return finalStatus;
+        } catch (Exception ex) {
+            log.error("Local doc extraction failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
+            task.setStatus(STATUS_FAILED);
+            task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
+            docTaskMapper.updateById(task);
+            return STATUS_FAILED;
+        }
+    }
+
+    private int applyLocalChanges(String gitlabUsername,
+                                  String project,
+                                  String branch,
+                                  String commitId,
+                                  Long taskId,
+                                  Path sourceRoot,
+                                  List<CommitFileChange> changes) {
+        if (changes == null || changes.isEmpty()) {
+            return 0;
+        }
+
+        int handled = 0;
+        for (CommitFileChange change : changes) {
+            switch (change.getChangeType()) {
+                case ADDED, MODIFIED -> {
+                    if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, sourceRoot)) {
+                        handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getNewPath());
+                    }
+                }
+                case DELETED -> {
+                    if (isSupportedDocFile(change.getOldPath())) {
+                        upsertDeletedDoc(gitlabUsername, project, branch, change.getOldPath(), commitId, taskId);
+                        handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getOldPath());
+                    }
+                }
+                case RENAMED -> {
+                    if (isSupportedDocFile(change.getOldPath())) {
+                        upsertDeletedDoc(gitlabUsername, project, branch, change.getOldPath(), commitId, taskId);
+                        handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getOldPath());
+                    }
+                    if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, sourceRoot)) {
+                        handled++;
+                    } else {
+                        logUnsupportedFile(project, commitId, change.getNewPath());
+                    }
+                }
+            }
+        }
+
+        return handled;
+    }
+
     private int applyChanges(String gitlabUsername,
                              String project,
                              String branch,
@@ -331,6 +451,43 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .filePath(filePath)
                 .sourceContent(fileContent)
                 .sourceRoot(resolveSourceRoot(gitlabUsername, project))
+                .outputRoot(resolveDocOutputRoot(gitlabUsername))
+                .build());
+
+        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
+        return true;
+    }
+
+    private boolean upsertActiveLocalDoc(String gitlabUsername,
+                                         String project,
+                                         String branch,
+                                         String filePath,
+                                         String commitId,
+                                         Long taskId,
+                                         Path sourceRoot) {
+        DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
+        if (generator == null) {
+            return false;
+        }
+
+        Path sourceFile = resolveRepoFile(sourceRoot, filePath);
+        if (!Files.isRegularFile(sourceFile)) {
+            throw new BusinessException(400, "Local source file not found after pull: " + filePath);
+        }
+
+        String fileContent;
+        try {
+            fileContent = Files.readString(sourceFile, StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new BusinessException(500, "Failed to read local source file: " + filePath);
+        }
+        DocGenerationResult result = generator.generate(DocGenerationContext.builder()
+                .project(project)
+                .branch(branch)
+                .commitId(commitId)
+                .filePath(filePath)
+                .sourceContent(fileContent)
+                .sourceRoot(sourceRoot)
                 .outputRoot(resolveDocOutputRoot(gitlabUsername))
                 .build());
 
@@ -425,28 +582,142 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return prefix + "-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
-    private String findBaselineCommit(String gitlabUsername, String project, String branch) {
-        LambdaQueryWrapper<DocTask> query = new LambdaQueryWrapper<>();
-        query.eq(DocTask::getGitlabUsername, gitlabUsername)
-                .eq(DocTask::getProject, project)
-                .eq(DocTask::getBranch, branch)
-                .in(DocTask::getStatus, Arrays.asList(STATUS_SUCCESS, STATUS_SKIPPED))
-                .orderByDesc(DocTask::getCreateTime)
-                .last("LIMIT 1");
+    private List<String> listCommitIdsInRange(Repository repository, String oldHead, String newHead) throws IOException {
+        ObjectId oldObjectId = repository.resolve(oldHead);
+        ObjectId newObjectId = repository.resolve(newHead);
+        if (oldObjectId == null || newObjectId == null) {
+            return List.of(newHead);
+        }
 
-        DocTask latestTask = docTaskMapper.selectOne(query);
-        return latestTask == null ? null : latestTask.getCommitId();
+        try (RevWalk revWalk = new RevWalk(repository)) {
+            RevCommit oldCommit = revWalk.parseCommit(oldObjectId);
+            RevCommit newCommit = revWalk.parseCommit(newObjectId);
+            revWalk.markStart(newCommit);
+            revWalk.markUninteresting(oldCommit);
+
+            List<RevCommit> commits = new ArrayList<>();
+            for (RevCommit commit : revWalk) {
+                commits.add(commit);
+            }
+
+            commits.sort(Comparator.comparingInt(RevCommit::getCommitTime));
+            List<String> commitIds = commits.stream().map(RevCommit::getName).collect(Collectors.toList());
+            return commitIds.isEmpty() ? List.of(newHead) : commitIds;
+        }
     }
 
-    private boolean alreadyHandled(String gitlabUsername, String project, String branch, String commitId) {
-        LambdaQueryWrapper<DocTask> query = new LambdaQueryWrapper<>();
-        query.eq(DocTask::getGitlabUsername, gitlabUsername)
-                .eq(DocTask::getProject, project)
-                .eq(DocTask::getBranch, branch)
-                .eq(DocTask::getCommitId, commitId)
-                .in(DocTask::getStatus, Arrays.asList(STATUS_RUNNING, STATUS_SUCCESS, STATUS_SKIPPED));
+    private List<CommitFileChange> listLocalDiffChanges(Git git, String oldHead, String newHead) throws IOException, GitAPIException {
+        Repository repository = git.getRepository();
+        ObjectId oldTree = repository.resolve(oldHead + "^{tree}");
+        ObjectId newTree = repository.resolve(newHead + "^{tree}");
+        if (oldTree == null || newTree == null) {
+            throw new BusinessException(500, "Unable to resolve commit trees for local diff");
+        }
 
-        return docTaskMapper.selectCount(query) > 0;
+        try (ObjectReader reader = repository.newObjectReader()) {
+            CanonicalTreeParser oldTreeParser = new CanonicalTreeParser();
+            oldTreeParser.reset(reader, oldTree);
+            CanonicalTreeParser newTreeParser = new CanonicalTreeParser();
+            newTreeParser.reset(reader, newTree);
+
+            List<DiffEntry> entries = git.diff()
+                    .setOldTree(oldTreeParser)
+                    .setNewTree(newTreeParser)
+                    .call();
+
+            if (!entries.isEmpty()) {
+                RenameDetector renameDetector = new RenameDetector(repository);
+                renameDetector.addAll(entries);
+                entries = renameDetector.compute();
+            }
+
+            List<CommitFileChange> changes = new ArrayList<>();
+            for (DiffEntry entry : entries) {
+                changes.add(toCommitFileChange(entry));
+            }
+            return changes;
+        }
+    }
+
+    private CommitFileChange toCommitFileChange(DiffEntry entry) {
+        return switch (entry.getChangeType()) {
+            case ADD -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
+            case MODIFY -> new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.MODIFIED);
+            case DELETE -> new CommitFileChange(entry.getOldPath(), null, CommitFileChange.ChangeType.DELETED);
+            case RENAME -> new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.RENAMED);
+            case COPY -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
+        };
+    }
+
+    private void checkoutLocalBranch(Git git, String branch) throws IOException, GitAPIException {
+        Repository repository = git.getRepository();
+        String localBranchRef = toBranchRef(branch);
+        Ref localBranch = repository.findRef(localBranchRef);
+        if (localBranch == null) {
+            throw new BusinessException(400, "Local branch not found: " + branch);
+        }
+
+        String currentBranch = repository.getFullBranch();
+        if (localBranchRef.equals(currentBranch)) {
+            return;
+        }
+
+        CheckoutCommand checkoutCommand = git.checkout().setName(branch);
+        checkoutCommand.call();
+    }
+
+    private void fetchAndPullBranch(Git git, String branch, String token) throws GitAPIException {
+        UsernamePasswordCredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider("git", token);
+        String branchRef = toBranchRef(branch);
+        String remoteTrackingRef = "refs/remotes/origin/" + branch;
+
+        try {
+            git.fetch()
+                    .setRemote("origin")
+                    .setCredentialsProvider(credentialsProvider)
+                    .setRefSpecs(new RefSpec(branchRef + ":" + remoteTrackingRef))
+                    .call();
+
+            PullResult pullResult = git.pull()
+                    .setRemote("origin")
+                    .setRemoteBranchName(branch)
+                    .setCredentialsProvider(credentialsProvider)
+                    .call();
+
+            if (!pullResult.isSuccessful()) {
+                throw new BusinessException(500, "git pull failed for branch: " + branch);
+            }
+        } catch (TransportException ex) {
+            throw new BusinessException(401, "Git fetch/pull failed, please check token and repository permissions");
+        }
+    }
+
+    private Path resolveRepoFile(Path sourceRoot, String filePath) {
+        if (!StringUtils.hasText(filePath)) {
+            throw new BusinessException(400, "Invalid file path from local diff");
+        }
+
+        Path normalizedRoot = sourceRoot.toAbsolutePath().normalize();
+        Path resolved = normalizedRoot.resolve(filePath).normalize();
+        if (!resolved.startsWith(normalizedRoot)) {
+            throw new BusinessException(400, "Invalid file path from local diff: " + filePath);
+        }
+        return resolved;
+    }
+
+    private String toBranchRef(String branch) {
+        if (branch.startsWith("refs/heads/")) {
+            return branch;
+        }
+        return "refs/heads/" + branch;
+    }
+
+    private String normalizeBranchName(String branch) {
+        String normalized = branch.trim();
+        if (normalized.startsWith("refs/heads/")) {
+            return normalized.substring("refs/heads/".length());
+        }
+        return normalized;
     }
 
     private boolean isSupportedDocFile(String path) {
@@ -627,6 +898,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private void validateProjectAndBranch(String project, String branch) {
         if (!StringUtils.hasText(project) || !StringUtils.hasText(branch)) {
             throw new BusinessException(400, "project and branch are required");
+        }
+    }
+
+    private void validateToken(String token) {
+        if (!StringUtils.hasText(token)) {
+            throw new BusinessException(400, "token is required");
         }
     }
 
