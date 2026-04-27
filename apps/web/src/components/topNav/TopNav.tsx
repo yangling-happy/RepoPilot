@@ -1,6 +1,6 @@
 import { Space } from "antd";
 import { useTranslation } from "react-i18next";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
 interface NavItem {
   path: string;
@@ -10,12 +10,16 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { path: "/", labelKey: "header.home" },
   { path: "/dashboard", labelKey: "header.dashboard" },
-  { path: "/documentation", labelKey: "header.documentation" },
-  { path: "/deploy", labelKey: "header.deploy" },
 ];
 
 export function TopNav() {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
+
+  const isDashboardRoute =
+    pathname === "/dashboard" ||
+    pathname === "/documentation" ||
+    pathname === "/deploy";
 
   return (
     <Space
@@ -29,12 +33,17 @@ export function TopNav() {
           to={item.path}
           end={item.path === "/"}
           className={({ isActive }: { isActive: boolean }) =>
-            [
-              "text-sm transition-colors",
-              isActive
-                ? "font-semibold text-neutral-950 dark:text-white"
-                : "font-normal text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white",
-            ].join(" ")
+            {
+              const active =
+                item.path === "/dashboard" ? isActive || isDashboardRoute : isActive;
+
+              return [
+                "text-sm transition-colors",
+                active
+                  ? "font-semibold text-neutral-950 dark:text-white"
+                  : "font-normal text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white",
+              ].join(" ");
+            }
           }
         >
           {t(item.labelKey)}

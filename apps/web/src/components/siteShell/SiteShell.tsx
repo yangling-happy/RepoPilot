@@ -2,6 +2,7 @@ import { Layout, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation } from "react-router-dom";
 import { SiteHeader } from "../siteHeader/SiteHeader";
+import { WorkbenchSubNav } from "../topNav/WorkbenchSubNav";
 
 export function SiteShell() {
   const { t } = useTranslation();
@@ -11,6 +12,7 @@ export function SiteShell() {
   return (
     <Layout className="min-h-screen bg-white dark:bg-black">
       <SiteHeader />
+      <WorkbenchSubNav />
       <Layout.Content
         className={
           isHome

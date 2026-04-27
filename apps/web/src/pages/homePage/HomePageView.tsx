@@ -54,16 +54,10 @@ export function HomePageView() {
             </p>
             <div className="mt-12 flex flex-wrap justify-center gap-4 lg:justify-start">
               <Link
-                to="/documentation"
+                to="/dashboard"
                 className="inline-flex h-14 items-center justify-center rounded-full bg-neutral-950 px-10 text-base font-semibold text-white transition-all hover:bg-neutral-800 active:scale-95 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
               >
-                {t("home.cta.documentation")}
-              </Link>
-              <Link
-                to="/deploy"
-                className="inline-flex h-14 items-center justify-center rounded-full border border-neutral-200 bg-white px-10 text-base font-semibold transition-all hover:bg-neutral-50 dark:border-white/10 dark:bg-transparent dark:hover:bg-white/5"
-              >
-                {t("home.cta.deploy")}
+                {t("home.dashboardEntry.cta")}
               </Link>
             </div>
           </div>
@@ -95,12 +89,6 @@ export function HomePageView() {
                   {t("home.dashboardEntry.subtitle")}
                 </p>
               </div>
-              <Link
-                to="/dashboard"
-                className="inline-flex h-14 shrink-0 items-center justify-center rounded-2xl bg-neutral-950 px-8 text-base font-bold text-white transition-all hover:scale-[1.02] active:scale-95 dark:bg-white dark:text-black lg:rounded-full"
-              >
-                {t("home.dashboardEntry.cta")}
-              </Link>
             </SpotlightCard>
           </motion.section>
 
@@ -165,20 +153,6 @@ export function HomePageView() {
             <p className="mx-auto mt-6 max-w-lg text-lg text-neutral-500 dark:text-neutral-400">
               {t("home.closing.subtitle")}
             </p>
-            <div className="mt-12 flex items-center justify-center gap-8">
-              <Link
-                to="/documentation"
-                className="text-base font-bold text-neutral-950 underline decoration-neutral-300 decoration-2 underline-offset-8 transition-all hover:decoration-neutral-950 dark:text-white dark:decoration-neutral-700 dark:hover:decoration-white"
-              >
-                {t("home.cta.documentation")}
-              </Link>
-              <Link
-                to="/deploy"
-                className="text-base font-bold text-neutral-500 transition-colors hover:text-neutral-950 dark:hover:text-white"
-              >
-                {t("home.cta.deploy")}
-              </Link>
-            </div>
           </motion.section>
         </div>
       </div>
