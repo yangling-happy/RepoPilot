@@ -1,8 +1,11 @@
 package com.repopilot.business.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repopilot.business.config.UserWorkspaceProperties;
 import com.repopilot.business.dto.DocLocalScanResult;
+import com.repopilot.business.dto.DocQueryItem;
 import com.repopilot.business.dto.DocRefreshResult;
+import com.repopilot.business.dto.DocStructuredContent;
 import com.repopilot.business.entity.DocFile;
 import com.repopilot.business.entity.DocTask;
 import com.repopilot.business.mapper.DocFileMapper;
@@ -24,6 +27,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -47,6 +51,7 @@ class DocPipelineServiceImplTest {
 
     private DocPipelineServiceImpl service;
     private Path workspaceBaseDir;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -128,7 +133,9 @@ class DocPipelineServiceImplTest {
             assertThat(saved.getCommitId()).isEqualTo(newHead);
             assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
             assertThat(saved.getDocFilePath()).isNotBlank();
+            assertThat(saved.getDocFilePath()).endsWith("doc.json");
             assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+            assertThat(outputDirectoryContainsHtml(Path.of(saved.getDocFilePath()).getParent())).isFalse();
             verifyNoInteractions(gitLabDocClient);
         }
     }
@@ -200,7 +207,27 @@ class DocPipelineServiceImplTest {
         Files.writeString(repo.resolve(".git/HEAD"), "ref: refs/heads/main\n");
         Files.writeString(repo.resolve(".git/refs/heads/main"), commitId + "\n");
         Files.createDirectories(repo.resolve("src"));
-        Files.writeString(repo.resolve("src/Test.java"), "/** hello */\npublic class Test {}\n");
+        Files.writeString(repo.resolve("src/Test.java"), """
+                /** Main test class. */
+                public class Test {
+                    /**
+                     * Greets a user.
+                     *
+                     * @param name user name
+                     * @return greeting text
+                     */
+                    public String greet(String name) {
+                        return "Hello " + name;
+                    }
+                }
+
+                /** Helper class in the same source file. */
+                class Helper {
+                    /** Runs the helper. */
+                    void run() {
+                    }
+                }
+                """);
         Files.writeString(repo.resolve("README.md"), "# Test\n");
 
         stubTaskInsertWithId(55L);
@@ -236,7 +263,35 @@ class DocPipelineServiceImplTest {
         assertThat(saved.getCommitId()).isEqualTo(commitId);
         assertThat(saved.getParseStatus()).isEqualTo("SUCCESS");
         assertThat(saved.getDocFilePath()).isNotBlank();
+        assertThat(saved.getDocFilePath()).endsWith("doc.json");
         assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
+        assertThat(outputDirectoryContainsHtml(Path.of(saved.getDocFilePath()).getParent())).isFalse();
+
+        DocStructuredContent structuredDoc = objectMapper.readValue(Path.of(saved.getDocFilePath()).toFile(),
+                DocStructuredContent.class);
+        assertThat(structuredDoc.getSourceFilePath()).isEqualTo("src/Test.java");
+        assertThat(structuredDoc.getTypes()).extracting(DocStructuredContent.TypeDoc::getName)
+                .contains("Test", "Helper");
+        DocStructuredContent.TypeDoc testType = structuredDoc.getTypes().stream()
+                .filter(type -> "Test".equals(type.getName()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(testType.getDescription()).isEqualTo("Main test class.");
+        assertThat(testType.getMethods()).extracting(DocStructuredContent.MemberDoc::getName)
+                .contains("greet");
+        DocStructuredContent.MemberDoc greetMethod = testType.getMethods().stream()
+                .filter(method -> "greet".equals(method.getName()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(greetMethod.getDescription()).isEqualTo("Greets a user.");
+        assertThat(greetMethod.getParameters()).singleElement()
+                .satisfies(parameter -> {
+                    assertThat(parameter.getName()).isEqualTo("name");
+                    assertThat(parameter.getType()).isEqualTo("String");
+                    assertThat(parameter.getDescription()).isEqualTo("user name");
+                });
+        assertThat(greetMethod.getReturns().getType()).isEqualTo("String");
+        assertThat(greetMethod.getReturns().getDescription()).isEqualTo("greeting text");
         verifyNoInteractions(gitLabDocClient);
     }
 
@@ -264,6 +319,53 @@ class DocPipelineServiceImplTest {
         assertThat(result.getGeneratedFilePaths()).doesNotContain("target/Ignored.java");
         assertThat(result.getGeneratedFileCount()).isEqualTo(1);
         verifyNoInteractions(gitLabDocClient);
+    }
+
+    @Test
+    void query_shouldReturnStructuredDocJsonContent() throws Exception {
+        Path docJson = workspaceBaseDir.resolve("workspace")
+                .resolve(USERNAME)
+                .resolve("docs")
+                .resolve("2")
+                .resolve("main")
+                .resolve("commit-1")
+                .resolve("2e483f73")
+                .resolve("doc.json");
+        Files.createDirectories(docJson.getParent());
+
+        DocStructuredContent structuredContent = new DocStructuredContent();
+        structuredContent.setProject("2");
+        structuredContent.setBranch("main");
+        structuredContent.setCommitId("commit-1");
+        structuredContent.setSourceFilePath("src/Test.java");
+        DocStructuredContent.TypeDoc typeDoc = new DocStructuredContent.TypeDoc();
+        typeDoc.setKind("CLASS");
+        typeDoc.setName("Test");
+        typeDoc.setQualifiedName("Test");
+        typeDoc.setDescription("Main test class.");
+        structuredContent.getTypes().add(typeDoc);
+        objectMapper.writeValue(docJson.toFile(), structuredContent);
+
+        DocFile row = new DocFile();
+        row.setGitlabUsername(USERNAME);
+        row.setProject("2");
+        row.setBranch("main");
+        row.setFilePath("src/Test.java");
+        row.setCommitId("commit-1");
+        row.setParseStatus("SUCCESS");
+        row.setDocFilePath(docJson.toString());
+        when(docFileMapper.selectList(any())).thenReturn(List.of(row));
+
+        List<DocQueryItem> result = service.query(USERNAME, "2", "main", null, null);
+
+        assertThat(result).singleElement()
+                .satisfies(item -> {
+                    assertThat(item.getFilePath()).isEqualTo("src/Test.java");
+                    assertThat(item.getStructuredDoc()).isNotNull();
+                    assertThat(item.getStructuredDoc().getTypes()).singleElement()
+                            .extracting(DocStructuredContent.TypeDoc::getName)
+                            .isEqualTo("Test");
+                });
     }
 
     private void stubTaskInsertWithId(long id) {
@@ -324,6 +426,13 @@ class DocPipelineServiceImplTest {
                 .setCommitter("tester", "tester@example.com")
                 .call();
         return git.getRepository().resolve("HEAD").name();
+    }
+
+    private boolean outputDirectoryContainsHtml(Path outputDir) throws IOException {
+        try (Stream<Path> stream = Files.walk(outputDir)) {
+            return stream.anyMatch(path -> Files.isRegularFile(path)
+                    && path.getFileName().toString().endsWith(".html"));
+        }
     }
 
     private Path repoPath(String username, String projectId) {

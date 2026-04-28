@@ -1,5 +1,7 @@
 package com.repopilot.business.service.docgen;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.repopilot.business.dto.DocStructuredContent;
 import com.repopilot.common.exception.BusinessException;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -8,6 +10,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
@@ -20,6 +23,10 @@ import java.util.stream.Stream;
 public class JavaDocGenerator implements DocGenerator {
 
     private static final Duration JAVADOC_TIMEOUT = Duration.ofSeconds(60);
+    private static final String STRUCTURED_DOC_FILE = "doc.json";
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JavaDocHtmlParser htmlParser = new JavaDocHtmlParser();
 
     @Override
     public String toolName() {
@@ -33,13 +40,13 @@ public class JavaDocGenerator implements DocGenerator {
 
     @Override
     public DocGenerationResult generate(DocGenerationContext context) {
-        JavaDocOutput output = runJavadoc(context);
+        Path structuredDocPath = runJavadoc(context);
         return DocGenerationResult.builder()
-                .docFilePath(output.mainHtmlPath().toString())
+                .docFilePath(structuredDocPath.toString())
                 .build();
     }
 
-    private JavaDocOutput runJavadoc(DocGenerationContext context) {
+    private Path runJavadoc(DocGenerationContext context) {
         Path workDir = null;
         try {
             workDir = Files.createTempDirectory("repopilot-javadoc-");
@@ -79,7 +86,11 @@ public class JavaDocGenerator implements DocGenerator {
                         + context.getFilePath() + ". " + summarize(commandOutput));
             }
 
-            return readJavaDocOutput(outputDir, sourceFile);
+            JavaDocOutput output = readJavaDocOutput(outputDir);
+            DocStructuredContent structuredContent = htmlParser.parse(context, output.outputDir(), output.htmlFiles());
+            return writeStructuredDoc(workDir, output.outputDir(), structuredContent);
+        } catch (BusinessException e) {
+            throw e;
         } catch (IOException e) {
             throw new BusinessException(500, "Failed to run javadoc for file: " + context.getFilePath());
         } catch (InterruptedException e) {
@@ -132,7 +143,7 @@ public class JavaDocGenerator implements DocGenerator {
         return resolved;
     }
 
-    private JavaDocOutput readJavaDocOutput(Path outputDir, Path sourceFile) throws IOException {
+    private JavaDocOutput readJavaDocOutput(Path outputDir) throws IOException {
         List<Path> htmlFiles;
         try (Stream<Path> stream = Files.walk(outputDir)) {
             htmlFiles = stream.filter(path -> Files.isRegularFile(path)
@@ -145,21 +156,65 @@ public class JavaDocGenerator implements DocGenerator {
             throw new BusinessException(500, "javadoc produced no HTML output");
         }
 
-        String expectedHtmlName = stripExtension(sourceFile.getFileName().toString()) + ".html";
-        Path mainHtml = htmlFiles.stream()
-                .filter(path -> path.getFileName().toString().equals(expectedHtmlName))
-                .findFirst()
-                .orElseGet(() -> outputDir.resolve("index.html"));
-        if (!Files.isRegularFile(mainHtml)) {
-            mainHtml = htmlFiles.get(0);
+        return new JavaDocOutput(outputDir, htmlFiles);
+    }
+
+    private Path writeStructuredDoc(Path workDir, Path outputDir, DocStructuredContent structuredContent) {
+        Path tempJson = workDir.resolve(STRUCTURED_DOC_FILE);
+        try {
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(tempJson.toFile(), structuredContent);
+            return replaceJavadocOutputWithJson(outputDir, tempJson);
+        } catch (IOException ex) {
+            throw new BusinessException(500, "Failed to write structured javadoc JSON");
         }
+    }
 
-        List<String> generatedFiles = htmlFiles.stream()
-                .map(path -> outputDir.relativize(path).toString().replace('\\', '/'))
-                .collect(Collectors.toList());
+    private Path replaceJavadocOutputWithJson(Path outputDir, Path tempJson) throws IOException {
+        Path normalizedOutputDir = outputDir.toAbsolutePath().normalize();
+        Path backupRoot = Files.createTempDirectory(normalizedOutputDir.getParent(),
+                normalizedOutputDir.getFileName() + "-javadoc-");
+        Path backupOutputDir = backupRoot.resolve("output");
+        Path jsonPath = normalizedOutputDir.resolve(STRUCTURED_DOC_FILE);
+        boolean movedOriginal = false;
 
-        String mainHtmlFile = outputDir.relativize(mainHtml).toString().replace('\\', '/');
-        return new JavaDocOutput(mainHtmlFile, mainHtml.toAbsolutePath().normalize(), generatedFiles);
+        try {
+            Files.move(normalizedOutputDir, backupOutputDir);
+            movedOriginal = true;
+            Files.createDirectories(normalizedOutputDir);
+            Files.move(tempJson, jsonPath, StandardCopyOption.REPLACE_EXISTING);
+            deleteRecursively(backupRoot);
+            return jsonPath;
+        } catch (IOException ex) {
+            restoreJavadocOutput(normalizedOutputDir, backupOutputDir, movedOriginal);
+            deleteQuietly(backupRoot);
+            throw ex;
+        }
+    }
+
+    private void restoreJavadocOutput(Path outputDir, Path backupOutputDir, boolean movedOriginal) {
+        if (!movedOriginal) {
+            return;
+        }
+        deleteQuietly(outputDir);
+        try {
+            if (Files.exists(backupOutputDir) && !Files.exists(outputDir)) {
+                Files.move(backupOutputDir, outputDir);
+            }
+        } catch (IOException ignored) {
+            // The parse failure path should keep the original javadoc files when the filesystem allows it.
+        }
+    }
+
+    private void deleteRecursively(Path root) throws IOException {
+        if (root == null || !Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> stream = Files.walk(root)) {
+            List<Path> paths = stream.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+            for (Path path : paths) {
+                Files.deleteIfExists(path);
+            }
+        }
     }
 
     private String resolveJavadocCommand() {
@@ -171,11 +226,6 @@ public class JavaDocGenerator implements DocGenerator {
             return javaHomeJavadoc.toString();
         }
         return executable;
-    }
-
-    private String stripExtension(String fileName) {
-        int dotIndex = fileName.lastIndexOf('.');
-        return dotIndex < 0 ? fileName : fileName.substring(0, dotIndex);
     }
 
     private String summarize(String output) {
@@ -214,6 +264,6 @@ public class JavaDocGenerator implements DocGenerator {
         }
     }
 
-    private record JavaDocOutput(String mainHtmlFile, Path mainHtmlPath, List<String> generatedFiles) {
+    private record JavaDocOutput(Path outputDir, List<Path> htmlFiles) {
     }
 }

@@ -235,11 +235,11 @@ curl -sS -X POST -b "$COOKIE_JAR" \
 
 - `file_path`：原始源码文件路径，例如 `gitlet/Repository.java`
 - `commit_id`：本次 GitLab diff 对应的提交
-- `doc_file_path`：javadoc 生成出来的主 HTML 文件本地路径
+- `doc_file_path`：结构化文档 JSON 文件本地路径；后端会解析所有生成的类 HTML 并合成 `doc.json`
 - `parse_status`：`SUCCESS` 表示生成成功，`FAILED` 表示生成失败
 - `parse_error_msg`：失败原因；文件删除场景会记录 `File deleted`
 
-同时，javadoc 文件会落盘到：
+同时，结构化文档会落盘到：
 
 ```text
 backend/business/workspace/{gitlabUsername}/docs/2/main/{commitId}/{filePathHash}/...
@@ -248,7 +248,7 @@ backend/business/workspace/{gitlabUsername}/docs/2/main/{commitId}/{filePathHash
 例如某次生成后，`doc_file_path` 可能指向：
 
 ```text
-/path/to/RepoPilot/backend/business/workspace/{gitlabUsername}/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/gitlet/Repository.html
+/path/to/RepoPilot/backend/business/workspace/{gitlabUsername}/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/doc.json
 ```
 
 查询当前可展示的文档：
@@ -261,14 +261,14 @@ curl -sS -b "$COOKIE_JAR" "${BASE_URL}/doc/query?project=2&branch=main"
 
 ```bash
 cd backend/business
-find ./workspace/{gitlabUsername}/docs/2/main -name '*.html' -print
+find ./workspace/{gitlabUsername}/docs/2/main -name 'doc.json' -print
 ```
 
 判断功能是否正确，可以看三处：
 
 - `/doc/scan-local` 返回成功，且 `scannedFileCount`、`generatedFileCount`、`skippedFileCount` 有符合预期的数量。
 - `/doc/query?project=2&branch=main` 返回的条目里，Java 文件有 `docFilePath` 且 `parseStatus = SUCCESS`。
-- `docFilePath` 指向的 HTML 文件真实存在，浏览器打开后是 javadoc 页面。
+- `docFilePath` 指向的 `doc.json` 真实存在，且 `/doc/query` 返回的条目包含 `structuredDoc`。
 
 说明：
 

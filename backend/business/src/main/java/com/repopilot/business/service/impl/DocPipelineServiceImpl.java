@@ -1,9 +1,11 @@
 package com.repopilot.business.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocQueryItem;
 import com.repopilot.business.dto.DocRefreshResult;
+import com.repopilot.business.dto.DocStructuredContent;
 import com.repopilot.business.entity.DocFile;
 import com.repopilot.business.entity.DocTask;
 import com.repopilot.business.mapper.DocFileMapper;
@@ -63,12 +65,14 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
     private static final String STATUS_SKIPPED = "SKIPPED";
+    private static final String STRUCTURED_DOC_SUFFIX = ".json";
 
     private final DocTaskMapper docTaskMapper;
     private final DocFileMapper docFileMapper;
     private final GitLabDocClient gitLabDocClient;
     private final DocGeneratorRegistry docGeneratorRegistry;
     private final UserWorkspaceResolver userWorkspaceResolver;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
@@ -891,8 +895,33 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         item.setDocFilePath(row.getDocFilePath());
         item.setParseStatus(row.getParseStatus());
         item.setParseErrorMsg(row.getParseErrorMsg());
+        item.setStructuredDoc(readStructuredDoc(row));
         item.setUpdateTime(row.getUpdateTime());
         return item;
+    }
+
+    private DocStructuredContent readStructuredDoc(DocFile row) {
+        if (!STATUS_SUCCESS.equals(row.getParseStatus()) || !StringUtils.hasText(row.getDocFilePath())) {
+            return null;
+        }
+
+        Path docPath = Path.of(row.getDocFilePath()).toAbsolutePath().normalize();
+        Path outputRoot = resolveDocOutputRoot(row.getGitlabUsername()).toAbsolutePath().normalize();
+        if (!docPath.startsWith(outputRoot)
+                || !docPath.getFileName().toString().endsWith(STRUCTURED_DOC_SUFFIX)
+                || !Files.isRegularFile(docPath)) {
+            log.warn("Skip unsafe or missing structured doc path. username={}, project={}, filePath={}, docPath={}",
+                    row.getGitlabUsername(), row.getProjectName(), row.getFilePath(), row.getDocFilePath());
+            return null;
+        }
+
+        try {
+            return objectMapper.readValue(docPath.toFile(), DocStructuredContent.class);
+        } catch (IOException ex) {
+            log.warn("Failed to read structured doc JSON. username={}, project={}, filePath={}, docPath={}",
+                    row.getGitlabUsername(), row.getProjectName(), row.getFilePath(), row.getDocFilePath(), ex);
+            return null;
+        }
     }
 
     private void validateProjectAndBranch(String project, String branch) {

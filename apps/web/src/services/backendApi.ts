@@ -52,6 +52,67 @@ export type DocLocalScanResult = {
   message: string;
 };
 
+export type DocStructuredContent = {
+  schemaVersion: string;
+  project: string;
+  branch: string;
+  commitId: string;
+  sourceFilePath: string;
+  types: DocTypeDoc[];
+};
+
+export type DocTypeDoc = {
+  htmlFile: string;
+  kind: string;
+  name: string;
+  qualifiedName: string;
+  signature: string;
+  description: string;
+  fields: DocMemberDoc[];
+  constructors: DocMemberDoc[];
+  methods: DocMemberDoc[];
+};
+
+export type DocMemberDoc = {
+  id: string;
+  kind: string;
+  name: string;
+  signature: string;
+  description: string;
+  parameters: DocParameterDoc[];
+  returns?: DocReturnDoc | null;
+  throws?: DocThrowsDoc[];
+};
+
+export type DocParameterDoc = {
+  name: string;
+  type: string;
+  description: string;
+};
+
+export type DocReturnDoc = {
+  type: string;
+  description: string;
+};
+
+export type DocThrowsDoc = {
+  type: string;
+  description: string;
+};
+
+export type DocQueryItem = {
+  gitlabUsername: string;
+  project: string;
+  branch: string;
+  filePath: string;
+  commitId: string;
+  docFilePath: string;
+  parseStatus: string;
+  parseErrorMsg?: string | null;
+  structuredDoc?: DocStructuredContent | null;
+  updateTime?: string | null;
+};
+
 export async function setGitlabToken(token: string): Promise<void> {
   const body = new URLSearchParams({ token });
   await requestApi<void>("/api/session/setGitlabToken", {
@@ -85,6 +146,27 @@ export async function scanLocalDoc(payload: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function queryDocs(payload: {
+  project: string;
+  branch?: string;
+  filePath?: string;
+  commitId?: string;
+}): Promise<DocQueryItem[]> {
+  const params = new URLSearchParams({ project: payload.project });
+  if (payload.branch) {
+    params.set("branch", payload.branch);
+  }
+  if (payload.filePath) {
+    params.set("filePath", payload.filePath);
+  }
+  if (payload.commitId) {
+    params.set("commitId", payload.commitId);
+  }
+  return requestApi<DocQueryItem[]>(`/api/doc/query?${params.toString()}`, {
+    method: "GET",
   });
 }
 

@@ -16,5 +16,6 @@ public class DocQueryItem {
     private String docFilePath;
     private String parseStatus;
     private String parseErrorMsg;
+    private DocStructuredContent structuredDoc;
     private LocalDateTime updateTime;
 }

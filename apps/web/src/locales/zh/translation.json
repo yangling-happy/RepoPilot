@@ -113,6 +113,21 @@
           "scanFailed": "[doc] 扫描失败：{{message}}"
         }
       },
+      "structured": {
+        "title": "\u7ed3\u6784\u5316\u6587\u6863",
+        "refresh": "\u5237\u65b0",
+        "refreshing": "\u5237\u65b0\u4e2d...",
+        "empty": "\u6682\u65e0\u7ed3\u6784\u5316\u6587\u6863\u3002",
+        "parseMissing": "\u8be5\u6587\u4ef6\u6682\u65e0\u7ed3\u6784\u5316 JSON\u3002",
+        "types": "\u7c7b\u578b",
+        "fields": "\u5b57\u6bb5",
+        "constructors": "\u6784\u9020\u51fd\u6570",
+        "methods": "\u51fd\u6570",
+        "parameters": "\u53c2\u6570",
+        "returns": "\u8fd4\u56de\u503c",
+        "throws": "\u5f02\u5e38",
+        "noDescription": "\u65e0\u6ce8\u91ca\u3002"
+      },
       "terminal": {
         "title": "虚拟终端",
         "subtitle": "文档生成与 Webhook 驱动的重建日志将在此输出（会话接入后）。",

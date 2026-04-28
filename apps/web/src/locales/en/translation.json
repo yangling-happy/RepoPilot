@@ -113,6 +113,21 @@
           "scanFailed": "[doc] failed: {{message}}"
         }
       },
+      "structured": {
+        "title": "Structured docs",
+        "refresh": "Refresh",
+        "refreshing": "Refreshing...",
+        "empty": "No structured docs yet.",
+        "parseMissing": "Structured JSON is not available for this file.",
+        "types": "Types",
+        "fields": "Fields",
+        "constructors": "Constructors",
+        "methods": "Methods",
+        "parameters": "Parameters",
+        "returns": "Returns",
+        "throws": "Throws",
+        "noDescription": "No comment."
+      },
       "terminal": {
         "title": "Virtual console",
         "subtitle": "Doc generation and webhook-driven rebuilds stream here once a session is attached.",
