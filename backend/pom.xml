@@ -72,6 +72,18 @@
 
     <repositories>
         <repository>
+            <id>jetbrains-intellij-cache-redirector</id>
+            <name>JetBrains IntelliJ Dependencies (Cache Redirector)</name>
+            <url>https://cache-redirector.jetbrains.com/packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+
+        <repository>
             <id>jetbrains-intellij-dependencies</id>
             <name>JetBrains IntelliJ Dependencies</name>
             <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
