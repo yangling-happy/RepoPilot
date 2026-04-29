@@ -149,6 +149,19 @@ export async function scanLocalDoc(payload: {
   });
 }
 
+export async function refreshDoc(payload: {
+  project: string;
+  branch: string;
+}): Promise<void> {
+  return requestApi<void>("/api/doc/refresh", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function queryDocs(payload: {
   project: string;
   branch?: string;

@@ -95,7 +95,8 @@
         "success": {
           "tokenSaved": "Token saved for this browser session.",
           "cloneCompleted": "Clone completed: {{projectPath}}. Synced to dashboard list.",
-          "scanCompleted": "Documentation generated successfully. Generated files: {{generated}}."
+          "scanCompleted": "Documentation generated successfully. Generated files: {{generated}}.",
+          "docRefreshed": "Documentation refreshed successfully."
         },
         "errors": {
           "tokenRequired": "Please enter a GitLab token first.",
@@ -110,7 +111,10 @@
           "cloneFailed": "[clone] failed: {{message}}",
           "scanStarted": "[doc] start scanning project={{project}}, branch={{branch}}",
           "scanCompleted": "[doc] completed, scanned={{scanned}}, generated={{generated}}, skipped={{skipped}}",
-          "scanFailed": "[doc] failed: {{message}}"
+          "scanFailed": "[doc] failed: {{message}}",
+          "refreshStarted": "[doc] start refreshing remote repository project={{project}}, branch={{branch}}",
+          "refreshCompleted": "[doc] remote refresh completed, reloading docs...",
+          "refreshFailed": "[doc] remote refresh failed: {{message}}"
         }
       },
       "structured": {

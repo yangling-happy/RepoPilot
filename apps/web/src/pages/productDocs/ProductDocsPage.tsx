@@ -10,6 +10,7 @@ import {
   ApiError,
   cloneRepo,
   queryDocs,
+  refreshDoc,
   scanLocalDoc,
   setGitlabToken,
   type CloneRepoResponse,
@@ -149,8 +150,45 @@ export function ProductDocsPage() {
       return;
     }
 
-    await loadDocs(project, branch.trim() || "main");
-  }, [branch, lastClone, loadDocs, projectId, t]);
+    const effectiveBranch = branch.trim() || "main";
+    setLoadingDocs(true);
+    appendTerminal(
+      t("pages.documentation.actions.terminal.refreshStarted", {
+        project,
+        branch: effectiveBranch,
+      }),
+    );
+
+    try {
+      await refreshDoc({ project, branch: effectiveBranch });
+      appendTerminal(
+        t("pages.documentation.actions.terminal.refreshCompleted"),
+      );
+      await loadDocs(project, effectiveBranch);
+      setStatus({
+        type: "success",
+        text: t("pages.documentation.actions.success.docRefreshed"),
+      });
+    } catch (error) {
+      appendTerminal(
+        t("pages.documentation.actions.terminal.refreshFailed", {
+          message: toErrorMessage(
+            error,
+            t("pages.documentation.actions.errors.unexpected"),
+          ),
+        }),
+      );
+      setStatus({
+        type: "error",
+        text: toErrorMessage(
+          error,
+          t("pages.documentation.actions.errors.unexpected"),
+        ),
+      });
+    } finally {
+      setLoadingDocs(false);
+    }
+  }, [appendTerminal, branch, lastClone, loadDocs, projectId, t]);
 
   const handleSaveToken = useCallback(async () => {
     const trimmedToken = token.trim();

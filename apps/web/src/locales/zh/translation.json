@@ -95,7 +95,8 @@
         "success": {
           "tokenSaved": "Token 已保存，会话可复用。",
           "cloneCompleted": "克隆完成：{{projectPath}}。已同步到控制台列表。",
-          "scanCompleted": "文档生成完成，成功文件数：{{generated}}。"
+          "scanCompleted": "文档生成完成，成功文件数：{{generated}}。",
+          "docRefreshed": "文档刷新成功。"
         },
         "errors": {
           "tokenRequired": "请先输入 GitLab Token。",
@@ -110,7 +111,10 @@
           "cloneFailed": "[clone] 克隆失败：{{message}}",
           "scanStarted": "[doc] 开始扫描 project={{project}}, branch={{branch}}",
           "scanCompleted": "[doc] 扫描完成，scanned={{scanned}}, generated={{generated}}, skipped={{skipped}}",
-          "scanFailed": "[doc] 扫描失败：{{message}}"
+          "scanFailed": "[doc] 扫描失败：{{message}}",
+          "refreshStarted": "[doc] 开始刷新远程仓库 project={{project}}, branch={{branch}}",
+          "refreshCompleted": "[doc] 远程刷新成功，重新加载文档列表...",
+          "refreshFailed": "[doc] 远程刷新失败：{{message}}"
         }
       },
       "structured": {
