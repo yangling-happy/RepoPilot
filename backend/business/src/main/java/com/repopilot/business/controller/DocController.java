@@ -48,7 +48,7 @@ public class DocController {
 
     @PostMapping("/refresh")
     public ApiResponse<DocRefreshResult> refreshDoc(@RequestBody DocRefreshRequest request,
-                                                    HttpSession session) {
+            HttpSession session) {
         BizAssert.notNull(request, 400, "Request body is required");
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
         log.info("Refresh doc request: username={}, project={}, branch={}",
@@ -60,7 +60,7 @@ public class DocController {
 
     @PostMapping("/scan-local")
     public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocRefreshRequest request,
-                                                        HttpSession session) {
+            HttpSession session) {
         BizAssert.notNull(request, 400, "Request body is required");
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
         log.info("Local doc scan request: username={}, project={}, branch={}",
@@ -96,7 +96,7 @@ public class DocController {
 
     @PostMapping("/task/create")
     public ApiResponse<DocTask> createDocTask(@RequestBody CreateDocTaskRequest request,
-                                              HttpSession session) {
+            HttpSession session) {
         String validationError = validateCreateDocTaskRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
@@ -119,10 +119,18 @@ public class DocController {
 
     @PostMapping("/file/create")
     public ApiResponse<DocFile> createDocFile(@RequestBody CreateDocFileRequest request,
-                                              HttpSession session) {
+            HttpSession session) {
         String validationError = validateCreateDocFileRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        DocTask linkedTask = docTaskMapper.selectById(request.getTaskId());
+        BizAssert.isTrue(linkedTask != null, 400, "taskId does not exist");
+        BizAssert.isTrue(context.username().equals(linkedTask.getGitlabUsername()), 400,
+                "taskId does not belong to the current user");
+        BizAssert.isTrue(request.getProjectName().trim().equals(linkedTask.getProject())
+                && request.getBranchName().trim().equals(linkedTask.getBranch())
+                && request.getCommitId().trim().equals(linkedTask.getCommitId()),
+                400, "taskId does not match project, branch, or commitId");
 
         DocFile docFile = new DocFile();
         docFile.setTaskId(request.getTaskId());
@@ -175,7 +183,10 @@ public class DocController {
         if (request == null) {
             return "Request body is required";
         }
-        if (request.getTaskId() != null && request.getTaskId() <= 0) {
+        if (request.getTaskId() == null) {
+            return "taskId is required";
+        }
+        if (request.getTaskId() <= 0) {
             return "taskId must be greater than 0";
         }
         if (!hasText(request.getProjectName())) {

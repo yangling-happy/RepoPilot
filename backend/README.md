@@ -72,12 +72,7 @@ CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/01_init_tables.sql
 ```
 
-如果本地数据库是旧版本已经建过表，再执行一次迁移脚本对齐字段：
-
-```bash
-mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/02_migrate_doc_schema.sql
-mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/03_add_gitlab_username.sql
-```
+当前只保留一个一次性建表脚本，不再维护 02/03 这类增量迁移脚本。若本地数据库是旧版本，建议先备份再直接重建数据库后执行该脚本。
 
 3. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
 
@@ -304,6 +299,8 @@ find ./workspace/{gitlabUsername}/docs/2/main -name 'doc.json' -print
 - 请求体字段：
   - `taskId` `projectName` `branchName` `filePath` `commitId` `docFilePath` `parseStatus` `parseErrorMsg`
 
+`taskId` 必须对应已有的 `doc_task.id`。
+
 ### 3) 部署任务写入
 
 - 接口：`POST /api/deploy/task/create`
@@ -369,6 +366,7 @@ curl -sS -X POST "${BASE_URL}/deploy/build/task/create" \
 curl -sS -X POST "${BASE_URL}/doc/file/create" \
   -H "Content-Type: application/json" \
   -d "{
+    \"taskId\": 1,
     \"projectName\": \"RepoPilot\",
     \"branchName\": \"main\",
     \"filePath\": \"${docFilePath}\",
@@ -378,28 +376,33 @@ curl -sS -X POST "${BASE_URL}/doc/file/create" \
   }"
 ```
 
+上面的 `taskId` 需要替换成已存在的 `doc_task.id`。
+
 ## 数据库表结构
 
 ### doc_task - 文档任务表（用于日志）
 
-- id: 主键
-- event_id: 事件ID
+- id: 自增主键，文档任务的数据库内部编号
+- gitlab_username: 用户目录标识，对应 `workspace/{gitlabUsername}`
+- event_id: 业务唯一键，一次文档任务的业务编号
 - project: 项目名
 - branch: 分支名
-- commit_id: 提交ID
+- commit_id: 提交 ID
 - status: 状态
-- create_time：创建时间
+- create_time: 创建时间
 - duration: 执行时长
 
 ### doc_file_dtl - 文档明细表
 
-- id: 主键
-- task_id: 关联文档任务ID
+- id: 自增主键，文档明细的数据库内部编号
+- gitlab_username: 用户目录标识，对应 `workspace/{gitlabUsername}`
+- task_id: 关联 doc_task.id，表示这条文件明细属于哪次文档任务，不能为空，外键
 - project_name: 项目名
 - branch_name: 分支名
-- commit_id: 提交ID
-- file_path: Java文件路径
-- doc_file_path: 文档解析结果文件路径
+- commit_id: 提交 ID
+- file_path: 原始源码文件路径
+- file_path_sha: `file_path` 的 SHA-256 哈希辅助列，用于复合唯一键和索引优化
+- doc_file_path: 结构化文档路径，通常指向 doc.json
 - parse_status: 解析状态
 - parse_error_msg: 解析失败信息
 - create_time: 创建时间
@@ -407,11 +410,12 @@ curl -sS -X POST "${BASE_URL}/doc/file/create" \
 
 ### deploy_task - 部署任务表
 
-- id: 主键
-- deploy_task_id: 部署任务ID
+- id: 自增主键，部署任务的数据库内部编号
+- gitlab_username: 用户目录标识，对应 `workspace/{gitlabUsername}`
+- deploy_task_id: 业务唯一键，部署任务对外编号
 - project_name: 项目名
 - branch_name: 分支名
-- commit_id: 提交ID
+- commit_id: 提交 ID
 - deploy_params: 部署参数
 - run_status: 运行状态
 - log_dir_path: 日志目录路径
@@ -419,15 +423,18 @@ curl -sS -X POST "${BASE_URL}/doc/file/create" \
 - error_msg: 部署失败信息
 - start_time: 开始时间
 - duration: 执行时长
+- create_time: 创建时间
+- update_time: 更新时间
 
 ### build_task - 构建任务表
 
-- id: 主键
-- build_task_id: 构建任务ID
-- deploy_task_id: 关联部署任务ID
+- id: 自增主键，构建任务的数据库内部编号
+- gitlab_username: 用户目录标识，对应 `workspace/{gitlabUsername}`
+- build_task_id: 业务唯一键，构建任务对外编号
+- deploy_task_id: 关联 deploy_task.deploy_task_id，可为空，外键
 - project_name: 项目名
 - branch_name: 分支名
-- commit_id: 提交ID
+- commit_id: 提交 ID
 - script_path: 执行构建脚本路径
 - artifact_path: 构建产物路径
 - log_dir_path: 构建日志目录路径
@@ -435,3 +442,5 @@ curl -sS -X POST "${BASE_URL}/doc/file/create" \
 - error_msg: 构建失败信息
 - start_time: 开始时间
 - duration: 执行时长
+- create_time: 创建时间
+- update_time: 更新时间

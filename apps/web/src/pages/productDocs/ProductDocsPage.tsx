@@ -288,7 +288,15 @@ export function ProductDocsPage() {
     } finally {
       setCloning(false);
     }
-  }, [appendTerminal, branch, language, projectId, t, terminalSessionId, token]);
+  }, [
+    appendTerminal,
+    branch,
+    language,
+    projectId,
+    t,
+    terminalSessionId,
+    token,
+  ]);
 
   const handleScanLocal = useCallback(async () => {
     const project =
@@ -605,7 +613,10 @@ function StructuredDocDetail({ doc }: { doc: DocQueryItem | null }) {
 
       <div className="mt-5 space-y-5">
         {doc.structuredDoc.types.map((typeDoc) => (
-          <TypeDocView key={`${typeDoc.htmlFile}-${typeDoc.name}`} typeDoc={typeDoc} />
+          <TypeDocView
+            key={`${typeDoc.htmlFile}-${typeDoc.name}`}
+            typeDoc={typeDoc}
+          />
         ))}
       </div>
     </section>
@@ -634,7 +645,8 @@ function TypeDocView({ typeDoc }: { typeDoc: DocTypeDoc }) {
       </div>
 
       <p className="mt-4 text-sm leading-6 text-neutral-700 dark:text-neutral-300">
-        {typeDoc.description || t("pages.documentation.structured.noDescription")}
+        {typeDoc.description ||
+          t("pages.documentation.structured.noDescription")}
       </p>
 
       {typeDoc.signature ? (
@@ -679,7 +691,10 @@ function MemberGroup({
       </h4>
       <div className="mt-2 space-y-2">
         {members.map((member) => (
-          <MemberDocView key={`${member.kind}-${member.id || member.name}`} member={member} />
+          <MemberDocView
+            key={`${member.kind}-${member.id || member.name}`}
+            member={member}
+          />
         ))}
       </div>
     </section>
@@ -708,7 +723,8 @@ function MemberDocView({ member }: { member: DocMemberDoc }) {
       ) : null}
 
       <p className="mt-3 text-sm leading-6 text-neutral-700 dark:text-neutral-300">
-        {member.description || t("pages.documentation.structured.noDescription")}
+        {member.description ||
+          t("pages.documentation.structured.noDescription")}
       </p>
 
       {member.parameters.length > 0 ? (

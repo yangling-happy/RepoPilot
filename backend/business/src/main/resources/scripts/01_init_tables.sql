@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS `doc_task` (
 
 CREATE TABLE IF NOT EXISTS `doc_file_dtl` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-  `task_id` BIGINT UNSIGNED NULL,
+  `task_id` BIGINT UNSIGNED NOT NULL,
   `gitlab_username` VARCHAR(128) NOT NULL,
   `project_name` VARCHAR(128) NOT NULL,
   `branch_name` VARCHAR(128) NOT NULL,
@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS `doc_file_dtl` (
   KEY `idx_doc_file_task_id` (`task_id`),
   KEY `idx_doc_file_project_branch_update_time` (`project_name`, `branch_name`, `update_time`),
   KEY `idx_doc_file_user_project_branch_update_time` (`gitlab_username`, `project_name`, `branch_name`, `update_time`),
+  CONSTRAINT `fk_doc_file_task_id` FOREIGN KEY (`task_id`) REFERENCES `doc_task` (`id`) ON DELETE CASCADE,
   CONSTRAINT `chk_doc_file_parse_status` CHECK (`parse_status` IN ('PENDING', 'SUCCESS', 'FAILED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

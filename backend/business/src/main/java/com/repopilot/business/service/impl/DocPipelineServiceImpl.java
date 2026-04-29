@@ -140,8 +140,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 result.getNewCommitCount(),
                 result.getCreatedTaskCommitIds().size(),
                 result.getSkippedCommitIds().size(),
-                result.getFailedTaskCommitIds().size()
-        ));
+                result.getFailedTaskCommitIds().size()));
         return result;
     }
 
@@ -200,7 +199,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
 
                 try {
-                    generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, file, filePath);
+                    generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, file,
+                            filePath);
                     result.setGeneratedFileCount(result.getGeneratedFileCount() + 1);
                     result.getGeneratedFilePaths().add(filePath);
                 } catch (Exception ex) {
@@ -222,8 +222,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                     result.getScannedFileCount(),
                     result.getGeneratedFileCount(),
                     result.getSkippedFileCount(),
-                    result.getFailedFileCount()
-            ));
+                    result.getFailedFileCount()));
             return result;
         } catch (Exception ex) {
             log.error("Local doc scan failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
@@ -238,7 +237,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     @Override
-    public List<DocQueryItem> query(String gitlabUsername, String project, String branch, String filePath, String commitId) {
+    public List<DocQueryItem> query(String gitlabUsername, String project, String branch, String filePath,
+            String commitId) {
         validateGitlabUsername(gitlabUsername);
         if (!StringUtils.hasText(project)) {
             throw new BusinessException(400, "project is required");
@@ -275,7 +275,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .collect(Collectors.toList());
     }
 
-    private String runExtractionTask(String gitlabUsername, String project, String branch, String commitId, String token) {
+    private String runExtractionTask(String gitlabUsername, String project, String branch, String commitId,
+            String token) {
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -306,11 +307,11 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     private String runLocalExtractionTask(String gitlabUsername,
-                                          String project,
-                                          String branch,
-                                          String commitId,
-                                          Path sourceRoot,
-                                          List<CommitFileChange> changes) {
+            String project,
+            String branch,
+            String commitId,
+            Path sourceRoot,
+            List<CommitFileChange> changes) {
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -323,7 +324,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         long start = System.currentTimeMillis();
         try {
-            int handledDocFiles = applyLocalChanges(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, changes);
+            int handledDocFiles = applyLocalChanges(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot,
+                    changes);
 
             String finalStatus = handledDocFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
             task.setStatus(finalStatus);
@@ -340,12 +342,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     private int applyLocalChanges(String gitlabUsername,
-                                  String project,
-                                  String branch,
-                                  String commitId,
-                                  Long taskId,
-                                  Path sourceRoot,
-                                  List<CommitFileChange> changes) {
+            String project,
+            String branch,
+            String commitId,
+            Long taskId,
+            Path sourceRoot,
+            List<CommitFileChange> changes) {
         if (changes == null || changes.isEmpty()) {
             return 0;
         }
@@ -354,7 +356,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         for (CommitFileChange change : changes) {
             switch (change.getChangeType()) {
                 case ADDED, MODIFIED -> {
-                    if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, sourceRoot)) {
+                    if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId,
+                            sourceRoot)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -375,7 +378,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                     } else {
                         logUnsupportedFile(project, commitId, change.getOldPath());
                     }
-                    if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, sourceRoot)) {
+                    if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId,
+                            sourceRoot)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -388,12 +392,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     private int applyChanges(String gitlabUsername,
-                             String project,
-                             String branch,
-                             String commitId,
-                             Long taskId,
-                             String token,
-                             List<CommitFileChange> changes) {
+            String project,
+            String branch,
+            String commitId,
+            Long taskId,
+            String token,
+            List<CommitFileChange> changes) {
         if (changes == null || changes.isEmpty()) {
             return 0;
         }
@@ -402,7 +406,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         for (CommitFileChange change : changes) {
             switch (change.getChangeType()) {
                 case ADDED, MODIFIED -> {
-                    if (upsertActiveDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, token)) {
+                    if (upsertActiveDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId,
+                            token)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -423,7 +428,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                     } else {
                         logUnsupportedFile(project, commitId, change.getOldPath());
                     }
-                    if (upsertActiveDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId, token)) {
+                    if (upsertActiveDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId,
+                            token)) {
                         handled++;
                     } else {
                         logUnsupportedFile(project, commitId, change.getNewPath());
@@ -436,12 +442,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     private boolean upsertActiveDoc(String gitlabUsername,
-                                    String project,
-                                    String branch,
-                                    String filePath,
-                                    String commitId,
-                                    Long taskId,
-                                    String token) {
+            String project,
+            String branch,
+            String filePath,
+            String commitId,
+            Long taskId,
+            String token) {
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
             return false;
@@ -463,12 +469,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     private boolean upsertActiveLocalDoc(String gitlabUsername,
-                                         String project,
-                                         String branch,
-                                         String filePath,
-                                         String commitId,
-                                         Long taskId,
-                                         Path sourceRoot) {
+            String project,
+            String branch,
+            String filePath,
+            String commitId,
+            Long taskId,
+            Path sourceRoot) {
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
             return false;
@@ -500,13 +506,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     private void generateLocalDoc(String gitlabUsername,
-                                  String project,
-                                  String branch,
-                                  String commitId,
-                                  Long taskId,
-                                  Path sourceRoot,
-                                  Path sourceFile,
-                                  String filePath) throws IOException {
+            String project,
+            String branch,
+            String commitId,
+            Long taskId,
+            Path sourceRoot,
+            Path sourceFile,
+            String filePath) throws IOException {
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
             return;
@@ -526,30 +532,32 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
     }
 
-    private void upsertDeletedDoc(String gitlabUsername, String project, String branch, String filePath, String commitId, Long taskId) {
+    private void upsertDeletedDoc(String gitlabUsername, String project, String branch, String filePath,
+            String commitId, Long taskId) {
         upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, null, "File deleted");
     }
 
     private void upsertDocFile(String gitlabUsername,
-                               String project,
-                               String branch,
-                               String filePath,
-                               String commitId,
-                               Long taskId,
-                               String docFilePath,
-                               String parseErrorMsg) {
-        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, STATUS_SUCCESS, docFilePath, parseErrorMsg);
+            String project,
+            String branch,
+            String filePath,
+            String commitId,
+            Long taskId,
+            String docFilePath,
+            String parseErrorMsg) {
+        upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, STATUS_SUCCESS, docFilePath,
+                parseErrorMsg);
     }
 
     private void upsertDocFile(String gitlabUsername,
-                               String project,
-                               String branch,
-                               String filePath,
-                               String commitId,
-                               Long taskId,
-                               String parseStatus,
-                               String docFilePath,
-                               String parseErrorMsg) {
+            String project,
+            String branch,
+            String filePath,
+            String commitId,
+            Long taskId,
+            String parseStatus,
+            String docFilePath,
+            String parseErrorMsg) {
         LambdaQueryWrapper<DocFile> query = new LambdaQueryWrapper<>();
         query.eq(DocFile::getGitlabUsername, gitlabUsername)
                 .eq(DocFile::getProjectName, project)
@@ -586,7 +594,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return prefix + "-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
-    private List<String> listCommitIdsInRange(Repository repository, String oldHead, String newHead) throws IOException {
+    private List<String> listCommitIdsInRange(Repository repository, String oldHead, String newHead)
+            throws IOException {
         ObjectId oldObjectId = repository.resolve(oldHead);
         ObjectId newObjectId = repository.resolve(newHead);
         if (oldObjectId == null || newObjectId == null) {
@@ -610,7 +619,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
-    private List<CommitFileChange> listLocalDiffChanges(Git git, String oldHead, String newHead) throws IOException, GitAPIException {
+    private List<CommitFileChange> listLocalDiffChanges(Git git, String oldHead, String newHead)
+            throws IOException, GitAPIException {
         Repository repository = git.getRepository();
         ObjectId oldTree = repository.resolve(oldHead + "^{tree}");
         ObjectId newTree = repository.resolve(newHead + "^{tree}");
@@ -646,9 +656,11 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private CommitFileChange toCommitFileChange(DiffEntry entry) {
         return switch (entry.getChangeType()) {
             case ADD -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
-            case MODIFY -> new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.MODIFIED);
+            case MODIFY ->
+                new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.MODIFIED);
             case DELETE -> new CommitFileChange(entry.getOldPath(), null, CommitFileChange.ChangeType.DELETED);
-            case RENAME -> new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.RENAMED);
+            case RENAME ->
+                new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.RENAMED);
             case COPY -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
         };
     }
