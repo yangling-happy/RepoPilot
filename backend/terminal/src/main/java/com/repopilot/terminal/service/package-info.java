@@ -1,4 +1,4 @@
 /**
- * Terminal session and process service abstractions.
+ * Terminal task script execution and log streaming abstractions.
  */
 package com.repopilot.terminal.service;

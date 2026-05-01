@@ -54,7 +54,8 @@ public class DocController {
         log.info("Refresh doc request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
         DocRefreshResult result = docPipelineService.refresh(
-                context.username(), request.getProject(), request.getBranch(), context.token());
+                context.username(), request.getProject(), request.getBranch(), context.token(),
+                request.getTerminalSessionId());
         return ApiResponse.success("Refresh completed", result);
     }
 
@@ -66,7 +67,7 @@ public class DocController {
         log.info("Local doc scan request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
         DocLocalScanResult result = docPipelineService.scanLocal(
-                context.username(), request.getProject(), request.getBranch());
+                context.username(), request.getProject(), request.getBranch(), request.getTerminalSessionId());
         return ApiResponse.success("Local scan completed", result);
     }
 

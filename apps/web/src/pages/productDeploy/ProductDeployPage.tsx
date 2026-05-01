@@ -1,17 +1,39 @@
-import { useMemo } from "react";
+import type { TerminalClient } from "../../../../terminal/src";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
+
+const TERMINAL_SESSION_STORAGE_KEY = "repopilot.deploy.terminalSessionId";
 
 export function ProductDeployPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
   const repo = params.get("repo");
+  const terminalClientRef = useRef<TerminalClient | null>(null);
+  const [terminalSessionId] = useState(() => getOrCreateTerminalSessionId());
+  const [terminalOpen, setTerminalOpen] = useState(false);
 
   const bootLines = useMemo(
     () => [t("pages.deploy.terminal.line1"), t("pages.deploy.terminal.line2")],
     [t],
   );
+
+  const onSessionReady = useCallback(
+    ({ sessionId, client }: { sessionId: string; client: TerminalClient }) => {
+      terminalClientRef.current = client;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(TERMINAL_SESSION_STORAGE_KEY, sessionId);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!repo) return;
+    setTerminalOpen(true);
+    terminalClientRef.current?.writeln(`[deploy] selected repository=${repo}`);
+  }, [repo]);
 
   const sections = [
     {
@@ -46,13 +68,16 @@ export function ProductDeployPage() {
         {t("pages.deploy.lede")}
       </p>
 
-      <div className="mt-14">
-        <VirtualTerminalPanel
-          title={t("pages.deploy.terminal.title")}
-          subtitle={t("pages.deploy.terminal.subtitle")}
-          bootLines={bootLines}
-        />
-      </div>
+      <VirtualTerminalPanel
+        title={t("pages.deploy.terminal.title")}
+        subtitle={t("pages.deploy.terminal.subtitle")}
+        bootLines={bootLines}
+        sessionId={terminalSessionId}
+        variant="floating"
+        open={terminalOpen}
+        onRequestClose={() => setTerminalOpen(false)}
+        onSessionReady={onSessionReady}
+      />
 
       <div className="mt-14 space-y-3">
         {sections.map((section) => (
@@ -78,4 +103,29 @@ export function ProductDeployPage() {
       </div>
     </div>
   );
+}
+
+function getOrCreateTerminalSessionId() {
+  if (typeof window === "undefined") {
+    return createSessionIdFallback();
+  }
+
+  const existing = window.localStorage.getItem(TERMINAL_SESSION_STORAGE_KEY);
+  if (existing) {
+    return existing;
+  }
+
+  const created = createSessionIdFallback();
+  window.localStorage.setItem(TERMINAL_SESSION_STORAGE_KEY, created);
+  return created;
+}
+
+function createSessionIdFallback() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

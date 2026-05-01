@@ -2,9 +2,7 @@ package com.repopilot.terminal.handler;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.repopilot.terminal.service.PtySession;
-import com.repopilot.terminal.service.PtySessionManager;
+import com.repopilot.terminal.service.TerminalLogPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,11 +24,11 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
     private static final String SESSION_ID_ATTR = "terminalSessionId";
 
-    private final PtySessionManager ptySessionManager;
+    private final TerminalLogPublisher terminalLogPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+    public void afterConnectionEstablished(WebSocketSession session) {
         String sessionId = extractSessionId(session);
         if (!StringUtils.hasText(sessionId)) {
             closeSilently(session, CloseStatus.BAD_DATA.withReason("Missing sessionId"));
@@ -38,12 +36,7 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
         }
 
         session.getAttributes().put(SESSION_ID_ATTR, sessionId);
-        try {
-            ptySessionManager.create(sessionId, output -> sendStdout(session, sessionId, output));
-        } catch (IOException e) {
-            log.error("Failed to create PTY session {}", sessionId, e);
-            closeSilently(session, CloseStatus.SERVER_ERROR.withReason("Failed to create PTY session"));
-        }
+        terminalLogPublisher.subscribe(sessionId, session);
     }
 
     @Override
@@ -54,24 +47,20 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        PtySession ptySession = ptySessionManager.get(sessionId);
-        if (ptySession == null) {
-            sendStdout(session, sessionId, "\r\n[terminal closed]\r\n");
-            return;
-        }
-
         try {
             JsonNode root = objectMapper.readTree(message.getPayload());
             String type = root.path("type").asText("");
-            JsonNode data = root.get("data");
 
             switch (type) {
-                case "stdin" -> handleStdin(ptySession, data, session, sessionId);
-                case "resize" -> handleResize(ptySession, data, session, sessionId);
-                default -> sendStdout(session, sessionId, "\r\n[unsupported message type]\r\n");
+                case "resize" -> {
+                    // Log sessions are read-only; resize is accepted as a no-op for client compatibility.
+                }
+                case "stdin" -> terminalLogPublisher.publishError(sessionId,
+                        "stdin is disabled for task log sessions");
+                default -> terminalLogPublisher.publishError(sessionId, "unsupported message type: " + type);
             }
         } catch (Exception e) {
-            sendStdout(session, sessionId, "\r\n[invalid message] " + e.getMessage() + "\r\n");
+            terminalLogPublisher.publishError(sessionId, "invalid message: " + e.getMessage());
         }
     }
 
@@ -79,7 +68,7 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
     public void handleTransportError(WebSocketSession session, Throwable exception) {
         String sessionId = getSessionId(session);
         if (StringUtils.hasText(sessionId)) {
-            ptySessionManager.remove(sessionId);
+            terminalLogPublisher.unsubscribe(sessionId, session);
         }
         closeSilently(session, CloseStatus.SERVER_ERROR);
     }
@@ -88,31 +77,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         String sessionId = getSessionId(session);
         if (StringUtils.hasText(sessionId)) {
-            ptySessionManager.remove(sessionId);
+            terminalLogPublisher.unsubscribe(sessionId, session);
         }
-    }
-
-    private void handleStdin(PtySession ptySession, JsonNode data, WebSocketSession wsSession, String sessionId) {
-        if (data == null || !data.isTextual()) {
-            sendStdout(wsSession, sessionId, "\r\n[stdin must be string]\r\n");
-            return;
-        }
-        try {
-            ptySession.write(data.asText());
-        } catch (IOException e) {
-            sendStdout(wsSession, sessionId, "\r\n[stdin write failed] " + e.getMessage() + "\r\n");
-        }
-    }
-
-    private void handleResize(PtySession ptySession, JsonNode data, WebSocketSession wsSession, String sessionId) {
-        if (data == null || !data.isArray() || data.size() < 2) {
-            sendStdout(wsSession, sessionId, "\r\n[resize data must be [cols, rows]]\r\n");
-            return;
-        }
-
-        int cols = data.get(0).asInt(80);
-        int rows = data.get(1).asInt(24);
-        ptySession.resize(cols, rows);
     }
 
     private String getSessionId(WebSocketSession session) {
@@ -135,27 +101,6 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             return null;
         }
         return URLDecoder.decode(path.substring(lastSlash + 1), StandardCharsets.UTF_8);
-    }
-
-    private void sendStdout(WebSocketSession session, String sessionId, String output) {
-        if (!session.isOpen()) {
-            return;
-        }
-
-        ObjectNode payload = objectMapper.createObjectNode();
-        payload.put("type", "stdout");
-        payload.put("data", output);
-        payload.put("sessionId", sessionId);
-
-        try {
-            synchronized (session) {
-                if (session.isOpen()) {
-                    session.sendMessage(new TextMessage(payload.toString()));
-                }
-            }
-        } catch (Exception e) {
-            log.debug("Failed to send stdout for session {}", sessionId, e);
-        }
     }
 
     private void closeSilently(WebSocketSession session, CloseStatus status) {

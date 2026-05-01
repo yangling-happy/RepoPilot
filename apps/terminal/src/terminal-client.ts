@@ -9,6 +9,7 @@ export class TerminalClient {
   private ws: WebSocket;
   private pendingMessages: string[] = [];
   private disposed = false;
+  private readonly enableInput: boolean;
 
   private readonly handleOpen = () => {
     this.flushPendingMessages();
@@ -16,8 +17,20 @@ export class TerminalClient {
 
   private readonly handleMessage = (event: MessageEvent) => {
     const message = JSON.parse(event.data as string);
-    if (message.type === "stdout") {
-      this.handle.terminal.write(message.data as string);
+    switch (message.type) {
+      case "stdout":
+        this.handle.terminal.write(String(message.data ?? ""));
+        break;
+      case "exit":
+        this.handle.terminal.write(
+          `\r\n[task exited with code ${String(message.exitCode ?? "")}]\r\n`,
+        );
+        break;
+      case "error":
+        this.handle.terminal.write(
+          `\r\n[error] ${String(message.message ?? message.data ?? "")}\r\n`,
+        );
+        break;
     }
   };
 
@@ -27,6 +40,7 @@ export class TerminalClient {
 
   constructor(ws: WebSocket, options?: CreateVirtualTerminalOptions) {
     this.ws = ws;
+    this.enableInput = options?.enableInput ?? false;
     this.handle = createVirtualTerminal(options);
     this.setupWebSocket();
     this.setupTerminal();
@@ -39,12 +53,14 @@ export class TerminalClient {
   }
 
   private setupTerminal() {
-    this.handle.terminal.onData((data: string) => {
-      this.send({
-        type: "stdin",
-        data,
+    if (this.enableInput) {
+      this.handle.terminal.onData((data: string) => {
+        this.send({
+          type: "stdin",
+          data,
+        });
       });
-    });
+    }
 
     this.handle.terminal.onResize((size: { cols: number; rows: number }) => {
       this.send({
@@ -92,10 +108,21 @@ export class TerminalClient {
   }
 
   sendStdin(data: string) {
+    if (!this.enableInput) {
+      return;
+    }
     this.send({
       type: "stdin",
       data,
     });
+  }
+
+  write(data: string) {
+    this.handle.terminal.write(data);
+  }
+
+  writeln(line: string) {
+    this.handle.terminal.writeln(line);
   }
 
   detach() {

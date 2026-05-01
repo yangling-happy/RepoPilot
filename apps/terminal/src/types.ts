@@ -5,7 +5,9 @@ export interface TerminalSession {
 }
 
 export interface WebSocketMessage {
-  type: "stdin" | "stdout" | "resize";
-  data: string | number[];
+  type: "stdout" | "exit" | "error" | "resize";
+  data?: string | number[];
   sessionId?: string;
+  exitCode?: number;
+  message?: string;
 }

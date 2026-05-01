@@ -18,6 +18,7 @@ import com.repopilot.business.service.docgen.DocGeneratorRegistry;
 import com.repopilot.business.service.gitignore.GitIgnoreMatcher;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
 import com.repopilot.business.service.gitlab.model.CommitFileChange;
+import com.repopilot.business.service.terminal.TerminalRelayClient;
 import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import com.repopilot.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
@@ -72,18 +73,28 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private final GitLabDocClient gitLabDocClient;
     private final DocGeneratorRegistry docGeneratorRegistry;
     private final UserWorkspaceResolver userWorkspaceResolver;
+    private final TerminalRelayClient terminalRelayClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
+        return refresh(gitlabUsername, project, branch, token, null);
+    }
+
+    @Override
+    public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token,
+            String terminalSessionId) {
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
         validateToken(token);
 
+        emitTerminal(terminalSessionId, "[doc] refresh accepted, project=" + project + ", branch=" + branch);
         Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
+            emitTerminal(terminalSessionId, "[doc] refresh failed, local repository not found: " + project);
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
+        emitTerminal(terminalSessionId, "[doc] using local repository: " + sourceRoot);
 
         String normalizedBranch = normalizeBranchName(branch);
         String oldHead;
@@ -106,10 +117,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 changes = listLocalDiffChanges(git, oldHead, newHead);
             }
         } catch (BusinessException ex) {
+            emitTerminal(terminalSessionId, "[doc] refresh failed, code=" + ex.getCode()
+                    + ", message=" + ex.getMessage());
             throw ex;
         } catch (IOException | GitAPIException ex) {
             log.error("Local doc refresh failed. project={}, branch={}, sourceRoot={}",
                     project, normalizedBranch, sourceRoot, ex);
+            emitTerminal(terminalSessionId, "[doc] refresh failed, local repository refresh error");
             throw new BusinessException(500, "Local repository refresh failed");
         }
 
@@ -122,13 +136,17 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         if (Objects.equals(oldHead, newHead)) {
             result.setMessage("No new commits.");
+            emitTerminal(terminalSessionId, "[doc] refresh completed, no new commits");
             return result;
         }
 
         result.setDetectedCommitIds(detectedCommitIds);
         result.setNewCommitCount(detectedCommitIds.size());
+        emitTerminal(terminalSessionId, "[doc] detected " + detectedCommitIds.size()
+                + " commit(s), new HEAD=" + newHead);
 
-        String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes);
+        String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes,
+                terminalSessionId);
         if (STATUS_FAILED.equals(status)) {
             result.getFailedTaskCommitIds().add(newHead);
         } else {
@@ -141,6 +159,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 result.getCreatedTaskCommitIds().size(),
                 result.getSkippedCommitIds().size(),
                 result.getFailedTaskCommitIds().size()));
+        emitTerminal(terminalSessionId, "[doc] refresh completed, status=" + status
+                + ", newCommitCount=" + result.getNewCommitCount());
         return result;
     }
 
@@ -160,15 +180,24 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
     @Override
     public DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch) {
+        return scanLocal(gitlabUsername, project, branch, null);
+    }
+
+    @Override
+    public DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch,
+            String terminalSessionId) {
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
 
+        emitTerminal(terminalSessionId, "[doc] local scan accepted, project=" + project + ", branch=" + branch);
         Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
+            emitTerminal(terminalSessionId, "[doc] local scan failed, repository not found: " + project);
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
 
         String commitId = resolveLocalHeadCommit(sourceRoot);
+        emitTerminal(terminalSessionId, "[doc] local scan repository=" + sourceRoot + ", HEAD=" + commitId);
         DocLocalScanResult result = new DocLocalScanResult();
         result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
@@ -190,6 +219,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         try {
             List<Path> files = listLocalRepoFiles(sourceRoot);
             result.setScannedFileCount(files.size());
+            emitTerminal(terminalSessionId, "[doc] local scan found " + files.size() + " file(s)");
 
             for (Path file : files) {
                 String filePath = toRepoRelativePath(sourceRoot, file);
@@ -203,9 +233,11 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                             filePath);
                     result.setGeneratedFileCount(result.getGeneratedFileCount() + 1);
                     result.getGeneratedFilePaths().add(filePath);
+                    emitTerminal(terminalSessionId, "[doc] generated " + filePath);
                 } catch (Exception ex) {
                     log.error("Local doc generation failed. project={}, branch={}, filePath={}",
                             project, branch, filePath, ex);
+                    emitTerminal(terminalSessionId, "[doc] failed " + filePath + ": " + summarizeError(ex));
                     result.setFailedFileCount(result.getFailedFileCount() + 1);
                     result.getFailedFilePaths().add(filePath);
                     upsertDocFile(gitlabUsername, project, branch, filePath, commitId, task.getId(),
@@ -223,9 +255,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                     result.getGeneratedFileCount(),
                     result.getSkippedFileCount(),
                     result.getFailedFileCount()));
+            emitTerminal(terminalSessionId, "[doc] local scan completed, scanned="
+                    + result.getScannedFileCount() + ", generated=" + result.getGeneratedFileCount()
+                    + ", skipped=" + result.getSkippedFileCount() + ", failed=" + result.getFailedFileCount());
             return result;
         } catch (Exception ex) {
             log.error("Local doc scan failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
+            emitTerminal(terminalSessionId, "[doc] local scan failed: " + summarizeError(ex));
             task.setStatus(STATUS_FAILED);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
@@ -311,7 +347,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             String branch,
             String commitId,
             Path sourceRoot,
-            List<CommitFileChange> changes) {
+            List<CommitFileChange> changes,
+            String terminalSessionId) {
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -324,6 +361,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         long start = System.currentTimeMillis();
         try {
+            emitTerminal(terminalSessionId, "[doc] extraction task started, commitId=" + commitId
+                    + ", changedFiles=" + (changes == null ? 0 : changes.size()));
             int handledDocFiles = applyLocalChanges(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot,
                     changes);
 
@@ -331,9 +370,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             task.setStatus(finalStatus);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
+            emitTerminal(terminalSessionId, "[doc] extraction task completed, handledDocFiles="
+                    + handledDocFiles + ", status=" + finalStatus);
             return finalStatus;
         } catch (Exception ex) {
             log.error("Local doc extraction failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
+            emitTerminal(terminalSessionId, "[doc] extraction task failed: " + summarizeError(ex));
             task.setStatus(STATUS_FAILED);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
@@ -934,6 +976,10 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                     row.getGitlabUsername(), row.getProjectName(), row.getFilePath(), row.getDocFilePath(), ex);
             return null;
         }
+    }
+
+    private void emitTerminal(String sessionId, String line) {
+        terminalRelayClient.emit(sessionId, line);
     }
 
     private void validateProjectAndBranch(String project, String branch) {

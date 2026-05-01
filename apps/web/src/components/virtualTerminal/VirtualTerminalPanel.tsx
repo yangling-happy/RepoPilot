@@ -18,6 +18,10 @@ type Props = {
   /** Lines shown after mount (e.g. boot banner) */
   bootLines: readonly string[];
   sessionId?: string;
+  variant?: "inline" | "floating";
+  open?: boolean;
+  dismissible?: boolean;
+  onRequestClose?: () => void;
   onSessionReady?: (context: {
     sessionId: string;
     client: TerminalClient;
@@ -31,6 +35,10 @@ export function VirtualTerminalPanel({
   subtitle,
   bootLines,
   sessionId,
+  variant = "inline",
+  open = true,
+  dismissible = true,
+  onRequestClose,
   onSessionReady,
   onConnectionStatusChange,
   className = "",
@@ -97,7 +105,15 @@ export function VirtualTerminalPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- bootKey fingerprints bootLines; avoid unstable bootLines ref from parents
   }, [resolvedTheme, bootKey, onConnectionStatusChange, onSessionReady]);
 
-  return (
+  useEffect(() => {
+    if (!open) return;
+    const client = clientRef.current;
+    if (!client) return;
+    const frame = requestAnimationFrame(() => client.fit());
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
+
+  const panel = (
     <section className={`${shellClass} ${className}`}>
       <div className="border-b border-neutral-200/80 px-6 py-5 dark:border-white/10 md:px-10 md:py-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
@@ -117,6 +133,38 @@ export function VirtualTerminalPanel({
         />
       </div>
     </section>
+  );
+
+  if (variant !== "floating") {
+    return panel;
+  }
+
+  return (
+    <div
+      className={`fixed inset-0 z-[1300] transition ${
+        open ? "pointer-events-auto" : "pointer-events-none"
+      }`}
+      aria-hidden={!open}
+    >
+      <div
+        className={`absolute inset-0 bg-neutral-950/20 backdrop-blur-[1px] transition-opacity dark:bg-black/35 ${
+          open ? "opacity-100" : "opacity-0"
+        }`}
+        onMouseDown={() => {
+          if (dismissible) {
+            onRequestClose?.();
+          }
+        }}
+      />
+      <div
+        className={`fixed bottom-3 left-3 right-3 transition duration-300 ease-out md:bottom-6 md:left-auto md:right-6 md:w-[720px] ${
+          open ? "translate-y-0 opacity-100" : "translate-y-[calc(100%+2rem)] opacity-0"
+        }`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        {panel}
+      </div>
+    </div>
   );
 }
 

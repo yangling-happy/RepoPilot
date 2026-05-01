@@ -1,5 +1,12 @@
 import type { TerminalClient } from "../../../../terminal/src";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -60,6 +67,8 @@ export function ProductDocsPage() {
   const [terminalSessionId] = useState(() => getOrCreateTerminalSessionId());
   const [terminalConnectionState, setTerminalConnectionState] =
     useState<TerminalConnectionState>("connecting");
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalBusy, setTerminalBusy] = useState(false);
 
   const language = i18n.resolvedLanguage ?? i18n.language;
 
@@ -96,13 +105,18 @@ export function ProductDocsPage() {
     [],
   );
 
+  useEffect(() => {
+    if (!repo) return;
+    setTerminalOpen(true);
+    terminalClientRef.current?.writeln(`[doc] selected repository=${repo}`);
+  }, [repo]);
+
   const appendTerminal = useCallback((line: string) => {
     const client = terminalClientRef.current;
     if (!client) {
       return;
     }
-    const escaped = line.replace(/'/g, `'"'"'`);
-    client.sendStdin(`printf '%s\\r\\n' '${escaped}'\n`);
+    client.writeln(line);
   }, []);
 
   const loadDocs = useCallback(
@@ -151,6 +165,8 @@ export function ProductDocsPage() {
     }
 
     const effectiveBranch = branch.trim() || "main";
+    setTerminalOpen(true);
+    setTerminalBusy(true);
     setLoadingDocs(true);
     appendTerminal(
       t("pages.documentation.actions.terminal.refreshStarted", {
@@ -160,7 +176,11 @@ export function ProductDocsPage() {
     );
 
     try {
-      await refreshDoc({ project, branch: effectiveBranch });
+      await refreshDoc({
+        project,
+        branch: effectiveBranch,
+        terminalSessionId,
+      });
       appendTerminal(
         t("pages.documentation.actions.terminal.refreshCompleted"),
       );
@@ -187,8 +207,17 @@ export function ProductDocsPage() {
       });
     } finally {
       setLoadingDocs(false);
+      setTerminalBusy(false);
     }
-  }, [appendTerminal, branch, lastClone, loadDocs, projectId, t]);
+  }, [
+    appendTerminal,
+    branch,
+    lastClone,
+    loadDocs,
+    projectId,
+    t,
+    terminalSessionId,
+  ]);
 
   const handleSaveToken = useCallback(async () => {
     const trimmedToken = token.trim();
@@ -236,6 +265,8 @@ export function ProductDocsPage() {
 
     const effectiveBranch = branch.trim() || "main";
 
+    setTerminalOpen(true);
+    setTerminalBusy(true);
     setCloning(true);
     appendTerminal(
       t("pages.documentation.actions.terminal.cloneStarted", {
@@ -287,6 +318,7 @@ export function ProductDocsPage() {
       });
     } finally {
       setCloning(false);
+      setTerminalBusy(false);
     }
   }, [
     appendTerminal,
@@ -310,6 +342,8 @@ export function ProductDocsPage() {
     }
 
     const effectiveBranch = branch.trim() || "main";
+    setTerminalOpen(true);
+    setTerminalBusy(true);
     setScanning(true);
     appendTerminal(
       t("pages.documentation.actions.terminal.scanStarted", {
@@ -319,7 +353,11 @@ export function ProductDocsPage() {
     );
 
     try {
-      const result = await scanLocalDoc({ project, branch: effectiveBranch });
+      const result = await scanLocalDoc({
+        project,
+        branch: effectiveBranch,
+        terminalSessionId,
+      });
       appendTerminal(
         t("pages.documentation.actions.terminal.scanCompleted", {
           scanned: result.scannedFileCount,
@@ -328,10 +366,13 @@ export function ProductDocsPage() {
         }),
       );
       setStatus({
-        type: "success",
-        text: t("pages.documentation.actions.success.scanCompleted", {
-          generated: result.generatedFileCount,
-        }),
+        type: result.failedFileCount > 0 ? "error" : "success",
+        text:
+          result.failedFileCount > 0
+            ? result.message
+            : t("pages.documentation.actions.success.scanCompleted", {
+                generated: result.generatedFileCount,
+              }),
       });
       await loadDocs(project, effectiveBranch);
     } catch (error) {
@@ -352,8 +393,17 @@ export function ProductDocsPage() {
       });
     } finally {
       setScanning(false);
+      setTerminalBusy(false);
     }
-  }, [appendTerminal, branch, lastClone, loadDocs, projectId, t]);
+  }, [
+    appendTerminal,
+    branch,
+    lastClone,
+    loadDocs,
+    projectId,
+    t,
+    terminalSessionId,
+  ]);
 
   const selectedDoc = useMemo(() => {
     const fallback = docs.find((doc) => doc.structuredDoc) ?? docs[0] ?? null;
@@ -455,8 +505,9 @@ export function ProductDocsPage() {
             {status.text}
           </p>
         ) : null}
-        {terminalConnectionState === "error" ||
-        terminalConnectionState === "closed" ? (
+        {terminalOpen &&
+        (terminalConnectionState === "error" ||
+          terminalConnectionState === "closed") ? (
           <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
             {getTerminalUnavailableMessage(language)}
           </p>
@@ -526,16 +577,18 @@ export function ProductDocsPage() {
         <StructuredDocDetail doc={selectedDoc} />
       </div>
 
-      <div className="mt-14">
-        <VirtualTerminalPanel
-          title={t("pages.documentation.terminal.title")}
-          subtitle={t("pages.documentation.terminal.subtitle")}
-          bootLines={bootLines}
-          sessionId={terminalSessionId}
-          onConnectionStatusChange={setTerminalConnectionState}
-          onSessionReady={onSessionReady}
-        />
-      </div>
+      <VirtualTerminalPanel
+        title={t("pages.documentation.terminal.title")}
+        subtitle={t("pages.documentation.terminal.subtitle")}
+        bootLines={bootLines}
+        sessionId={terminalSessionId}
+        variant="floating"
+        open={terminalOpen}
+        dismissible={!terminalBusy}
+        onRequestClose={() => setTerminalOpen(false)}
+        onConnectionStatusChange={setTerminalConnectionState}
+        onSessionReady={onSessionReady}
+      />
 
       <div className="mt-14 space-y-3">
         {sections.map((section) => (
