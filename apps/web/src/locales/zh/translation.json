@@ -134,7 +134,6 @@
       },
       "terminal": {
         "title": "虚拟终端",
-        "subtitle": "文档生成与 Webhook 驱动的重建日志将在此输出（会话接入后）。",
         "line1": "RepoPilot 虚拟终端已初始化。",
         "line2": "等待文档流水线输出…"
       },

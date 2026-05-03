@@ -157,8 +157,10 @@ export function VirtualTerminalPanel({
         }}
       />
       <div
-        className={`fixed bottom-3 left-3 right-3 transition duration-300 ease-out md:bottom-6 md:left-auto md:right-6 md:w-[720px] ${
-          open ? "translate-y-0 opacity-100" : "translate-y-[calc(100%+2rem)] opacity-0"
+        className={`fixed left-1/2 top-1/2 w-[min(920px,calc(100vw-1.5rem))] -translate-x-1/2 transition duration-300 ease-out ${
+          open
+            ? "-translate-y-1/2 scale-100 opacity-100"
+            : "-translate-y-[45%] scale-95 opacity-0"
         }`}
         onMouseDown={(event) => event.stopPropagation()}
       >

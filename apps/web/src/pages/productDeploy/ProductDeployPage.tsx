@@ -32,7 +32,9 @@ export function ProductDeployPage() {
   useEffect(() => {
     if (!repo) return;
     setTerminalOpen(true);
-    terminalClientRef.current?.writeln(`[deploy] selected repository=${repo}`);
+    const client = terminalClientRef.current;
+    client?.clear();
+    client?.writeln(`[deploy] selected repository=${repo}`);
   }, [repo]);
 
   const sections = [

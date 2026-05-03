@@ -125,6 +125,10 @@ export class TerminalClient {
     this.handle.terminal.writeln(line);
   }
 
+  clear() {
+    this.handle.terminal.clear();
+  }
+
   detach() {
     this.dispose();
   }
