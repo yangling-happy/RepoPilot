@@ -1,3 +1,4 @@
+import { CloseOutlined } from "@ant-design/icons";
 import { useTheme } from "next-themes";
 import { useEffect, useRef } from "react";
 import { TerminalClient } from "../../../../terminal/src";
@@ -113,23 +114,42 @@ export function VirtualTerminalPanel({
     return () => cancelAnimationFrame(frame);
   }, [open]);
 
+  const showCloseButton = variant === "floating" && Boolean(onRequestClose);
+  const terminalHostSizeClass =
+    variant === "floating"
+      ? "h-[min(630px,68vh)] min-h-[360px]"
+      : "h-[min(420px,55vh)] min-h-[280px]";
+
   const panel = (
     <section className={`${shellClass} ${className}`}>
-      <div className="border-b border-neutral-200/80 px-6 py-5 dark:border-white/10 md:px-10 md:py-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
-          {title}
-        </p>
-        {subtitle ? (
-          <p className="mt-2 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-            {subtitle}
+      <div className="flex items-start justify-between gap-4 border-b border-neutral-200/80 px-6 py-5 dark:border-white/10 md:px-10 md:py-6">
+        <div className="min-w-0">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-neutral-400">
+            {title}
           </p>
+          {subtitle ? (
+            <p className="mt-2 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+        {showCloseButton ? (
+          <button
+            type="button"
+            aria-label="Close terminal"
+            title="Close terminal"
+            onClick={onRequestClose}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-200 bg-white text-neutral-500 transition hover:border-neutral-400 hover:text-neutral-950 dark:border-white/10 dark:bg-white/[0.06] dark:text-neutral-300 dark:hover:border-white/25 dark:hover:text-white"
+          >
+            <CloseOutlined aria-hidden="true" className="text-sm" />
+          </button>
         ) : null}
       </div>
       {/* 内边距 + min-w-0：避免 flex 子项裁切 xterm；不用 overflow-hidden，以免挡住滚动条与最后一行 */}
       <div className="box-border min-w-0 px-4 pb-5 pt-3 md:px-6 md:pb-6">
         <div
           ref={hostRef}
-          className="box-border h-[min(420px,55vh)] min-h-[280px] w-full min-w-0 rounded-xl bg-neutral-50/90 p-3 ring-1 ring-inset ring-neutral-200/70 dark:bg-black/50 dark:ring-white/10"
+          className={`box-border ${terminalHostSizeClass} w-full min-w-0 rounded-xl bg-neutral-50/90 p-3 ring-1 ring-inset ring-neutral-200/70 dark:bg-black/50 dark:ring-white/10`}
         />
       </div>
     </section>
@@ -157,7 +177,7 @@ export function VirtualTerminalPanel({
         }}
       />
       <div
-        className={`fixed left-1/2 top-1/2 w-[min(920px,calc(100vw-1.5rem))] -translate-x-1/2 transition duration-300 ease-out ${
+        className={`fixed left-1/2 top-1/2 w-[min(1380px,calc(100vw-2rem))] -translate-x-1/2 transition duration-300 ease-out ${
           open
             ? "-translate-y-1/2 scale-100 opacity-100"
             : "-translate-y-[45%] scale-95 opacity-0"

@@ -2,7 +2,6 @@ import type { TerminalClient } from "../../../../terminal/src";
 import {
   type ReactNode,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -128,14 +127,6 @@ export function ProductDocsPage() {
     [],
   );
 
-  useEffect(() => {
-    if (!repo) return;
-    setTerminalOpen(true);
-    const client = terminalClientRef.current;
-    client?.clear();
-    client?.writeln(`[doc] selected repository=${repo}`);
-  }, [repo]);
-
   const appendTerminal = useCallback((line: string) => {
     const client = terminalClientRef.current;
     if (!client) {
@@ -198,40 +189,19 @@ export function ProductDocsPage() {
     }
 
     const effectiveBranch = branch.trim() || "main";
-    setTerminalOpen(true);
-    terminalClientRef.current?.clear();
-    setTerminalBusy(true);
     setLoadingDocs(true);
-    appendTerminal(
-      t("pages.documentation.actions.terminal.refreshStarted", {
-        project,
-        branch: effectiveBranch,
-      }),
-    );
 
     try {
       await refreshDoc({
         project,
         branch: effectiveBranch,
-        terminalSessionId,
       });
-      appendTerminal(
-        t("pages.documentation.actions.terminal.refreshCompleted"),
-      );
       await loadDocs(project, effectiveBranch);
       setStatus({
         type: "success",
         text: t("pages.documentation.actions.success.docRefreshed"),
       });
     } catch (error) {
-      appendTerminal(
-        t("pages.documentation.actions.terminal.refreshFailed", {
-          message: toErrorMessage(
-            error,
-            t("pages.documentation.actions.errors.unexpected"),
-          ),
-        }),
-      );
       setStatus({
         type: "error",
         text: toErrorMessage(
@@ -241,17 +211,8 @@ export function ProductDocsPage() {
       });
     } finally {
       setLoadingDocs(false);
-      setTerminalBusy(false);
     }
-  }, [
-    appendTerminal,
-    branch,
-    lastClone,
-    loadDocs,
-    projectId,
-    t,
-    terminalSessionId,
-  ]);
+  }, [branch, lastClone, loadDocs, projectId, t]);
 
   const handleSaveToken = useCallback(async () => {
     const trimmedToken = token.trim();
@@ -269,7 +230,6 @@ export function ProductDocsPage() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(TOKEN_STORAGE_KEY, trimmedToken);
       }
-      appendTerminal(t("pages.documentation.actions.terminal.tokenSaved"));
       setStatus({
         type: "success",
         text: t("pages.documentation.actions.success.tokenSaved"),
@@ -285,7 +245,7 @@ export function ProductDocsPage() {
     } finally {
       setSavingToken(false);
     }
-  }, [appendTerminal, t, token]);
+  }, [t, token]);
 
   const handleClone = useCallback(async () => {
     const projectIdNumber = Number(projectId);
