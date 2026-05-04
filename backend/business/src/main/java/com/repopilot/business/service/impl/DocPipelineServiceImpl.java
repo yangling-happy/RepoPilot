@@ -78,23 +78,14 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
     @Override
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
-        return refresh(gitlabUsername, project, branch, token, null);
-    }
-
-    @Override
-    public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token,
-            String terminalSessionId) {
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
         validateToken(token);
 
-        emitTerminal(terminalSessionId, "[doc] refresh accepted, project=" + project + ", branch=" + branch);
         Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
-            emitTerminal(terminalSessionId, "[doc] refresh failed, local repository not found: " + project);
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
-        emitTerminal(terminalSessionId, "[doc] using local repository: " + sourceRoot);
 
         String normalizedBranch = normalizeBranchName(branch);
         String oldHead;
@@ -117,13 +108,10 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 changes = listLocalDiffChanges(git, oldHead, newHead);
             }
         } catch (BusinessException ex) {
-            emitTerminal(terminalSessionId, "[doc] refresh failed, code=" + ex.getCode()
-                    + ", message=" + ex.getMessage());
             throw ex;
         } catch (IOException | GitAPIException ex) {
             log.error("Local doc refresh failed. project={}, branch={}, sourceRoot={}",
                     project, normalizedBranch, sourceRoot, ex);
-            emitTerminal(terminalSessionId, "[doc] refresh failed, local repository refresh error");
             throw new BusinessException(500, "Local repository refresh failed");
         }
 
@@ -136,17 +124,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         if (Objects.equals(oldHead, newHead)) {
             result.setMessage("No new commits.");
-            emitTerminal(terminalSessionId, "[doc] refresh completed, no new commits");
             return result;
         }
 
         result.setDetectedCommitIds(detectedCommitIds);
         result.setNewCommitCount(detectedCommitIds.size());
-        emitTerminal(terminalSessionId, "[doc] detected " + detectedCommitIds.size()
-                + " commit(s), new HEAD=" + newHead);
 
-        String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes,
-                terminalSessionId);
+        String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes);
         if (STATUS_FAILED.equals(status)) {
             result.getFailedTaskCommitIds().add(newHead);
         } else {
@@ -159,8 +143,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 result.getCreatedTaskCommitIds().size(),
                 result.getSkippedCommitIds().size(),
                 result.getFailedTaskCommitIds().size()));
-        emitTerminal(terminalSessionId, "[doc] refresh completed, status=" + status
-                + ", newCommitCount=" + result.getNewCommitCount());
         return result;
     }
 
@@ -347,8 +329,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             String branch,
             String commitId,
             Path sourceRoot,
-            List<CommitFileChange> changes,
-            String terminalSessionId) {
+            List<CommitFileChange> changes) {
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -361,8 +342,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         long start = System.currentTimeMillis();
         try {
-            emitTerminal(terminalSessionId, "[doc] extraction task started, commitId=" + commitId
-                    + ", changedFiles=" + (changes == null ? 0 : changes.size()));
             int handledDocFiles = applyLocalChanges(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot,
                     changes);
 
@@ -370,12 +349,9 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             task.setStatus(finalStatus);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
-            emitTerminal(terminalSessionId, "[doc] extraction task completed, handledDocFiles="
-                    + handledDocFiles + ", status=" + finalStatus);
             return finalStatus;
         } catch (Exception ex) {
             log.error("Local doc extraction failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
-            emitTerminal(terminalSessionId, "[doc] extraction task failed: " + summarizeError(ex));
             task.setStatus(STATUS_FAILED);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);

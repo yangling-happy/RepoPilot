@@ -8,5 +8,4 @@ public class DocRefreshRequest {
 
     private String project;
     private String branch;
-    private String terminalSessionId;
 }

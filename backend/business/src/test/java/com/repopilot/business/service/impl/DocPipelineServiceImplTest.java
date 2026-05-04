@@ -91,7 +91,7 @@ class DocPipelineServiceImplTest {
             assertThat(result.getHeadCommit()).isEqualTo(initialHead);
             assertThat(result.getNewCommitCount()).isEqualTo(0);
             assertThat(result.getMessage()).isEqualTo("No new commits.");
-            verifyNoInteractions(docTaskMapper, docFileMapper, gitLabDocClient);
+            verifyNoInteractions(docTaskMapper, docFileMapper, gitLabDocClient, terminalRelayClient);
         }
     }
 
@@ -140,7 +140,7 @@ class DocPipelineServiceImplTest {
             assertThat(saved.getDocFilePath()).endsWith("doc.json");
             assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
             assertThat(outputDirectoryContainsHtml(Path.of(saved.getDocFilePath()).getParent())).isFalse();
-            verifyNoInteractions(gitLabDocClient);
+            verifyNoInteractions(gitLabDocClient, terminalRelayClient);
         }
     }
 

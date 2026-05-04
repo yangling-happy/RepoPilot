@@ -2,6 +2,7 @@ package com.repopilot.business.controller;
 
 import com.repopilot.business.dto.CreateDocFileRequest;
 import com.repopilot.business.dto.CreateDocTaskRequest;
+import com.repopilot.business.dto.DocLocalScanRequest;
 import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocRefreshRequest;
 import com.repopilot.business.dto.DocRefreshResult;
@@ -54,13 +55,12 @@ public class DocController {
         log.info("Refresh doc request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
         DocRefreshResult result = docPipelineService.refresh(
-                context.username(), request.getProject(), request.getBranch(), context.token(),
-                request.getTerminalSessionId());
+                context.username(), request.getProject(), request.getBranch(), context.token());
         return ApiResponse.success("Refresh completed", result);
     }
 
     @PostMapping("/scan-local")
-    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocRefreshRequest request,
+    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocLocalScanRequest request,
             HttpSession session) {
         BizAssert.notNull(request, 400, "Request body is required");
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);

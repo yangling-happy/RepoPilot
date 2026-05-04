@@ -10,9 +10,6 @@ public interface DocPipelineService {
 
     DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token);
 
-    DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token,
-            String terminalSessionId);
-
     void rebuild(String gitlabUsername, String project, String branch, String commitId, String token);
 
     DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch);

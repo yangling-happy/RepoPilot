@@ -153,7 +153,6 @@ export async function scanLocalDoc(payload: {
 export async function refreshDoc(payload: {
   project: string;
   branch: string;
-  terminalSessionId?: string;
 }): Promise<void> {
   return requestApi<void>("/api/doc/refresh", {
     method: "POST",
