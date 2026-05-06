@@ -14,5 +14,7 @@ public interface DocPipelineService {
 
     DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch);
 
+    DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch, String terminalSessionId);
+
     List<DocQueryItem> query(String gitlabUsername, String project, String branch, String filePath, String commitId);
 }

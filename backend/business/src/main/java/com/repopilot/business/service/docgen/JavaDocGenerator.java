@@ -63,6 +63,7 @@ public class JavaDocGenerator implements DocGenerator {
                     "-charset", "UTF-8",
                     "-docencoding", "UTF-8",
                     "-Xdoclint:none",
+                    "--ignore-source-errors",
                     "-private",
                     "-sourcepath", buildSourcePath(tempSourceRoot, context.getSourceRoot()),
                     "-d", outputDir.toString(),

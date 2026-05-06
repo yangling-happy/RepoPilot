@@ -1,5 +1,11 @@
 import type { TerminalClient } from "../../../../terminal/src";
-import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -26,6 +32,28 @@ import { saveClonedRepo } from "../workbench/repoLocalStore";
 
 const TOKEN_STORAGE_KEY = "repopilot.gitlabToken";
 const TERMINAL_SESSION_STORAGE_KEY = "repopilot.docs.terminalSessionId";
+const STRUCTURED_DOC_SECTIONS = [
+  "types",
+  "fields",
+  "constructors",
+  "methods",
+] as const;
+
+type StructuredDocSection = (typeof STRUCTURED_DOC_SECTIONS)[number];
+type StructuredDocSelection = {
+  docKey: string;
+  section: StructuredDocSection;
+};
+
+const STRUCTURED_DOC_SECTION_LABEL_KEYS: Record<
+  StructuredDocSection,
+  string
+> = {
+  types: "pages.documentation.structured.types",
+  fields: "pages.documentation.structured.fields",
+  constructors: "pages.documentation.structured.constructors",
+  methods: "pages.documentation.structured.methods",
+};
 
 export function ProductDocsPage() {
   const { i18n, t } = useTranslation();
@@ -56,10 +84,13 @@ export function ProductDocsPage() {
   const [lastClone, setLastClone] = useState<CloneRepoResponse | null>(null);
   const [docs, setDocs] = useState<DocQueryItem[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
-  const [selectedDocKey, setSelectedDocKey] = useState<string | null>(null);
+  const [selectedDocSelection, setSelectedDocSelection] =
+    useState<StructuredDocSelection | null>(null);
   const [terminalSessionId] = useState(() => getOrCreateTerminalSessionId());
   const [terminalConnectionState, setTerminalConnectionState] =
     useState<TerminalConnectionState>("connecting");
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalBusy, setTerminalBusy] = useState(false);
 
   const language = i18n.resolvedLanguage ?? i18n.language;
 
@@ -101,8 +132,7 @@ export function ProductDocsPage() {
     if (!client) {
       return;
     }
-    const escaped = line.replace(/'/g, `'"'"'`);
-    client.sendStdin(`printf '%s\\r\\n' '${escaped}'\n`);
+    client.writeln(line);
   }, []);
 
   const loadDocs = useCallback(
@@ -114,13 +144,21 @@ export function ProductDocsPage() {
           branch: docBranch,
         });
         setDocs(loadedDocs);
-        setSelectedDocKey((current) => {
-          if (current && loadedDocs.some((doc) => getDocKey(doc) === current)) {
+        setSelectedDocSelection((current) => {
+          if (
+            current &&
+            loadedDocs.some((doc) => getDocKey(doc) === current.docKey)
+          ) {
             return current;
           }
           const firstStructuredDoc =
             loadedDocs.find((doc) => doc.structuredDoc) ?? loadedDocs[0];
-          return firstStructuredDoc ? getDocKey(firstStructuredDoc) : null;
+          return firstStructuredDoc
+            ? {
+                docKey: getDocKey(firstStructuredDoc),
+                section: getDefaultDocSection(firstStructuredDoc),
+              }
+            : null;
         });
         return loadedDocs;
       } catch (error) {
@@ -152,32 +190,18 @@ export function ProductDocsPage() {
 
     const effectiveBranch = branch.trim() || "main";
     setLoadingDocs(true);
-    appendTerminal(
-      t("pages.documentation.actions.terminal.refreshStarted", {
-        project,
-        branch: effectiveBranch,
-      }),
-    );
 
     try {
-      await refreshDoc({ project, branch: effectiveBranch });
-      appendTerminal(
-        t("pages.documentation.actions.terminal.refreshCompleted"),
-      );
+      await refreshDoc({
+        project,
+        branch: effectiveBranch,
+      });
       await loadDocs(project, effectiveBranch);
       setStatus({
         type: "success",
         text: t("pages.documentation.actions.success.docRefreshed"),
       });
     } catch (error) {
-      appendTerminal(
-        t("pages.documentation.actions.terminal.refreshFailed", {
-          message: toErrorMessage(
-            error,
-            t("pages.documentation.actions.errors.unexpected"),
-          ),
-        }),
-      );
       setStatus({
         type: "error",
         text: toErrorMessage(
@@ -188,7 +212,7 @@ export function ProductDocsPage() {
     } finally {
       setLoadingDocs(false);
     }
-  }, [appendTerminal, branch, lastClone, loadDocs, projectId, t]);
+  }, [branch, lastClone, loadDocs, projectId, t]);
 
   const handleSaveToken = useCallback(async () => {
     const trimmedToken = token.trim();
@@ -206,7 +230,6 @@ export function ProductDocsPage() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(TOKEN_STORAGE_KEY, trimmedToken);
       }
-      appendTerminal(t("pages.documentation.actions.terminal.tokenSaved"));
       setStatus({
         type: "success",
         text: t("pages.documentation.actions.success.tokenSaved"),
@@ -222,7 +245,7 @@ export function ProductDocsPage() {
     } finally {
       setSavingToken(false);
     }
-  }, [appendTerminal, t, token]);
+  }, [t, token]);
 
   const handleClone = useCallback(async () => {
     const projectIdNumber = Number(projectId);
@@ -236,6 +259,9 @@ export function ProductDocsPage() {
 
     const effectiveBranch = branch.trim() || "main";
 
+    setTerminalOpen(true);
+    terminalClientRef.current?.clear();
+    setTerminalBusy(true);
     setCloning(true);
     appendTerminal(
       t("pages.documentation.actions.terminal.cloneStarted", {
@@ -287,6 +313,7 @@ export function ProductDocsPage() {
       });
     } finally {
       setCloning(false);
+      setTerminalBusy(false);
     }
   }, [
     appendTerminal,
@@ -310,6 +337,9 @@ export function ProductDocsPage() {
     }
 
     const effectiveBranch = branch.trim() || "main";
+    setTerminalOpen(true);
+    terminalClientRef.current?.clear();
+    setTerminalBusy(true);
     setScanning(true);
     appendTerminal(
       t("pages.documentation.actions.terminal.scanStarted", {
@@ -319,7 +349,11 @@ export function ProductDocsPage() {
     );
 
     try {
-      const result = await scanLocalDoc({ project, branch: effectiveBranch });
+      const result = await scanLocalDoc({
+        project,
+        branch: effectiveBranch,
+        terminalSessionId,
+      });
       appendTerminal(
         t("pages.documentation.actions.terminal.scanCompleted", {
           scanned: result.scannedFileCount,
@@ -328,10 +362,13 @@ export function ProductDocsPage() {
         }),
       );
       setStatus({
-        type: "success",
-        text: t("pages.documentation.actions.success.scanCompleted", {
-          generated: result.generatedFileCount,
-        }),
+        type: result.failedFileCount > 0 ? "error" : "success",
+        text:
+          result.failedFileCount > 0
+            ? result.message
+            : t("pages.documentation.actions.success.scanCompleted", {
+                generated: result.generatedFileCount,
+              }),
       });
       await loadDocs(project, effectiveBranch);
     } catch (error) {
@@ -352,16 +389,29 @@ export function ProductDocsPage() {
       });
     } finally {
       setScanning(false);
+      setTerminalBusy(false);
     }
-  }, [appendTerminal, branch, lastClone, loadDocs, projectId, t]);
+  }, [
+    appendTerminal,
+    branch,
+    lastClone,
+    loadDocs,
+    projectId,
+    t,
+    terminalSessionId,
+  ]);
 
   const selectedDoc = useMemo(() => {
     const fallback = docs.find((doc) => doc.structuredDoc) ?? docs[0] ?? null;
-    if (!selectedDocKey) {
+    if (!selectedDocSelection) {
       return fallback;
     }
-    return docs.find((doc) => getDocKey(doc) === selectedDocKey) ?? fallback;
-  }, [docs, selectedDocKey]);
+    return (
+      docs.find((doc) => getDocKey(doc) === selectedDocSelection.docKey) ??
+      fallback
+    );
+  }, [docs, selectedDocSelection]);
+  const selectedSection = selectedDocSelection?.section ?? "types";
 
   return (
     <div className="mx-auto max-w-[1200px] pb-20 pt-2 text-neutral-950 dark:text-neutral-50">
@@ -455,15 +505,16 @@ export function ProductDocsPage() {
             {status.text}
           </p>
         ) : null}
-        {terminalConnectionState === "error" ||
-        terminalConnectionState === "closed" ? (
+        {terminalOpen &&
+        (terminalConnectionState === "error" ||
+          terminalConnectionState === "closed") ? (
           <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">
             {getTerminalUnavailableMessage(language)}
           </p>
         ) : null}
       </div>
 
-      <div className="mt-10 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+      <div className="mt-10 grid gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <section className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -481,61 +532,110 @@ export function ProductDocsPage() {
             </button>
           </div>
 
-          <div className="mt-4 max-h-[520px] space-y-2 overflow-auto pr-1">
+          <div className="mt-4 max-h-[620px] space-y-2 overflow-auto pr-1">
             {docs.length === 0 ? (
               <div className="rounded-xl border border-dashed border-neutral-300 px-3 py-8 text-center text-sm text-neutral-500 dark:border-white/15 dark:text-neutral-400">
                 {t("pages.documentation.structured.empty")}
               </div>
             ) : (
               docs.map((doc) => {
+                const docKey = getDocKey(doc);
                 const active = selectedDoc
-                  ? getDocKey(doc) === getDocKey(selectedDoc)
+                  ? docKey === getDocKey(selectedDoc)
                   : false;
                 return (
-                  <button
-                    key={getDocKey(doc)}
-                    type="button"
-                    onClick={() => setSelectedDocKey(getDocKey(doc))}
-                    className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                  <div
+                    key={docKey}
+                    className={`rounded-xl border transition ${
                       active
                         ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-black"
                         : "border-neutral-200 bg-neutral-50 text-neutral-800 hover:border-neutral-400 dark:border-white/10 dark:bg-black/20 dark:text-neutral-200 dark:hover:border-white/25"
                     }`}
                   >
-                    <span className="block truncate font-mono text-xs">
-                      {doc.filePath}
-                    </span>
-                    <span
-                      className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        active
-                          ? "bg-white/20 text-inherit dark:bg-black/10"
-                          : doc.parseStatus === "SUCCESS"
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
-                            : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"
-                      }`}
+                    <button
+                      type="button"
+                      aria-expanded={active}
+                      onClick={() =>
+                        setSelectedDocSelection({
+                          docKey,
+                          section: getDefaultDocSection(doc),
+                        })
+                      }
+                      className="w-full px-3 py-3 text-left"
                     >
-                      {doc.parseStatus}
-                    </span>
-                  </button>
+                      <span className="block truncate font-mono text-xs">
+                        {doc.filePath}
+                      </span>
+                      <span
+                        className={`mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                          active
+                            ? "bg-white/20 text-inherit dark:bg-black/10"
+                            : doc.parseStatus === "SUCCESS"
+                              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
+                              : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"
+                        }`}
+                      >
+                        {doc.parseStatus}
+                      </span>
+                    </button>
+
+                    {active && doc.structuredDoc ? (
+                      <div className="space-y-1 border-t border-white/15 px-2 pb-2 pt-1 dark:border-black/10">
+                        {STRUCTURED_DOC_SECTIONS.map((section) => {
+                          const sectionActive = selectedSection === section;
+                          const count = getSectionCount(doc, section);
+                          return (
+                            <button
+                              key={section}
+                              type="button"
+                              onClick={() =>
+                                setSelectedDocSelection({ docKey, section })
+                              }
+                              className={`flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left text-xs transition ${
+                                sectionActive
+                                  ? "bg-white text-neutral-950 shadow-sm dark:bg-black dark:text-white"
+                                  : "text-white/80 hover:bg-white/10 dark:text-black/70 dark:hover:bg-black/10"
+                              }`}
+                            >
+                              <span className="truncate font-medium">
+                                {t(STRUCTURED_DOC_SECTION_LABEL_KEYS[section])}
+                              </span>
+                              <span
+                                className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-[11px] ${
+                                  sectionActive
+                                    ? "bg-neutral-100 text-neutral-700 dark:bg-white/10 dark:text-neutral-200"
+                                    : "bg-white/15 text-inherit dark:bg-black/10"
+                                }`}
+                              >
+                                {count}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })
             )}
           </div>
         </section>
 
-        <StructuredDocDetail doc={selectedDoc} />
+        <StructuredDocDetail doc={selectedDoc} section={selectedSection} />
       </div>
 
-      <div className="mt-14">
-        <VirtualTerminalPanel
-          title={t("pages.documentation.terminal.title")}
-          subtitle={t("pages.documentation.terminal.subtitle")}
-          bootLines={bootLines}
-          sessionId={terminalSessionId}
-          onConnectionStatusChange={setTerminalConnectionState}
-          onSessionReady={onSessionReady}
-        />
-      </div>
+      <VirtualTerminalPanel
+        title={t("pages.documentation.terminal.title")}
+        subtitle={t("pages.documentation.terminal.subtitle")}
+        bootLines={bootLines}
+        sessionId={terminalSessionId}
+        variant="floating"
+        open={terminalOpen}
+        dismissible={!terminalBusy}
+        onRequestClose={() => setTerminalOpen(false)}
+        onConnectionStatusChange={setTerminalConnectionState}
+        onSessionReady={onSessionReady}
+      />
 
       <div className="mt-14 space-y-3">
         {sections.map((section) => (
@@ -563,7 +663,13 @@ export function ProductDocsPage() {
   );
 }
 
-function StructuredDocDetail({ doc }: { doc: DocQueryItem | null }) {
+function StructuredDocDetail({
+  doc,
+  section,
+}: {
+  doc: DocQueryItem | null;
+  section: StructuredDocSection;
+}) {
   const { t } = useTranslation();
 
   if (!doc) {
@@ -590,6 +696,9 @@ function StructuredDocDetail({ doc }: { doc: DocQueryItem | null }) {
     );
   }
 
+  const sectionLabel = t(STRUCTURED_DOC_SECTION_LABEL_KEYS[section]);
+  const sectionCount = getSectionCount(doc, section);
+
   return (
     <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
       <div className="flex flex-col gap-3 border-b border-neutral-200 pb-4 dark:border-white/10 md:flex-row md:items-start md:justify-between">
@@ -603,21 +712,29 @@ function StructuredDocDetail({ doc }: { doc: DocQueryItem | null }) {
         </div>
         <div className="shrink-0 rounded-xl border border-neutral-200 px-3 py-2 text-right dark:border-white/10">
           <div className="text-2xl font-semibold text-neutral-950 dark:text-neutral-50">
-            {doc.structuredDoc.types.length}
+            {sectionCount}
           </div>
           <div className="text-xs text-neutral-500 dark:text-neutral-400">
-            {t("pages.documentation.structured.types")}
+            {sectionLabel}
           </div>
         </div>
       </div>
 
       <div className="mt-5 space-y-5">
-        {doc.structuredDoc.types.map((typeDoc) => (
-          <TypeDocView
-            key={`${typeDoc.htmlFile}-${typeDoc.name}`}
-            typeDoc={typeDoc}
-          />
-        ))}
+        {section === "types" ? (
+          doc.structuredDoc.types.length > 0 ? (
+            doc.structuredDoc.types.map((typeDoc) => (
+              <TypeDocView
+                key={`${typeDoc.htmlFile}-${typeDoc.name}`}
+                typeDoc={typeDoc}
+              />
+            ))
+          ) : (
+            <EmptyStructuredSection />
+          )
+        ) : (
+          <StructuredMemberSection doc={doc.structuredDoc} section={section} />
+        )}
       </div>
     </section>
   );
@@ -654,22 +771,48 @@ function TypeDocView({ typeDoc }: { typeDoc: DocTypeDoc }) {
           {typeDoc.signature}
         </pre>
       ) : null}
-
-      <div className="mt-4 space-y-4">
-        <MemberGroup
-          title={t("pages.documentation.structured.fields")}
-          members={typeDoc.fields}
-        />
-        <MemberGroup
-          title={t("pages.documentation.structured.constructors")}
-          members={typeDoc.constructors}
-        />
-        <MemberGroup
-          title={t("pages.documentation.structured.methods")}
-          members={typeDoc.methods}
-        />
-      </div>
     </article>
+  );
+}
+
+function StructuredMemberSection({
+  doc,
+  section,
+}: {
+  doc: NonNullable<DocQueryItem["structuredDoc"]>;
+  section: Exclude<StructuredDocSection, "types">;
+}) {
+  const { t } = useTranslation();
+  const groups = doc.types
+    .map((typeDoc) => ({
+      typeDoc,
+      members: getSectionMembers(typeDoc, section),
+    }))
+    .filter((group) => group.members.length > 0);
+
+  if (groups.length === 0) {
+    return <EmptyStructuredSection />;
+  }
+
+  return (
+    <>
+      {groups.map(({ typeDoc, members }) => (
+        <MemberGroup
+          key={`${typeDoc.htmlFile}-${typeDoc.name}-${section}`}
+          title={`${typeDoc.name} - ${t(STRUCTURED_DOC_SECTION_LABEL_KEYS[section])}`}
+          members={members}
+        />
+      ))}
+    </>
+  );
+}
+
+function EmptyStructuredSection() {
+  const { t } = useTranslation();
+  return (
+    <div className="rounded-xl border border-dashed border-neutral-300 px-4 py-10 text-center text-sm text-neutral-500 dark:border-white/15 dark:text-neutral-400">
+      {t("pages.documentation.structured.empty")}
+    </div>
   );
 }
 
@@ -799,6 +942,43 @@ function DocMetaBlock({
 
 function getDocKey(doc: DocQueryItem) {
   return `${doc.filePath}::${doc.commitId}`;
+}
+
+function getDefaultDocSection(doc: DocQueryItem): StructuredDocSection {
+  const firstSectionWithContent = STRUCTURED_DOC_SECTIONS.find(
+    (section) => getSectionCount(doc, section) > 0,
+  );
+  return firstSectionWithContent ?? "types";
+}
+
+function getSectionCount(
+  doc: DocQueryItem,
+  section: StructuredDocSection,
+): number {
+  if (!doc.structuredDoc) {
+    return 0;
+  }
+  if (section === "types") {
+    return doc.structuredDoc.types.length;
+  }
+  return doc.structuredDoc.types.reduce(
+    (total, typeDoc) => total + getSectionMembers(typeDoc, section).length,
+    0,
+  );
+}
+
+function getSectionMembers(
+  typeDoc: DocTypeDoc,
+  section: Exclude<StructuredDocSection, "types">,
+): DocMemberDoc[] {
+  switch (section) {
+    case "fields":
+      return typeDoc.fields;
+    case "constructors":
+      return typeDoc.constructors;
+    case "methods":
+      return typeDoc.methods;
+  }
 }
 
 function getOrCreateTerminalSessionId() {

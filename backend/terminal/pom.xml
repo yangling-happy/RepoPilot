@@ -14,7 +14,7 @@
     <artifactId>terminal</artifactId>
     <packaging>jar</packaging>
     <name>Terminal Service</name>
-    <description>WebSocket terminal service with PTY4J</description>
+    <description>Task script execution and WebSocket log streaming service</description>
 
     <dependencies>
         <!-- Common Service -->
@@ -33,18 +33,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
-        </dependency>
-
-        <!-- PTY4J -->
-        <dependency>
-            <groupId>org.jetbrains.pty4j</groupId>
-            <artifactId>pty4j</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.jetbrains.pty4j</groupId>
-                    <artifactId>purejavacomm</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- Lombok -->

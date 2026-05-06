@@ -2,7 +2,7 @@ package com.repopilot.terminal.controller;
 
 import com.repopilot.common.dto.ApiResponse;
 import com.repopilot.terminal.dto.InternalTerminalStdoutRequest;
-import com.repopilot.terminal.service.PtySessionManager;
+import com.repopilot.terminal.service.TerminalLogPublisher;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class InternalTerminalSessionController {
 
-    private final PtySessionManager ptySessionManager;
+    private final TerminalLogPublisher terminalLogPublisher;
 
     @PostMapping("/{sessionId}/stdout")
     public ApiResponse<Void> emitStdout(@PathVariable String sessionId,
@@ -29,7 +29,7 @@ public class InternalTerminalSessionController {
             return ApiResponse.error(400, "data is required");
         }
 
-        boolean delivered = ptySessionManager.emitStdout(sessionId, data);
+        boolean delivered = terminalLogPublisher.publishStdout(sessionId, data);
         if (!delivered) {
             return ApiResponse.error(404, "terminal session not found");
         }

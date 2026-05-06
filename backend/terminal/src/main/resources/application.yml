@@ -7,3 +7,8 @@ spring:
   websocket:
     max-text-message-size: 65536
     max-binary-message-size: 65536
+
+terminal:
+  tasks:
+    shell: ${TERMINAL_TASK_SHELL:bash}
+    script-dir: ${TERMINAL_TASK_SCRIPT_DIR:}

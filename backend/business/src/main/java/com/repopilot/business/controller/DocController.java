@@ -2,6 +2,7 @@ package com.repopilot.business.controller;
 
 import com.repopilot.business.dto.CreateDocFileRequest;
 import com.repopilot.business.dto.CreateDocTaskRequest;
+import com.repopilot.business.dto.DocLocalScanRequest;
 import com.repopilot.business.dto.DocLocalScanResult;
 import com.repopilot.business.dto.DocRefreshRequest;
 import com.repopilot.business.dto.DocRefreshResult;
@@ -59,14 +60,14 @@ public class DocController {
     }
 
     @PostMapping("/scan-local")
-    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocRefreshRequest request,
+    public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocLocalScanRequest request,
             HttpSession session) {
         BizAssert.notNull(request, 400, "Request body is required");
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
         log.info("Local doc scan request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
         DocLocalScanResult result = docPipelineService.scanLocal(
-                context.username(), request.getProject(), request.getBranch());
+                context.username(), request.getProject(), request.getBranch(), request.getTerminalSessionId());
         return ApiResponse.success("Local scan completed", result);
     }
 

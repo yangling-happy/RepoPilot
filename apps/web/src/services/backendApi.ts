@@ -139,6 +139,7 @@ export async function cloneRepo(
 export async function scanLocalDoc(payload: {
   project: string;
   branch: string;
+  terminalSessionId?: string;
 }): Promise<DocLocalScanResult> {
   return requestApi<DocLocalScanResult>("/api/doc/scan-local", {
     method: "POST",

@@ -9,6 +9,7 @@ export interface CreateVirtualTerminalOptions {
   colorScheme?: VirtualTerminalColorScheme;
   /** Printed with writeln after the terminal is mounted */
   initialLines?: string[];
+  enableInput?: boolean;
   cursorBlink?: boolean;
   fontSize?: number;
 }
@@ -49,6 +50,7 @@ export function createVirtualTerminal(
     fontSize: options.fontSize ?? 13,
     lineHeight: 1.35,
     cursorBlink: options.cursorBlink ?? true,
+    disableStdin: !(options.enableInput ?? false),
     scrollback: 5000,
     convertEol: true,
   });

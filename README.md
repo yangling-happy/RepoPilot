@@ -131,3 +131,46 @@ RepoPilot/
 
 - **实时日志**：通过 WebSocket 将后端 PTY 执行的 Shell 脚本输出实时推送到前端 Xterm 终端。
 - **任务管控**：支持任务状态追踪（RUNNING/SUCCESS/FAILED），具备超时自动终止与防重复部署机制。
+
+## Terminal task logs
+
+`backend/terminal` is a read-only log streaming service. WebSocket clients subscribe to
+`ws://localhost:8081/ws/terminal/{sessionId}` and receive server messages only:
+
+- `stdout`: `{ "type": "stdout", "sessionId": "...", "data": "..." }`
+- `error`: `{ "type": "error", "sessionId": "...", "message": "..." }`
+- `exit`: `{ "type": "exit", "sessionId": "...", "exitCode": 0 }`
+
+Interactive stdin is disabled by default in `apps/terminal`:
+
+```ts
+const client = new TerminalClient(ws, { enableInput: false });
+```
+
+Start a whitelisted script task with:
+
+```bash
+curl -X POST http://localhost:8081/api/terminal/tasks/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "demo-session",
+    "taskType": "CLONE_REPO",
+    "args": {
+      "projectId": "123",
+      "branch": "main",
+      "username": "alice",
+      "repoUrl": "https://gitlab.example.com/group/project.git"
+    }
+  }'
+```
+
+Supported `taskType` values are `CLONE_REPO`, `REFRESH_DOC`, `SCAN_LOCAL_DOC`,
+`BUILD_PROJECT`, and `DEPLOY_PROJECT`. The task endpoint never accepts a raw command
+or script path; `ScriptRegistry` maps each task type to a fixed script under
+`backend/terminal/src/main/resources/scripts`.
+
+On Windows, set `TERMINAL_TASK_SHELL` if the default `bash` resolves to an
+unavailable WSL bash. Example: `TERMINAL_TASK_SHELL=D:/Git Bash/Git/bin/bash.exe`.
+
+The existing business relay endpoint remains available for compatibility:
+`POST /internal/terminal/sessions/{sessionId}/stdout`.

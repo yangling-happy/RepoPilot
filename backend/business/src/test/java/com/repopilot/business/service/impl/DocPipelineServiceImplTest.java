@@ -13,6 +13,7 @@ import com.repopilot.business.mapper.DocTaskMapper;
 import com.repopilot.business.service.docgen.DocGeneratorRegistry;
 import com.repopilot.business.service.docgen.JavaDocGenerator;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
+import com.repopilot.business.service.terminal.TerminalRelayClient;
 import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -48,6 +49,8 @@ class DocPipelineServiceImplTest {
     private DocFileMapper docFileMapper;
     @Mock
     private GitLabDocClient gitLabDocClient;
+    @Mock
+    private TerminalRelayClient terminalRelayClient;
 
     private DocPipelineServiceImpl service;
     private Path workspaceBaseDir;
@@ -64,7 +67,8 @@ class DocPipelineServiceImplTest {
                 docFileMapper,
                 gitLabDocClient,
                 registry,
-                new UserWorkspaceResolver(workspaceProperties));
+                new UserWorkspaceResolver(workspaceProperties),
+                terminalRelayClient);
     }
 
     @Test
@@ -87,7 +91,7 @@ class DocPipelineServiceImplTest {
             assertThat(result.getHeadCommit()).isEqualTo(initialHead);
             assertThat(result.getNewCommitCount()).isEqualTo(0);
             assertThat(result.getMessage()).isEqualTo("No new commits.");
-            verifyNoInteractions(docTaskMapper, docFileMapper, gitLabDocClient);
+            verifyNoInteractions(docTaskMapper, docFileMapper, gitLabDocClient, terminalRelayClient);
         }
     }
 
@@ -136,7 +140,7 @@ class DocPipelineServiceImplTest {
             assertThat(saved.getDocFilePath()).endsWith("doc.json");
             assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
             assertThat(outputDirectoryContainsHtml(Path.of(saved.getDocFilePath()).getParent())).isFalse();
-            verifyNoInteractions(gitLabDocClient);
+            verifyNoInteractions(gitLabDocClient, terminalRelayClient);
         }
     }
 
