@@ -3,9 +3,13 @@ package com.repopilot.business.dto;
 import lombok.Data;
 
 @Data
-public class DocLocalScanRequest {
+public class DeployTriggerRequest {
 
     private String project;
     private String branch;
+    private String environment;
+    private String commitId;
     private String terminalSessionId;
+    private Boolean build;
+    private String artifactPath;
 }

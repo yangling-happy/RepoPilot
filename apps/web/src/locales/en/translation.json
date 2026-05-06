@@ -155,6 +155,44 @@
         "trigger": "Trigger",
         "queryLog": "Status & logs",
         "cancel": "Cancel"
+      },
+      "actions": {
+        "title": "Trigger deployment",
+        "projectId": "Project ID",
+        "branch": "Branch",
+        "environment": "Environment",
+        "artifactPath": "Artifact path (optional)",
+        "artifactPlaceholder": "Leave empty to auto-discover the latest artifact",
+        "build": "Build before deploy",
+        "trigger": "Trigger deploy",
+        "triggering": "Triggering...",
+        "cancel": "Cancel",
+        "envOptions": {
+          "staging": "Staging",
+          "production": "Production"
+        },
+        "success": {
+          "triggered": "Deployment accepted. Task ID: {{taskId}}",
+          "cancelled": "Deployment cancelled."
+        },
+        "errors": {
+          "projectIdInvalid": "Project ID must be a valid numeric GitLab project id.",
+          "environmentRequired": "Environment is required.",
+          "unexpected": "Deployment request failed.",
+          "noActiveTask": "No running deployment task to cancel."
+        },
+        "terminal": {
+          "triggered": "[deploy] request accepted, project={{project}}, branch={{branch}}, environment={{environment}}",
+          "accepted": "[deploy] task started, id={{taskId}}",
+          "failed": "[deploy] request failed: {{message}}"
+        },
+        "status": "Deployment status: {{status}}"
+      },
+      "summary": {
+        "title": "Current deployment",
+        "taskId": "Task ID",
+        "status": "Status",
+        "commitId": "Commit"
       }
     },
     "dashboard": {

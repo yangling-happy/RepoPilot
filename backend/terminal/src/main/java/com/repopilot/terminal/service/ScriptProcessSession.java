@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntConsumer;
 
 @Slf4j
 public class ScriptProcessSession {
@@ -15,17 +16,17 @@ public class ScriptProcessSession {
     private final TerminalTaskType taskType;
     private final Process process;
     private final TerminalLogPublisher terminalLogPublisher;
-    private final Runnable onExit;
+    private final IntConsumer onExit;
     private final AtomicBoolean started = new AtomicBoolean(false);
 
     private Thread outputThread;
     private Thread waitThread;
 
     public ScriptProcessSession(String sessionId,
-                                TerminalTaskType taskType,
-                                Process process,
-                                TerminalLogPublisher terminalLogPublisher,
-                                Runnable onExit) {
+            TerminalTaskType taskType,
+            Process process,
+            TerminalLogPublisher terminalLogPublisher,
+            IntConsumer onExit) {
         this.sessionId = sessionId;
         this.taskType = taskType;
         this.process = process;
@@ -78,7 +79,7 @@ public class ScriptProcessSession {
             terminalLogPublisher.publishError(sessionId, "task wait interrupted");
         } finally {
             terminalLogPublisher.publishExit(sessionId, exitCode);
-            onExit.run();
+            onExit.accept(exitCode);
             log.debug("Terminal task exited, sessionId={}, taskType={}, exitCode={}",
                     sessionId, taskType, exitCode);
         }
