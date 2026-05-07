@@ -13,23 +13,31 @@ import com.repopilot.common.util.BizAssert;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Set;
 
 import static org.springframework.util.StringUtils.hasText;
 
+//Lombok 注解，编译后自动生成 private static final Logger log = ...，
+//可直接用 log.info(...) 记录日志
 @Slf4j
 @RestController
 @RequestMapping("/deploy")
+//Lombok 注解，自动生成包含 final 字段的构造函数，Spring 会通过这个构造函数注入私有成员
 @RequiredArgsConstructor
 public class DeployController {
-
+    //一个集合，记录状态
     private static final Set<String> ALLOWED_RUN_STATUS = Set.of(
             "PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED", "TIMEOUT");
-
+    
+    //这三个final字段(值不可修改的变量)就是通过@RequiredArgsConstructor这个注解自动生成构造函数的
+    //操作数据库中的部署任务和构建任务表
     private final DeployTaskMapper deployTaskMapper;
     private final BuildTaskMapper buildTaskMapper;
+    //从 HTTP 会话中获取当前 GitLab 用户上下文
     private final GitLabSessionContextService gitLabSessionContextService;
 
     @PostMapping("/trigger")
@@ -38,6 +46,9 @@ public class DeployController {
             @RequestParam String environment,
             @RequestParam(required = false) String args,
             HttpSession session) {
+        
+        //通过 gitLabSessionContextService.requireContext(session) 强制获取当前用户上下文
+        //若未登录或无有效会话，此方法通常会抛异常，由全局异常处理器处理
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
         log.info("Deploy trigger: username={}, project={}, branch={}, env={}",
                 context.username(), project, branch, environment);
@@ -48,10 +59,14 @@ public class DeployController {
     @PostMapping("/task/create")
     public ApiResponse<DeployTask> createDeployTask(@RequestBody CreateDeployTaskRequest request,
                                                     HttpSession session) {
+        //调用 validateCreateDeployTaskRequest，如存在错误返回400并携带提示信息
         String validationError = validateCreateDeployTaskRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
+        //获取用户上下文：从会话中取出 GitLabUserContext
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
-
+        
+        //这里的deployTask是数据库实体，其作用是插入一条数据库数据，不能也不应该交给 Spring 容器管理
+        //如果试图将其作为 Spring Bean 注入，那容器中只会有一个实例（默认单例），所有请求共享同一个对象，这会造成严重的数据混乱
         DeployTask deployTask = new DeployTask();
         deployTask.setGitlabUsername(context.username());
         deployTask.setDeployTaskId(request.getDeployTaskId().trim());
@@ -78,7 +93,8 @@ public class DeployController {
         String validationError = validateCreateBuildTaskRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
-
+        
+        
         BuildTask buildTask = new BuildTask();
         buildTask.setGitlabUsername(context.username());
         buildTask.setBuildTaskId(request.getBuildTaskId().trim());
@@ -182,6 +198,7 @@ public class DeployController {
         return null;
     }
 
+    //如果字符串有内容（非空且包含非空白字符），则返回去除首尾空格后的值；否则返回 null(保证有一个默认值null)
     private String trimToNull(String value) {
         return hasText(value) ? value.trim() : null;
     }

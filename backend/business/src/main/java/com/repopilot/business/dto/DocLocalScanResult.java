@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 // 本地仓库全量扫描文档生成结果。
+// Lombok 注解，自动生成 getter/setter、toString()、equals()、hashCode() 等方法，减少样板代码
 @Data
 public class DocLocalScanResult {
 

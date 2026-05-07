@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 // 返回给前端的 refresh 汇总结果。
+//Lombok 注解，自动生成 getter/setter、toString()、equals()、hashCode() 等方法，减少样板代码
 @Data
 public class DocRefreshResult {
 

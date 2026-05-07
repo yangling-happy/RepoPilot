@@ -24,9 +24,12 @@ import java.util.Set;
 
 import static org.springframework.util.StringUtils.hasText;
 
+//Lombok 注解，编译后自动生成 private static final Logger log = ...，
+//可直接用 log.info(...) 记录日志
 @Slf4j
 @RestController
 @RequestMapping("/doc")
+//Lombok 注解，自动生成包含 final 字段的构造函数，Spring 会通过这个构造函数注入私有成员
 @RequiredArgsConstructor
 public class DocController {
 
@@ -34,43 +37,60 @@ public class DocController {
             "PENDING", "RUNNING", "SUCCESS", "FAILED", "SKIPPED");
     private static final Set<String> ALLOWED_PARSE_STATUS = Set.of(
             "PENDING", "SUCCESS", "FAILED");
-
+            
+    //这四个final字段(值不可修改的变量)就是通过@RequiredArgsConstructor这个注解自动生成构造函数的
+    //操作数据库中的文档任务和生成产物表
     private final DocTaskMapper docTaskMapper;
     private final DocFileMapper docFileMapper;
+    //文档流水线服务，封装了实际的文档刷新、扫描、重建、查询等业务逻辑，是 Service 层的抽象
     private final DocPipelineService docPipelineService;
+    //从 HttpSession 中提取 GitLab 用户上下文，确保请求已认证
     private final GitLabSessionContextService gitLabSessionContextService;
-
-    @PostMapping("/webhook/gitlab")
-    public ApiResponse<Void> handleGitlabWebhook(@RequestBody String payload) {
-        log.info("Received GitLab webhook: {}", payload);
-        // TODO: Implement webhook handling logic
-        return ApiResponse.success("Webhook received", null);
-    }
 
     @PostMapping("/refresh")
     public ApiResponse<DocRefreshResult> refreshDoc(@RequestBody DocRefreshRequest request,
             HttpSession session) {
+        // 检验请求体非空
         BizAssert.notNull(request, 400, "Request body is required");
+    
+        // 从会话获取用户上下文
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+    
         log.info("Refresh doc request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
+    
+        // 调用 service 层执行刷新：先同步远程仓库，再扫描文档变更
         DocRefreshResult result = docPipelineService.refresh(
                 context.username(), request.getProject(), request.getBranch(), context.token());
+    
         return ApiResponse.success("Refresh completed", result);
     }
-
+    
     @PostMapping("/scan-local")
     public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocLocalScanRequest request,
             HttpSession session) {
+        // 检验请求体非空
         BizAssert.notNull(request, 400, "Request body is required");
+    
+        // 从会话获取用户上下文
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+    
         log.info("Local doc scan request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
+    
+        // 扫描本地文件，不需要 GitLab token；
+        // terminalSessionId 用于把扫描过程日志推送到前端终端面板
         DocLocalScanResult result = docPipelineService.scanLocal(
-                context.username(), request.getProject(), request.getBranch(), request.getTerminalSessionId());
+                context.username(),
+                request.getProject(),
+                request.getBranch(),
+                request.getTerminalSessionId());
+    
         return ApiResponse.success("Local scan completed", result);
     }
 
+    //接收项目、分支、提交 ID，调用 docPipelineService.rebuild 重新生成文档
+    //需要 Token，要从远程仓库重新拉取内容
     @PostMapping("/rebuild")
     public ApiResponse<Void> rebuildDoc(@RequestParam String project,
             @RequestParam String branch,
@@ -92,16 +112,20 @@ public class DocController {
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
         log.info("Query doc: username={}, project={}, branch={}, filePath={}, commitId={}",
                 context.username(), project, branch, filePath, commitId);
+        //返回结果直接包装到 ApiResponse 中
         return ApiResponse.success(docPipelineService.query(context.username(), project, branch, filePath, commitId));
     }
 
     @PostMapping("/task/create")
     public ApiResponse<DocTask> createDocTask(@RequestBody CreateDocTaskRequest request,
             HttpSession session) {
+        //验证请求非空，统一进行错误处理
         String validationError = validateCreateDocTaskRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
-
+        
+        //这里的DocTask是数据库实体，其作用是插入一条数据库数据，不能也不应该交给 Spring 容器管理
+        //如果试图将其作为 Spring Bean 注入，那容器中只会有一个实例（默认单例），所有请求共享同一个对象，这会造成严重的数据混乱
         DocTask task = new DocTask();
         task.setGitlabUsername(context.username());
         task.setEventId(request.getEventId().trim());
@@ -124,10 +148,14 @@ public class DocController {
         String validationError = validateCreateDocFileRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+
+        //查询数据库确保 taskId 对应一条真实的任务记录，防止孤儿文件
         DocTask linkedTask = docTaskMapper.selectById(request.getTaskId());
         BizAssert.isTrue(linkedTask != null, 400, "taskId does not exist");
+        //保证当前请求的用户只能给自己的任务创建文件，杜绝越权操作
         BizAssert.isTrue(context.username().equals(linkedTask.getGitlabUsername()), 400,
                 "taskId does not belong to the current user");
+        //确保传入的 projectName、branchName、commitId 与关联任务记录的对应字段完全一致
         BizAssert.isTrue(request.getProjectName().trim().equals(linkedTask.getProject())
                 && request.getBranchName().trim().equals(linkedTask.getBranch())
                 && request.getCommitId().trim().equals(linkedTask.getCommitId()),
