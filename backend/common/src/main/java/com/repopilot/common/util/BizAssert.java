@@ -3,6 +3,8 @@ package com.repopilot.common.util;
 import com.repopilot.common.exception.BusinessException;
 import org.springframework.util.StringUtils;
 
+
+//Biz是Business的简称，所以这个类是用来抛出业务异常的工具类
 public final class BizAssert {
 
     //私有构造方法，因为这个类只提供 static 工具方法，不需要创建对象

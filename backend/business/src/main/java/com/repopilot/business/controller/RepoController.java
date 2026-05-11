@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 //Lombok 注解，编译后自动生成 private static final Logger log = ...，
 //可直接用 log.info(...) 记录日志
 @Slf4j
+//组合了 @Controller 和 @ResponseBody，表示该类中所有方法的返回值都会直接序列化为 JSON 写入 HTTP 响应体
 @RestController
 @RequestMapping("/repo")
 //Lombok 注解，自动生成包含 final 字段的构造函数，Spring 会通过这个构造函数注入私有成员
