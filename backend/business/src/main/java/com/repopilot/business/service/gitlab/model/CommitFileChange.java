@@ -4,19 +4,24 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 
 // 表示一次 commit diff 中的单个文件级变更。
+//Lombok 注解，自动生成 getter/setter 等方法
 @Data
+//Lombok 注解，生成包含所有字段的构造函数
 @AllArgsConstructor
 public class CommitFileChange {
 
+    //变更前的文件路径（重命名时有用，其他情况与 newPath 相同）
     private String oldPath;
+    //变更后的文件路径
     private String newPath;
+    //变更类型
     private ChangeType changeType;
 
-    // 提取流水线使用的标准化变更分类。
+    //文件变更类型枚举
     public enum ChangeType {
-        ADDED,
-        MODIFIED,
-        RENAMED,
-        DELETED
+        ADDED,      //新增文件
+        MODIFIED,   //修改已有文件
+        RENAMED,    //重命名文件
+        DELETED     //删除文件
     }
 }

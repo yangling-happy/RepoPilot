@@ -15,18 +15,31 @@ public class DocFile {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    //关联的文档任务 ID（对应 doc_task 表的主键）
     private Long taskId;
+    //GitLab 用户名
     private String gitlabUsername;
+    //项目名称
     private String projectName;
+    //分支名称
     private String branchName;
+    //源文件在仓库中的路径
     private String filePath;
+    //源文件所属的 commit hash
     private String commitId;
+    //生成的文档文件路径
     private String docFilePath;
+    //解析状态（SUCCESS/FAILED）
     private String parseStatus;
+    //解析失败时的错误信息
     private String parseErrorMsg;
+    //记录创建时间
     private LocalDateTime createTime;
+    //记录最后更新时间
     private LocalDateTime updateTime;
 
+    //以下是别名方法：让外部可以用 getProject()/setProject() 来访问 projectName 字段
+    //这样在其他地方使用时代码更简洁（project 比 projectName 更直观）
     public String getProject() {
         return projectName;
     }
@@ -35,6 +48,7 @@ public class DocFile {
         this.projectName = project;
     }
 
+    //同理，getBranch()/setBranch() 是 branchName 的别名
     public String getBranch() {
         return branchName;
     }

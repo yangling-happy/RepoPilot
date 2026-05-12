@@ -11,11 +11,14 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+//内部接口 Controller，供 business 模块通过 HTTP 调用
+//路径前缀 /internal 表示这是内部服务间调用的接口，不对外暴露
 @RestController
 @RequestMapping("/internal/terminal/sessions")
 @RequiredArgsConstructor
 public class InternalTerminalSessionController {
 
+    //终端日志发布器，负责将消息推送到 WebSocket 连接的前端
     private final TerminalLogPublisher terminalLogPublisher;
 
     @PostMapping("/{sessionId}/stdout")

@@ -25,15 +25,20 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 
-// 文档流水线使用的 GitLab API 轻量客户端，负责 commit 与文件数据读取。
+//文档流水线专用的 GitLab API 轻量客户端
+//职责：通过 GitLab REST API 读取 commit 信息、文件变更和文件内容
+//不使用 GitLab 官方 SDK，而是直接用 Java HttpClient 调用 REST API，保持轻量
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GitLabDocClient {
 
+    //JSON 解析工具
     private final ObjectMapper objectMapper;
+    //Java HTTP 客户端
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    //GitLab API 基础地址（从配置文件读取）
     @Value("${gitlab.api-url}")
     private String apiUrl;
 

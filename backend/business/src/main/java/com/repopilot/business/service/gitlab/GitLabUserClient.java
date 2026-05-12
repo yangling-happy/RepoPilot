@@ -14,16 +14,24 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 
+//Spring 注解，将这个类注册为 Spring Bean
 @Component
+//Lombok 注解，为 final 字段生成构造函数
 @RequiredArgsConstructor
 public class GitLabUserClient {
 
+    //JSON 解析工具
     private final ObjectMapper objectMapper;
+    //Java 11+ 内置的 HTTP 客户端，用于调用 GitLab REST API
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
+    //从 application.yml 配置文件中读取 GitLab API 地址
+    //冒号后面是默认值，如果配置文件没写就用这个默认地址
     @Value("${gitlab.api-url:https://gitlab.com/api/v4}")
     private String gitlabApiUrl;
 
+    //通过 GitLab Token 获取当前用户的用户名
+    //调用的是 GitLab 的 /user 接口，该接口返回当前 Token 对应的用户信息
     public String getCurrentUsername(String token) {
         if (!StringUtils.hasText(token)) {
             throw new BusinessException(400, "GitLab token is required");

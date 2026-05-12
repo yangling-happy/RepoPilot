@@ -13,18 +13,27 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+//终端日志发布器
+//职责：管理 WebSocket 会话的订阅关系，并将消息广播给订阅了同一 sessionId 的所有前端连接
+//使用 ConcurrentHashMap 保证线程安全（多个任务可能同时发布日志）
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TerminalLogPublisher {
 
+    //JSON 构建工具
     private final ObjectMapper objectMapper;
+    //sessionId -> 订阅了该会话的 WebSocket 连接集合
+    //ConcurrentHashMap.newKeySet() 创建线程安全的 Set
     private final ConcurrentMap<String, Set<WebSocketSession>> subscribers = new ConcurrentHashMap<>();
 
+    //订阅：将 WebSocket 会话加入指定 sessionId 的订阅者集合
+    //computeIfAbsent：如果 sessionId 不存在则创建一个新的线程安全 Set
     public void subscribe(String sessionId, WebSocketSession session) {
         subscribers.computeIfAbsent(sessionId, ignored -> ConcurrentHashMap.newKeySet()).add(session);
     }
 
+    //取消订阅：从指定 sessionId 的订阅者集合中移除 WebSocket 会话
     public void unsubscribe(String sessionId, WebSocketSession session) {
         Set<WebSocketSession> sessions = subscribers.get(sessionId);
         if (sessions == null) {

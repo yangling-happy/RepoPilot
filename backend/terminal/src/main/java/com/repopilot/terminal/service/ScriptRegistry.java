@@ -22,26 +22,37 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+//脚本注册表
+//职责：管理所有终端任务的 shell 脚本，包括：
+//  1. 定义每种任务类型对应的脚本文件和参数映射
+//  2. 应用启动时将 classpath 中的脚本文件复制到临时目录
+//  3. 根据任务类型和参数创建脚本启动计划（ScriptLaunchPlan）
 @Component
 public class ScriptRegistry {
 
+    //脚本文件在 classpath 中的根路径
     private static final String RESOURCE_ROOT = "scripts/";
+    //所有需要部署的脚本文件名
     private static final Set<String> SCRIPT_FILES = Set.of(
-            "common.sh",
-            "clone-repo.sh",
-            "refresh-doc.sh",
-            "scan-local-doc.sh",
-            "build-project.sh",
-            "deploy-project.sh");
+            "common.sh",          //公共函数库
+            "clone-repo.sh",      //克隆仓库脚本
+            "refresh-doc.sh",     //刷新文档脚本
+            "scan-local-doc.sh",  //本地扫描文档脚本
+            "build-project.sh",   //构建项目脚本
+            "deploy-project.sh"); //部署项目脚本
 
+    //任务类型 -> 脚本定义的映射（EnumMap 比 HashMap 更高效）
     private final Map<TerminalTaskType, ScriptDefinition> definitions = new EnumMap<>(TerminalTaskType.class);
 
+    //执行脚本的 shell 程序（默认 bash，可通过配置文件修改）
     @Value("${terminal.tasks.shell:bash}")
     private String shell;
 
+    //自定义脚本目录（可选，为空则使用系统临时目录）
     @Value("${terminal.tasks.script-dir:}")
     private String configuredScriptDir;
 
+    //脚本文件实际存放的目录
     private Path scriptDirectory;
 
     public ScriptRegistry() {
@@ -89,6 +100,8 @@ public class ScriptRegistry {
                 Map.of()));
     }
 
+    //@PostConstruct 注解：Spring Bean 初始化完成后自动调用此方法
+    //在这里将 classpath 中的脚本文件复制到临时目录，并设置可执行权限
     @PostConstruct
     public void initialize() {
         scriptDirectory = resolveScriptDirectory();

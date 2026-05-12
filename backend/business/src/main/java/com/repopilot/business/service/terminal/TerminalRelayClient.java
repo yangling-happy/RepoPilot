@@ -16,16 +16,24 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
+//WebSocket 终端消息中继客户端
+//作用：business 模块通过 HTTP 调用 terminal 模块的内部接口，将消息推送到 WebSocket 终端
+//这样 business 模块不需要直接管理 WebSocket 连接，只需要把消息发给 terminal 模块即可
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TerminalRelayClient {
 
+    //JSON 序列化工具
     private final ObjectMapper objectMapper;
 
+    //terminal 模块的内部接口地址（从配置文件读取，默认是本地 8081 端口）
     @Value("${terminal.relay.base-url:http://localhost:8081/internal/terminal/sessions}")
     private String relayBaseUrl;
 
+    //向指定的终端会话发送一行消息
+    //sessionId: WebSocket 会话 ID（前端连接时生成）
+    //line: 要发送的文本内容
     public void emit(String sessionId, String line) {
         if (!StringUtils.hasText(sessionId) || !StringUtils.hasText(line)) {
             return;

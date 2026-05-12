@@ -15,8 +15,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+//Javadoc HTML 解析器
+//职责：将 javadoc 工具生成的 HTML 页面解析成结构化的 DocStructuredContent 对象
+//使用 Jsoup（Java 的 HTML 解析库）来解析 HTML DOM，提取类名、方法签名、参数、注释等信息
+//这个类是纯工具类，没有 Spring 注解，由 JavaDocGenerator 直接 new 创建
 public class JavaDocHtmlParser {
 
+    //入口方法：解析 javadoc 输出的所有 HTML 文件，组装成一个完整的结构化文档
     public DocStructuredContent parse(DocGenerationContext context, Path outputDir, List<Path> htmlFiles) {
         DocStructuredContent content = new DocStructuredContent();
         content.setProject(context.getProject());
@@ -37,6 +42,7 @@ public class JavaDocHtmlParser {
         return content;
     }
 
+    //解析单个 HTML 文件，提取类型（类/接口/枚举）的文档信息
     private DocStructuredContent.TypeDoc parseTypeDoc(Path outputDir, Path htmlFile) {
         Document document;
         try {
@@ -64,6 +70,9 @@ public class JavaDocHtmlParser {
         return typeDoc;
     }
 
+    //解析类的成员（字段/构造函数/方法）列表
+    //detailsSelector: HTML 中的 CSS 选择器（如 "section.field-details"）
+    //kind: 成员类型标识（FIELD/CONSTRUCTOR/METHOD）
     private List<DocStructuredContent.MemberDoc> parseMembers(Document document, String detailsSelector, String kind) {
         List<DocStructuredContent.MemberDoc> members = new ArrayList<>();
         for (Element detail : document.select(detailsSelector + " section.detail")) {
@@ -75,6 +84,7 @@ public class JavaDocHtmlParser {
         return members;
     }
 
+    //解析单个成员（方法/构造函数/字段）的详细信息
     private DocStructuredContent.MemberDoc parseMember(Element detail, String kind) {
         Element signatureElement = firstElement(detail, ".member-signature", "pre");
         String signature = clean(signatureElement == null ? "" : signatureElement.text());
@@ -100,6 +110,8 @@ public class JavaDocHtmlParser {
         return member;
     }
 
+    //解析 javadoc HTML 中的 <dl.notes> 元素，提取参数、返回值、异常信息
+    //javadoc 将 @param/@return/@throws 标签渲染成 <dl> 列表，<dt> 是标题，<dd> 是内容
     private void parseNotes(Element detail,
                             DocStructuredContent.MemberDoc member,
                             Map<String, String> parameterTypes) {
@@ -125,12 +137,14 @@ public class JavaDocHtmlParser {
         }
     }
 
+    //判断一个 <dd> 元素是否是返回值说明（没有 <code> 标签且方法有返回类型）
     private boolean isReturnNote(Element dd, Element detail, DocStructuredContent.MemberDoc member) {
         return member.getReturns() == null
                 && !StringUtils.hasText(firstText(dd, "code"))
                 && StringUtils.hasText(returnType(firstElement(detail, ".member-signature", "pre")));
     }
 
+    //解析 @param 标签对应的 <dd> 元素，提取参数名、类型和描述
     private DocStructuredContent.ParameterDoc parseParameter(Element dd, Map<String, String> parameterTypes) {
         String name = firstText(dd, "code");
         DocStructuredContent.ParameterDoc parameter = new DocStructuredContent.ParameterDoc();
@@ -140,6 +154,7 @@ public class JavaDocHtmlParser {
         return parameter;
     }
 
+    //解析 @return 标签对应的 <dd> 元素，提取返回值类型和描述
     private DocStructuredContent.ReturnDoc parseReturn(Element dd, Element detail) {
         DocStructuredContent.ReturnDoc returns = new DocStructuredContent.ReturnDoc();
         returns.setType(returnType(firstElement(detail, ".member-signature", "pre")));
@@ -147,6 +162,7 @@ public class JavaDocHtmlParser {
         return returns;
     }
 
+    //解析 @throws 标签对应的 <dd> 元素，提取异常类型和描述
     private DocStructuredContent.ThrowsDoc parseThrows(Element dd) {
         DocStructuredContent.ThrowsDoc throwsDoc = new DocStructuredContent.ThrowsDoc();
         throwsDoc.setType(firstText(dd, "code"));
@@ -154,6 +170,8 @@ public class JavaDocHtmlParser {
         return throwsDoc;
     }
 
+    //从 HTML 元素中提取成员名称（方法名/构造函数名/字段名）
+    //优先从 h3/h4 标题中获取，其次从签名的 .element-name 中获取，最后从 id 属性中提取
     private String memberName(Element detail, Element signatureElement) {
         String heading = firstText(detail, "h3", "h4");
         if (StringUtils.hasText(heading)) {
@@ -168,6 +186,8 @@ public class JavaDocHtmlParser {
         return argsStart > 0 ? id.substring(0, argsStart) : id;
     }
 
+    //从方法签名的 HTML 元素中提取参数类型映射（参数名 -> 参数类型）
+    //例如签名 "public void save(String name, int age)" 会解析出 {"name": "String", "age": "int"}
     private Map<String, String> parameterTypes(Element signatureElement) {
         Map<String, String> parameterTypes = new LinkedHashMap<>();
         Element parametersElement = signatureElement == null ? null : firstElement(signatureElement, ".parameters");
@@ -194,6 +214,8 @@ public class JavaDocHtmlParser {
         return parameterTypes;
     }
 
+    //将参数列表字符串按逗号分割，但要正确处理泛型中的逗号
+    //例如 "List<String>, Map<K,V>" 应该分成两段而不是三段
     private List<String> splitParameters(String parameters) {
         List<String> result = new ArrayList<>();
         int depth = 0;
@@ -213,6 +235,7 @@ public class JavaDocHtmlParser {
         return result;
     }
 
+    //去除参数中的注解（如 @NonNull）和 final 修饰符，只保留类型和参数名
     private String stripParameterModifiers(String parameter) {
         return parameter
                 .replaceAll("@\\S+\\s+", "")
@@ -220,6 +243,7 @@ public class JavaDocHtmlParser {
                 .trim();
     }
 
+    //从方法签名 HTML 中提取返回值类型（如 "String"、"void"）
     private String returnType(Element signatureElement) {
         if (signatureElement == null) {
             return "";
@@ -231,6 +255,7 @@ public class JavaDocHtmlParser {
         return "";
     }
 
+    //从类描述区域提取类型签名（如 "public class UserService"）
     private String typeSignature(Element descriptionSection) {
         if (descriptionSection == null) {
             return "";
@@ -239,6 +264,8 @@ public class JavaDocHtmlParser {
         return clean(signature);
     }
 
+    //从页面的 .sub-title 中提取包名，与类名拼接成全限定名
+    //例如 .sub-title 显示 "Package com.example"，类名是 "UserService"，则返回 "com.example.UserService"
     private String qualifiedName(Document document, String name) {
         String packageName = firstText(document, ".sub-title a", ".sub-title");
         if (packageName.startsWith("Package ")) {
@@ -247,6 +274,7 @@ public class JavaDocHtmlParser {
         return StringUtils.hasText(packageName) ? packageName + "." + name : name;
     }
 
+    //提取元素中 class="block" 的第一个子元素的文本（javadoc 注释的主要内容）
     private String firstBlockText(Element element) {
         if (element == null) {
             return "";
@@ -259,6 +287,7 @@ public class JavaDocHtmlParser {
         return firstText(element, ".block");
     }
 
+    //提取 <dd> 元素中的描述文本，去掉前缀的 code 标签内容和横线
     private String ddDescription(Element dd) {
         String text = clean(dd.text());
         String code = firstText(dd, "code");
@@ -271,6 +300,7 @@ public class JavaDocHtmlParser {
         return text;
     }
 
+    //工具方法：按多个 CSS 选择器查找，返回第一个匹配的元素
     private Element firstElement(Element root, String... selectors) {
         if (root == null) {
             return null;
@@ -284,11 +314,14 @@ public class JavaDocHtmlParser {
         return null;
     }
 
+    //工具方法：按多个 CSS 选择器查找，返回第一个匹配元素的文本
     private String firstText(Element root, String... selectors) {
         Element element = firstElement(root, selectors);
         return element == null ? "" : clean(element.text());
     }
 
+    //从 HTML 页面中提取类型头信息（类型种类 + 类型名称）
+    //尝试三种策略：1.从 class-description 区域提取 2.从 meta 标签提取 3.从 h1 标题提取
     private TypeHeader parseTypeHeader(Document document, Element descriptionSection) {
         if (descriptionSection == null) {
             return null;
@@ -311,6 +344,7 @@ public class JavaDocHtmlParser {
         return parseEnglishTypeHeader(header);
     }
 
+    //从 <meta name="description" content="declaration:class:UserService"> 标签中提取类型信息
     private TypeHeader parseTypeHeaderFromMeta(Document document) {
         Element description = firstElement(document, "meta[name=description]");
         String content = description == null ? "" : clean(description.attr("content"));
@@ -329,6 +363,7 @@ public class JavaDocHtmlParser {
         return new TypeHeader(kind, name);
     }
 
+    //从类型签名中识别类型种类（class/interface/enum/annotation/record）
     private String kindFromSignature(String signature) {
         String normalized = " " + clean(signature) + " ";
         if (normalized.contains(" @interface ")) {
@@ -349,6 +384,8 @@ public class JavaDocHtmlParser {
         return "";
     }
 
+    //将 meta 标签中的声明类型字符串转为枚举值
+    //Java 14+ switch 表达式语法：case 可以用逗号分隔匹配多个值
     private String kindFromDeclaration(String declarationKind) {
         return switch (declarationKind) {
             case "annotation interface", "@interface" -> "ANNOTATION";
@@ -360,6 +397,7 @@ public class JavaDocHtmlParser {
         };
     }
 
+    //从英文版 javadoc 的 h1 标题中提取类型信息（如 "Class UserService" -> CLASS + UserService）
     private TypeHeader parseEnglishTypeHeader(String header) {
         if (!StringUtils.hasText(header)) {
             return null;
@@ -382,6 +420,7 @@ public class JavaDocHtmlParser {
         return null;
     }
 
+    //清理文本：将不间断空格( )替换为普通空格，合并连续空白，去除首尾空格
     private String clean(String value) {
         if (!StringUtils.hasText(value)) {
             return "";
@@ -389,6 +428,7 @@ public class JavaDocHtmlParser {
         return value.replace('\u00A0', ' ').replaceAll("\\s+", " ").trim();
     }
 
+    //内部 record：封装类型头信息（种类 + 名称）
     private record TypeHeader(String kind, String name) {
     }
 }

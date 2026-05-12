@@ -15,13 +15,20 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+//终端任务服务
+//职责：接收任务启动请求，创建 shell 进程执行脚本，并管理任务的生命周期
+//使用 ConcurrentHashMap 保证同一 sessionId 同时只能运行一个任务
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TerminalTaskService {
 
+    //脚本注册表，用于将任务类型映射到具体的 shell 脚本
     private final ScriptRegistry scriptRegistry;
+    //日志发布器
     private final TerminalLogPublisher terminalLogPublisher;
+    //活跃的任务会话映射：sessionId -> 正在运行的脚本进程
+    //用于防止同一会话重复启动任务，以及支持任务销毁
     private final ConcurrentMap<String, ScriptProcessSession> activeSessions = new ConcurrentHashMap<>();
 
     public TerminalTaskStartResponse start(TerminalTaskStartRequest request) {

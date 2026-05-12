@@ -57,25 +57,36 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
+//文档流水线服务的核心实现类
+//职责：协调 GitLab API、文档生成器、数据库，完成文档的增量刷新、重建、本地扫描和查询
+//这是整个文档生成功能的"大脑"，负责串联各个组件完成完整的业务流程
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DocPipelineServiceImpl implements DocPipelineService {
 
-    private static final String STATUS_RUNNING = "RUNNING";
-    private static final String STATUS_SUCCESS = "SUCCESS";
-    private static final String STATUS_FAILED = "FAILED";
-    private static final String STATUS_SKIPPED = "SKIPPED";
-    private static final String STRUCTURED_DOC_SUFFIX = ".json";
+    //任务状态常量
+    private static final String STATUS_RUNNING = "RUNNING";   //任务正在执行
+    private static final String STATUS_SUCCESS = "SUCCESS";   //任务成功完成
+    private static final String STATUS_FAILED = "FAILED";     //任务执行失败
+    private static final String STATUS_SKIPPED = "SKIPPED";   //任务被跳过（如没有 Java 文件变更）
+    private static final String STRUCTURED_DOC_SUFFIX = ".json"; //结构化文档文件后缀
 
-    private final DocTaskMapper docTaskMapper;
-    private final DocFileMapper docFileMapper;
+    //数据库操作 Mapper
+    private final DocTaskMapper docTaskMapper;    //文档任务表操作
+    private final DocFileMapper docFileMapper;    //文档文件明细表操作
+    //GitLab API 客户端，用于读取远程仓库的 commit 和文件内容
     private final GitLabDocClient gitLabDocClient;
+    //文档生成器注册表，根据文件后缀找到对应的生成器
     private final DocGeneratorRegistry docGeneratorRegistry;
+    //用户工作空间路径解析器
     private final UserWorkspaceResolver userWorkspaceResolver;
+    //WebSocket 终端消息推送客户端
     private final TerminalRelayClient terminalRelayClient;
+    //JSON 序列化工具
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    //增量刷新文档：对比本地 HEAD 和远程 HEAD，找出新增 commit，为变更的 Java 文件生成文档
     @Override
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
         validateGitlabUsername(gitlabUsername);
@@ -146,6 +157,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return result;
     }
 
+    //重建文档：为指定的 commit 重新生成所有文档（覆盖旧产物）
     @Override
     public void rebuild(String gitlabUsername, String project, String branch, String commitId, String token) {
         validateGitlabUsername(gitlabUsername);
@@ -254,6 +266,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    //查询已生成的文档记录，支持按项目/分支/文件路径/commit 过滤
     @Override
     public List<DocQueryItem> query(String gitlabUsername, String project, String branch, String filePath,
             String commitId) {

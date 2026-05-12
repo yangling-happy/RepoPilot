@@ -29,11 +29,11 @@ public class DocGeneratorRegistry {
         }
     }
 
-    //返回Optional是因为不一定能找到对应生成器，使用后，调用方必须显式处理“找不到”的情况
+    //返回Optional是因为不一定能找到对应生成器，使用后，调用方必须显式处理找不到的情况
     public Optional<DocGenerator> findGenerator(String filePath) {
         //根据文件后缀去注册表里找到对应生成器
         String extension = extractExtension(filePath);
-        // 如果没有对应生成器，返回空
+        //如果没有对应生成器，返回空
         if (!StringUtils.hasText(extension)) {
             return Optional.empty();
         }

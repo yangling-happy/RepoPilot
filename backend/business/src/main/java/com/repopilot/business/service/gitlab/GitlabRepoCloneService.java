@@ -28,16 +28,24 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+//Lombok: 自动生成日志对象 log
 @Slf4j
+//Spring: 标记为 Service 层 Bean
 @Service
+//Lombok: 为 final 字段生成构造函数
 @RequiredArgsConstructor
 public class GitlabRepoCloneService {
 
+    //仓库克隆的配置属性（默认分支、超时时间等）
     private final RepoCloneProperties repoCloneProperties;
+    //JSON 解析工具
     private final ObjectMapper objectMapper;
+    //WebSocket 终端消息推送客户端，用于将克隆进度实时发送到前端
     private final TerminalRelayClient terminalRelayClient;
+    //用户工作空间路径解析器，决定仓库克隆到哪个目录
     private final UserWorkspaceResolver userWorkspaceResolver;
 
+    //GitLab API 地址（从配置文件读取，默认是 GitLab.com）
     @Value("${gitlab.api-url:https://gitlab.com/api/v4}")
     private String gitlabApiUrl;
 
@@ -125,6 +133,7 @@ public class GitlabRepoCloneService {
         }
     }
 
+    //向 WebSocket 终端发送消息（如果 sessionId 不为空）
     private void emitTerminal(String sessionId, String line) {
         terminalRelayClient.emit(sessionId, line);
     }
@@ -196,9 +205,12 @@ public class GitlabRepoCloneService {
         return "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host);
     }
 
+    //内部 record，封装从 GitLab API 获取的项目基本信息
     private record ProjectInfo(long id, String pathWithNamespace, String cloneUrl) {
     }
 
+    //JGit 的 ProgressMonitor 实现，将 Git 克隆进度推送到 WebSocket 终端
+    //这样用户在前端可以实时看到克隆的进度（如 "Receiving objects 50%"）
     private class TerminalProgressMonitor implements ProgressMonitor {
 
         private final String sessionId;

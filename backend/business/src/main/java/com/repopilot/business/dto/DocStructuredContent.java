@@ -14,57 +14,93 @@ import java.util.List;
 @Data
 public class DocStructuredContent {
 
+    //文档格式版本号，方便未来格式升级时做兼容
     private String schemaVersion = "1";
+    //项目名称
     private String project;
+    //分支名称
     private String branch;
+    //源文件所属的 commit hash
     private String commitId;
+    //源文件在仓库中的路径
     private String sourceFilePath;
+    //一个 Java 文件中可能包含多个类型（类、接口、枚举等），用列表存储
     private List<TypeDoc> types = new ArrayList<>();
 
     //静态内部类:TypeDoc 逻辑上属于 DocStructuredContent，
     //但创建 TypeDoc 对象时不依赖外部 DocStructuredContent 实例。
+    //表示一个类型（类/接口/枚举/注解）的文档
     @Data
     public static class TypeDoc {
+        //对应的 javadoc HTML 文件名
         private String htmlFile;
+        //类型种类：CLASS、INTERFACE、ENUM、ANNOTATION、RECORD
         private String kind;
+        //类型简单名（如 UserService）
         private String name;
+        //全限定名（如 com.example.UserService）
         private String qualifiedName;
+        //类型签名（如 public class UserService）
         private String signature;
+        //类型级别的 Javadoc 描述
         private String description;
+        //字段列表
         private List<MemberDoc> fields = new ArrayList<>();
+        //构造函数列表
         private List<MemberDoc> constructors = new ArrayList<>();
+        //方法列表
         private List<MemberDoc> methods = new ArrayList<>();
     }
 
+    //表示类成员（字段/构造函数/方法）的文档
     @Data
     public static class MemberDoc {
+        //成员的唯一标识（通常是方法签名）
         private String id;
+        //成员种类：FIELD、CONSTRUCTOR、METHOD
         private String kind;
+        //成员名称
         private String name;
+        //成员签名（如 public String getUserName(Long id)）
         private String signature;
+        //成员的 Javadoc 描述
         private String description;
+        //方法参数列表（仅方法和构造函数有）
         private List<ParameterDoc> parameters = new ArrayList<>();
+        //返回值信息（仅方法有）
         private ReturnDoc returns;
+        //@JsonProperty("throws") 是 Jackson 注解，指定序列化成 JSON 时字段名为 "throws"
+        //因为 "throws" 是 Java 关键字，不能直接用作字段名，所以用 throwsItems 做 Java 字段名
         @JsonProperty("throws")
         private List<ThrowsDoc> throwsItems = new ArrayList<>();
     }
 
+    //方法参数文档
     @Data
     public static class ParameterDoc {
+        //参数名
         private String name;
+        //参数类型（如 Long、String）
         private String type;
+        //参数的 Javadoc 描述
         private String description;
     }
 
+    //方法返回值文档
     @Data
     public static class ReturnDoc {
+        //返回值类型
         private String type;
+        //返回值的 Javadoc 描述
         private String description;
     }
 
+    //方法抛出异常文档
     @Data
     public static class ThrowsDoc {
+        //异常类型（如 IllegalArgumentException）
         private String type;
+        //异常的 Javadoc 描述
         private String description;
     }
 }

@@ -17,16 +17,24 @@ import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 
+//WebSocket 消息处理器
+//职责：处理前端 WebSocket 连接的生命周期事件（连接建立、消息接收、连接关闭）
+//这是"只读终端"模式：前端只能接收日志输出，不能发送 stdin 输入
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
+    //WebSocket 会话属性中存储 sessionId 的 key
     private static final String SESSION_ID_ATTR = "terminalSessionId";
 
+    //日志发布器，管理 WebSocket 订阅关系
     private final TerminalLogPublisher terminalLogPublisher;
+    //JSON 解析工具
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    //WebSocket 连接建立后调用
+    //从 URL 路径中提取 sessionId，注册到日志发布器
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
         String sessionId = extractSessionId(session);
@@ -35,10 +43,14 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
+        //将 sessionId 存入会话属性，后续消息处理时可以直接取用
         session.getAttributes().put(SESSION_ID_ATTR, sessionId);
+        //订阅：将这个 WebSocket 会话加入 sessionId 对应的订阅者集合
         terminalLogPublisher.subscribe(sessionId, session);
     }
 
+    //收到前端发来的文本消息时调用
+    //这个终端是只读的，前端发来的消息只做简单响应
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String sessionId = getSessionId(session);
@@ -53,7 +65,8 @@ public class TerminalWebSocketHandler extends TextWebSocketHandler {
 
             switch (type) {
                 case "resize" -> {
-                    // Log sessions are read-only; resize is accepted as a no-op for client compatibility.
+                    //终端窗口大小调整消息，这里接受但不做处理（no-op）
+                    //接受是为了客户端兼容性，避免前端报错
                 }
                 case "stdin" -> terminalLogPublisher.publishError(sessionId,
                         "stdin is disabled for task log sessions");

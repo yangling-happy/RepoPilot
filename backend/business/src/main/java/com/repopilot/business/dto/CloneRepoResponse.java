@@ -6,12 +6,20 @@ import lombok.Data;
 @Data
 public class CloneRepoResponse {
 
+    //GitLab 项目 ID
     private Long projectId;
+    //当前克隆操作对应的 GitLab 用户名
     private String gitlabUsername;
+    //项目在 GitLab 中的路径（如 group/project-name）
     private String projectPath;
+    //实际克隆的分支名
     private String branch;
+    //Git 克隆 URL
     private String cloneUrl;
+    //用户工作空间根目录路径
     private String workspacePath;
+    //仓库克隆到本地的绝对路径
     private String localPath;
+    //克隆完成后 HEAD 指向的 commit hash
     private String commitId;
 }
