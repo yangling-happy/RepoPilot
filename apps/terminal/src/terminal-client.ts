@@ -96,56 +96,6 @@ export class TerminalClient {
     this.pendingMessages = [];
   }
 
-  isOpen() {
-    return this.ws.readyState === WebSocket.OPEN;
-  }
-
-  isClosed() {
-    return (
-      this.disposed ||
-      this.ws.readyState === WebSocket.CLOSING ||
-      this.ws.readyState === WebSocket.CLOSED
-    );
-  }
-
-  waitUntilOpen(timeoutMs = 10000): Promise<void> {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      return Promise.resolve();
-    }
-    if (this.isClosed()) {
-      return Promise.reject(new Error("Terminal connection is closed"));
-    }
-
-    return new Promise((resolve, reject) => {
-      let settled = false;
-      const timer = setTimeout(() => {
-        finish(() => reject(new Error("Terminal connection timed out")));
-      }, timeoutMs);
-
-      const finish = (complete: () => void) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        this.ws.removeEventListener("open", handleOpen);
-        this.ws.removeEventListener("error", handleError);
-        this.ws.removeEventListener("close", handleClose);
-        complete();
-      };
-
-      const handleOpen = () => finish(() => resolve());
-      const handleError = () =>
-        finish(() => reject(new Error("Terminal connection failed")));
-      const handleClose = () =>
-        finish(() => reject(new Error("Terminal connection is closed")));
-
-      this.ws.addEventListener("open", handleOpen);
-      this.ws.addEventListener("error", handleError);
-      this.ws.addEventListener("close", handleClose);
-    });
-  }
-
   attach(container: HTMLElement) {
     this.handle.open(container);
   }
@@ -202,10 +152,8 @@ export class TerminalClient {
   }
 
   onMessage(callback: (message: unknown) => void) {
-    const listener = (event: MessageEvent) => {
+    this.ws.addEventListener("message", (event) => {
       callback(JSON.parse(event.data as string));
-    };
-    this.ws.addEventListener("message", listener);
-    return () => this.ws.removeEventListener("message", listener);
+    });
   }
 }

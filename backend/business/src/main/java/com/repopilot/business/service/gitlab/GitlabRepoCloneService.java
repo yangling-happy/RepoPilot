@@ -2,7 +2,6 @@ package com.repopilot.business.service.gitlab;
 
 import com.repopilot.business.config.RepoCloneProperties;
 import com.repopilot.business.dto.CloneRepoResponse;
-import com.repopilot.business.dto.GitLabProjectInfoResponse;
 import com.repopilot.business.service.terminal.TerminalRelayClient;
 import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import com.repopilot.common.exception.BusinessException;
@@ -27,7 +26,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
@@ -131,76 +129,13 @@ public class GitlabRepoCloneService {
         terminalRelayClient.emit(sessionId, line);
     }
 
-    public GitLabProjectInfoResponse getProjectInfo(Long projectId, String token, String gitlabUsername) {
-        validateProjectQuery(projectId, token);
-        try {
-            return toResponse(fetchProject(projectId, token.trim()), gitlabUsername);
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(500, "Failed to read GitLab project");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(500, "Interrupted while reading GitLab project");
-        }
-    }
-
-    public List<GitLabProjectInfoResponse> listProjects(String token, String gitlabUsername) {
-        if (!StringUtils.hasText(token)) {
-            throw new BusinessException(400, "GitLab token is required in session");
-        }
-        try {
-            JsonNode projects = getJson(token.trim(), "/projects?membership=true&simple=true&per_page=100");
-            List<GitLabProjectInfoResponse> responses = new ArrayList<>();
-            if (projects.isArray()) {
-                for (JsonNode project : projects) {
-                    ProjectInfo info = readProjectInfo(project, 0L);
-                    if (info.id > 0) {
-                        responses.add(toResponse(info, gitlabUsername));
-                    }
-                }
-            }
-            return responses;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (IOException e) {
-            throw new BusinessException(500, "Failed to read GitLab projects");
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(500, "Interrupted while reading GitLab projects");
-        }
-    }
-
     private ProjectInfo fetchProject(Long projectId, String token) throws IOException, InterruptedException {
-        try {
-            return readProjectInfo(getJson(token, "/projects/" + projectId), projectId);
-        } catch (BusinessException e) {
-            if (e.getCode() == 404) {
-                throw new BusinessException(404, "GitLab project not found: " + projectId);
-            }
-            throw e;
-        }
-    }
-
-    private ProjectInfo readProjectInfo(JsonNode json, Long fallbackProjectId) {
-        String cloneUrl = json.path("http_url_to_repo").asText(null);
-        String pathWithNamespace = json.path("path_with_namespace").asText(null);
-        String defaultBranch = json.path("default_branch").asText(null);
-        long id = json.path("id").asLong(fallbackProjectId == null ? 0L : fallbackProjectId);
-        if (!StringUtils.hasText(cloneUrl)) {
-            throw new BusinessException(500, "GitLab project clone url is empty");
-        }
-        return new ProjectInfo(id, pathWithNamespace, cloneUrl, defaultBranch);
-    }
-
-    private JsonNode getJson(String token, String pathAndQuery) throws IOException, InterruptedException {
         String apiBase = gitlabApiUrl.endsWith("/") ? gitlabApiUrl.substring(0, gitlabApiUrl.length() - 1)
                 : gitlabApiUrl;
-        URI uri = URI.create(apiBase + pathAndQuery);
+        URI uri = URI.create(apiBase + "/projects/" + projectId);
 
         HttpRequest request = HttpRequest.newBuilder(uri)
                 .header("PRIVATE-TOKEN", token)
-                .header("Accept", "application/json")
                 .GET()
                 .build();
 
@@ -209,7 +144,7 @@ public class GitlabRepoCloneService {
 
         int status = response.statusCode();
         if (status == 404) {
-            throw new BusinessException(404, "GitLab project not found");
+            throw new BusinessException(404, "GitLab project not found: " + projectId);
         }
         if (status == 401 || status == 403) {
             throw new BusinessException(401, "Invalid token or insufficient permission");
@@ -217,7 +152,17 @@ public class GitlabRepoCloneService {
         if (status < 200 || status >= 300) {
             throw new BusinessException(500, "GitLab API error, status=" + status);
         }
-        return objectMapper.readTree(response.body());
+
+        JsonNode json = objectMapper.readTree(response.body());
+        String cloneUrl = json.path("http_url_to_repo").asText(null);
+        String pathWithNamespace = json.path("path_with_namespace").asText(null);
+        long id = json.path("id").asLong(projectId);
+
+        if (!StringUtils.hasText(cloneUrl)) {
+            throw new BusinessException(500, "GitLab project clone url is empty");
+        }
+
+        return new ProjectInfo(id, pathWithNamespace, cloneUrl);
     }
 
     private String toBranchRef(String branch) {
@@ -251,28 +196,7 @@ public class GitlabRepoCloneService {
         return "localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host);
     }
 
-    private void validateProjectQuery(Long projectId, String token) {
-        if (projectId == null || projectId <= 0) {
-            throw new BusinessException(400, "projectId must be greater than 0");
-        }
-        if (!StringUtils.hasText(token)) {
-            throw new BusinessException(400, "GitLab token is required in session");
-        }
-    }
-
-    private GitLabProjectInfoResponse toResponse(ProjectInfo project, String gitlabUsername) {
-        GitLabProjectInfoResponse response = new GitLabProjectInfoResponse();
-        response.setId(project.id);
-        response.setGitlabUsername(gitlabUsername);
-        response.setPathWithNamespace(project.pathWithNamespace);
-        response.setHttpUrlToRepo(normalizeCloneUrl(project.cloneUrl));
-        response.setDefaultBranch(project.defaultBranch);
-        response.setWorkspacePath(userWorkspaceResolver.userWorkspace(gitlabUsername).toString());
-        response.setLocalPath(userWorkspaceResolver.repoPath(gitlabUsername, project.id).toString());
-        return response;
-    }
-
-    private record ProjectInfo(long id, String pathWithNamespace, String cloneUrl, String defaultBranch) {
+    private record ProjectInfo(long id, String pathWithNamespace, String cloneUrl) {
     }
 
     private class TerminalProgressMonitor implements ProgressMonitor {

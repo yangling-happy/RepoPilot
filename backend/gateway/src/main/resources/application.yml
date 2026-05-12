@@ -7,10 +7,6 @@ spring:
   cloud:
     gateway:
       routes:
-        - id: terminal-api
-          uri: http://localhost:8081
-          predicates:
-            - Path=/api/terminal/**
         - id: business
           uri: http://localhost:8080
           predicates:

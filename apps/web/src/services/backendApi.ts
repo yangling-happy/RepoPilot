@@ -37,16 +37,6 @@ export type CloneRepoResponse = {
   commitId: string;
 };
 
-export type GitLabProjectInfo = {
-  id: number;
-  gitlabUsername: string;
-  pathWithNamespace: string;
-  httpUrlToRepo: string;
-  defaultBranch?: string | null;
-  workspacePath: string;
-  localPath: string;
-};
-
 export type DocLocalScanResult = {
   gitlabUsername: string;
   project: string;
@@ -143,20 +133,6 @@ export async function cloneRepo(
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-  });
-}
-
-export async function listGitLabProjects(): Promise<GitLabProjectInfo[]> {
-  return requestApi<GitLabProjectInfo[]>("/api/repo/projects", {
-    method: "GET",
-  });
-}
-
-export async function getGitLabProject(
-  projectId: number,
-): Promise<GitLabProjectInfo> {
-  return requestApi<GitLabProjectInfo>(`/api/repo/projects/${projectId}`, {
-    method: "GET",
   });
 }
 

@@ -50,8 +50,7 @@ public class ScriptRegistry {
                 List.of(required("projectId", "--project-id"),
                         required("branch", "--branch"),
                         required("username", "--username"),
-                        required("repoUrl", "--repo-url"),
-                        optional("projectPath", "--project-path"),
+                        optional("repoUrl", "--repo-url"),
                         optional("workspaceRoot", "--workspace-root")),
                 Map.of("gitlabToken", "GITLAB_TOKEN")));
         definitions.put(TerminalTaskType.REFRESH_DOC, new ScriptDefinition(

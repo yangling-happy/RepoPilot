@@ -10,7 +10,7 @@ USERNAME=""
 ENVIRONMENT=""
 ARTIFACT_PATH=""
 REPO_DIR=""
-WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-${REPOPILOT_WORKSPACE_BASE:-.}}"
+WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,7 +54,6 @@ require_value "username" "$USERNAME"
 require_value "environment" "$ENVIRONMENT"
 
 if [[ -z "$ARTIFACT_PATH" ]]; then
-  WORKSPACE_ROOT="$(shell_path "$WORKSPACE_ROOT")"
   REPO_DIR="$(resolve_repo_dir "$USERNAME" "$PROJECT" "$REPO_DIR" "$WORKSPACE_ROOT")"
   ensure_git_repo "$REPO_DIR"
   ARTIFACT_PATH="$(find "$REPO_DIR" -path "$REPO_DIR/.git" -prune -o -type f \( -name "*.jar" -o -name "*.war" \) -print | head -n 1)"

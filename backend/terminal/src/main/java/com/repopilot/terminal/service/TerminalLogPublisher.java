@@ -1,6 +1,5 @@
 package com.repopilot.terminal.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
@@ -58,16 +57,6 @@ public class TerminalLogPublisher {
     public boolean publishExit(String sessionId, int exitCode) {
         ObjectNode payload = basePayload("exit", sessionId);
         payload.put("exitCode", exitCode);
-        return publish(sessionId, payload);
-    }
-
-    public boolean publishResult(String sessionId, String taskType, JsonNode data) {
-        if (data == null || data.isNull()) {
-            return false;
-        }
-        ObjectNode payload = basePayload("result", sessionId);
-        payload.put("taskType", taskType);
-        payload.set("data", data);
         return publish(sessionId, payload);
     }
 
