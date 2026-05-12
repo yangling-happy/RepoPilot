@@ -1,11 +1,15 @@
 package com.repopilot.terminal.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repopilot.terminal.dto.TerminalTaskType;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
@@ -15,6 +19,8 @@ public class ScriptProcessSession {
     private final TerminalTaskType taskType;
     private final Process process;
     private final TerminalLogPublisher terminalLogPublisher;
+    private final ObjectMapper objectMapper;
+    private final Path resultFile;
     private final Runnable onExit;
     private final AtomicBoolean started = new AtomicBoolean(false);
 
@@ -25,11 +31,15 @@ public class ScriptProcessSession {
                                 TerminalTaskType taskType,
                                 Process process,
                                 TerminalLogPublisher terminalLogPublisher,
+                                ObjectMapper objectMapper,
+                                Path resultFile,
                                 Runnable onExit) {
         this.sessionId = sessionId;
         this.taskType = taskType;
         this.process = process;
         this.terminalLogPublisher = terminalLogPublisher;
+        this.objectMapper = objectMapper;
+        this.resultFile = resultFile;
         this.onExit = onExit;
     }
 
@@ -77,10 +87,29 @@ public class ScriptProcessSession {
             Thread.currentThread().interrupt();
             terminalLogPublisher.publishError(sessionId, "task wait interrupted");
         } finally {
+            publishResult();
             terminalLogPublisher.publishExit(sessionId, exitCode);
             onExit.run();
             log.debug("Terminal task exited, sessionId={}, taskType={}, exitCode={}",
                     sessionId, taskType, exitCode);
+        }
+    }
+
+    private void publishResult() {
+        if (resultFile == null || !Files.isRegularFile(resultFile)) {
+            return;
+        }
+        try {
+            JsonNode result = objectMapper.readTree(resultFile.toFile());
+            terminalLogPublisher.publishResult(sessionId, taskType.name(), result);
+        } catch (Exception e) {
+            terminalLogPublisher.publishError(sessionId, "failed to read task result: " + e.getMessage());
+        } finally {
+            try {
+                Files.deleteIfExists(resultFile);
+            } catch (IOException e) {
+                log.debug("Failed to delete terminal task result file: {}", resultFile, e);
+            }
         }
     }
 }

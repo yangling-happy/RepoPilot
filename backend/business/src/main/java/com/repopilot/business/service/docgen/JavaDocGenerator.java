@@ -19,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+//说明这个类会被 Spring 扫描并注册为 Bean。也就是说，项目启动时，Spring 会自动创建一个 JavaDocGenerator 对象，放进 Spring 容器里
 @Component
 public class JavaDocGenerator implements DocGenerator {
 
@@ -35,11 +36,14 @@ public class JavaDocGenerator implements DocGenerator {
 
     @Override
     public Set<String> supportedExtensions() {
+        //Set.of()能够快速创建一个包含固定元素的集合
         return Set.of(".java");
     }
 
+    //对外接口，生成文档
     @Override
     public DocGenerationResult generate(DocGenerationContext context) {
+        //runJavadoc生成文档，返回生成产物的路径
         Path structuredDocPath = runJavadoc(context);
         return DocGenerationResult.builder()
                 .docFilePath(structuredDocPath.toString())
@@ -49,31 +53,48 @@ public class JavaDocGenerator implements DocGenerator {
     private Path runJavadoc(DocGenerationContext context) {
         Path workDir = null;
         try {
+            //1.创建临时工作目录
             workDir = Files.createTempDirectory("repopilot-javadoc-");
+            //2.准备最终输出目录
             Path outputDir = prepareOutputDir(context);
             Path commandOutputFile = workDir.resolve("javadoc.log");
 
+            //写入临时源码文件，不对原仓库里的 Java 文件执行 javadoc
             Path tempSourceRoot = writeSourceFile(context, workDir);
             Path sourceFile = safeResolve(tempSourceRoot, context.getFilePath());
 
+            //执行Javadoc命令
             ProcessBuilder processBuilder = new ProcessBuilder(
                     resolveJavadocCommand(),
+                    //减少 javadoc 输出
                     "-quiet",
+                    //指定源码编码
                     "-encoding", "UTF-8",
+                    //指定生成 HTML 的字符集
                     "-charset", "UTF-8",
+                    //指定文档文件编码
                     "-docencoding", "UTF-8",
+                    //关闭严格文档检查，避免注释格式不规范导致失败
                     "-Xdoclint:none",
+                    //忽略部分源码错误
                     "--ignore-source-errors",
+                    //私有字段、私有方法也生成文档
                     "-private",
+                    //指定源码查找路径
                     "-sourcepath", buildSourcePath(tempSourceRoot, context.getSourceRoot()),
+                    //指定 javadoc 输出目录
                     "-d", outputDir.toString(),
+                    //当前要生成文档的 Java 文件
                     sourceFile.toString()
             );
+            //把 javadoc 的标准输出和错误输出都写入 javadoc.log
             processBuilder.redirectErrorStream(true);
             processBuilder.redirectOutput(commandOutputFile.toFile());
 
+            //启动进程并设置超时，最多执行60s
             Process process = processBuilder.start();
             boolean completed = process.waitFor(JAVADOC_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            //如果仍未完成，强制杀掉进程，并抛出业务异常
             if (!completed) {
                 process.destroyForcibly();
                 throw new BusinessException(500, "javadoc timed out for file: " + context.getFilePath());

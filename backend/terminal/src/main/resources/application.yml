@@ -12,3 +12,6 @@ terminal:
   tasks:
     shell: ${TERMINAL_TASK_SHELL:bash}
     script-dir: ${TERMINAL_TASK_SCRIPT_DIR:}
+    workspace-base-dir: ${USER_WORKSPACE_BASE:}
+    backend-root: ${REPOPILOT_BACKEND_ROOT:}
+    business-jar: ${REPOPILOT_BUSINESS_CLI_JAR:}

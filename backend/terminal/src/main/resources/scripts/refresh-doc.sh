@@ -8,7 +8,7 @@ PROJECT=""
 BRANCH=""
 USERNAME=""
 REPO_DIR=""
-WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
+WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-${REPOPILOT_WORKSPACE_BASE:-.}}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -42,6 +42,7 @@ require_value "project" "$PROJECT"
 require_value "branch" "$BRANCH"
 require_value "username" "$USERNAME"
 
+WORKSPACE_ROOT="$(shell_path "$WORKSPACE_ROOT")"
 REPO_DIR="$(resolve_repo_dir "$USERNAME" "$PROJECT" "$REPO_DIR" "$WORKSPACE_ROOT")"
 ensure_git_repo "$REPO_DIR"
 

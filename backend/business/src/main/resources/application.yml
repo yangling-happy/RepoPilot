@@ -38,7 +38,7 @@ repo:
 
 user:
   workspace:
-    base-dir: ${USER_WORKSPACE_BASE:.}
+    base-dir: ${USER_WORKSPACE_BASE:}
 
 terminal:
   relay:

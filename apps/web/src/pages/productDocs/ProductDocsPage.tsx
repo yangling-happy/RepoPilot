@@ -14,16 +14,19 @@ import {
 } from "../../components/virtualTerminal/VirtualTerminalPanel";
 import {
   ApiError,
-  cloneRepo,
+  getGitLabProject,
+  listGitLabProjects,
   queryDocs,
   refreshDoc,
-  scanLocalDoc,
   setGitlabToken,
   type CloneRepoResponse,
+  type DocLocalScanResult,
   type DocMemberDoc,
   type DocQueryItem,
   type DocTypeDoc,
+  type GitLabProjectInfo,
 } from "../../services/backendApi";
+import { startTerminalTask, type TerminalTaskType } from "../../services/terminalApi";
 import {
   getCloneErrorMessage,
   getTerminalUnavailableMessage,
@@ -60,6 +63,9 @@ export function ProductDocsPage() {
   const [params] = useSearchParams();
   const repo = params.get("repo");
   const terminalClientRef = useRef<TerminalClient | null>(null);
+  const terminalReadyResolversRef = useRef<
+    Array<(client: TerminalClient) => void>
+  >([]);
 
   const [token, setToken] = useState(() => {
     if (typeof window === "undefined") {
@@ -82,6 +88,7 @@ export function ProductDocsPage() {
     text: string;
   } | null>(null);
   const [lastClone, setLastClone] = useState<CloneRepoResponse | null>(null);
+  const [projects, setProjects] = useState<GitLabProjectInfo[]>([]);
   const [docs, setDocs] = useState<DocQueryItem[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [selectedDocSelection, setSelectedDocSelection] =
@@ -90,6 +97,7 @@ export function ProductDocsPage() {
   const [terminalConnectionState, setTerminalConnectionState] =
     useState<TerminalConnectionState>("connecting");
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalPanelKey, setTerminalPanelKey] = useState(0);
   const [terminalBusy, setTerminalBusy] = useState(false);
 
   const language = i18n.resolvedLanguage ?? i18n.language;
@@ -105,7 +113,7 @@ export function ProductDocsPage() {
   const sections = [
     {
       label: t("pages.documentation.items.webhook"),
-      codes: ["POST /api/repo/clone", "POST /api/doc/scan-local"],
+      codes: ["POST /api/terminal/tasks/start", "GET /api/repo/projects/{projectId}"],
     },
     {
       label: t("pages.documentation.items.query"),
@@ -123,9 +131,45 @@ export function ProductDocsPage() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(TERMINAL_SESSION_STORAGE_KEY, sessionId);
       }
+      const resolvers = terminalReadyResolversRef.current.splice(0);
+      resolvers.forEach((resolve) => resolve(client));
     },
     [],
   );
+
+  const openTerminal = useCallback(() => {
+    const client = terminalClientRef.current;
+    if (!terminalOpen || client?.isClosed()) {
+      terminalClientRef.current = null;
+      setTerminalPanelKey((current) => current + 1);
+    }
+    setTerminalOpen(true);
+  }, [terminalOpen]);
+
+  const waitForTerminalClient = useCallback(() => {
+    const existingClient = terminalClientRef.current;
+    if (existingClient && !existingClient.isClosed()) {
+      return Promise.resolve(existingClient);
+    }
+
+    return new Promise<TerminalClient>((resolve, reject) => {
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const resolver = (client: TerminalClient) => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        resolve(client);
+      };
+
+      terminalReadyResolversRef.current.push(resolver);
+      timeoutId = setTimeout(() => {
+        terminalReadyResolversRef.current =
+          terminalReadyResolversRef.current.filter((item) => item !== resolver);
+        reject(new Error("Terminal connection is not ready"));
+      }, 10000);
+    });
+  }, []);
 
   const appendTerminal = useCallback((line: string) => {
     const client = terminalClientRef.current;
@@ -177,6 +221,12 @@ export function ProductDocsPage() {
     [t],
   );
 
+  const loadProjects = useCallback(async () => {
+    const loadedProjects = await listGitLabProjects();
+    setProjects(loadedProjects);
+    return loadedProjects;
+  }, []);
+
   const handleRefreshDocs = useCallback(async () => {
     const project =
       projectId.trim() || (lastClone ? String(lastClone.projectId) : "");
@@ -184,6 +234,14 @@ export function ProductDocsPage() {
       setStatus({
         type: "error",
         text: t("pages.documentation.actions.errors.projectIdRequiredForDoc"),
+      });
+      return;
+    }
+    const projectIdNumber = Number(project);
+    if (!Number.isInteger(projectIdNumber) || projectIdNumber <= 0) {
+      setStatus({
+        type: "error",
+        text: t("pages.documentation.actions.errors.projectIdInvalid"),
       });
       return;
     }
@@ -230,6 +288,7 @@ export function ProductDocsPage() {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(TOKEN_STORAGE_KEY, trimmedToken);
       }
+      await loadProjects();
       setStatus({
         type: "success",
         text: t("pages.documentation.actions.success.tokenSaved"),
@@ -245,7 +304,7 @@ export function ProductDocsPage() {
     } finally {
       setSavingToken(false);
     }
-  }, [t, token]);
+  }, [loadProjects, t, token]);
 
   const handleClone = useCallback(async () => {
     const projectIdNumber = Number(projectId);
@@ -257,9 +316,18 @@ export function ProductDocsPage() {
       return;
     }
 
+    const trimmedToken = token.trim();
+    if (!trimmedToken) {
+      setStatus({
+        type: "error",
+        text: t("pages.documentation.actions.errors.tokenRequired"),
+      });
+      return;
+    }
+
     const effectiveBranch = branch.trim() || "main";
 
-    setTerminalOpen(true);
+    openTerminal();
     terminalClientRef.current?.clear();
     setTerminalBusy(true);
     setCloning(true);
@@ -271,27 +339,59 @@ export function ProductDocsPage() {
     );
 
     try {
-      if (token.trim()) {
-        await setGitlabToken(token.trim());
+      await setGitlabToken(trimmedToken);
+      const projectInfo = await getGitLabProject(projectIdNumber);
+      const terminalClient = await waitForTerminalClient();
+      await terminalClient.waitUntilOpen();
+      const waiter = createTerminalTaskWaiter(
+        terminalClient,
+        terminalSessionId,
+        "CLONE_REPO",
+      );
+      try {
+        await startTerminalTask({
+          sessionId: terminalSessionId,
+          taskType: "CLONE_REPO",
+          args: {
+            projectId: projectIdNumber,
+            branch: effectiveBranch,
+            username: projectInfo.gitlabUsername,
+            repoUrl: projectInfo.httpUrlToRepo,
+            projectPath: projectInfo.pathWithNamespace,
+            gitlabToken: trimmedToken,
+          },
+        });
+      } catch (error) {
+        waiter.cancel();
+        throw error;
       }
-
-      const response = await cloneRepo({
+      const outcome = await waiter.promise;
+      const response = readTerminalTaskData<CloneRepoResponse>(
+        outcome,
+        t("pages.documentation.actions.errors.unexpected"),
+      );
+      const normalizedResponse = {
+        ...response,
         projectId: projectIdNumber,
         branch: effectiveBranch,
-        terminalSessionId,
-      });
+        projectPath: response.projectPath || projectInfo.pathWithNamespace,
+        gitlabUsername: response.gitlabUsername || projectInfo.gitlabUsername,
+        cloneUrl: response.cloneUrl || projectInfo.httpUrlToRepo,
+        workspacePath: response.workspacePath || projectInfo.workspacePath,
+        localPath: response.localPath || projectInfo.localPath,
+      };
 
-      saveClonedRepo(response);
-      setLastClone(response);
+      saveClonedRepo(normalizedResponse);
+      setLastClone(normalizedResponse);
       appendTerminal(
         t("pages.documentation.actions.terminal.cloneCompleted", {
-          localPath: response.localPath,
+          localPath: normalizedResponse.localPath,
         }),
       );
       setStatus({
         type: "success",
         text: t("pages.documentation.actions.success.cloneCompleted", {
-          projectPath: response.projectPath,
+          projectPath: normalizedResponse.projectPath,
         }),
       });
     } catch (error) {
@@ -319,10 +419,12 @@ export function ProductDocsPage() {
     appendTerminal,
     branch,
     language,
+    openTerminal,
     projectId,
     t,
     terminalSessionId,
     token,
+    waitForTerminalClient,
   ]);
 
   const handleScanLocal = useCallback(async () => {
@@ -335,9 +437,17 @@ export function ProductDocsPage() {
       });
       return;
     }
+    const projectIdNumber = Number(project);
+    if (!Number.isInteger(projectIdNumber) || projectIdNumber <= 0) {
+      setStatus({
+        type: "error",
+        text: t("pages.documentation.actions.errors.projectIdInvalid"),
+      });
+      return;
+    }
 
     const effectiveBranch = branch.trim() || "main";
-    setTerminalOpen(true);
+    openTerminal();
     terminalClientRef.current?.clear();
     setTerminalBusy(true);
     setScanning(true);
@@ -349,11 +459,36 @@ export function ProductDocsPage() {
     );
 
     try {
-      const result = await scanLocalDoc({
-        project,
-        branch: effectiveBranch,
+      if (token.trim()) {
+        await setGitlabToken(token.trim());
+      }
+      const projectInfo = await getGitLabProject(projectIdNumber);
+      const terminalClient = await waitForTerminalClient();
+      await terminalClient.waitUntilOpen();
+      const waiter = createTerminalTaskWaiter(
+        terminalClient,
         terminalSessionId,
-      });
+        "SCAN_LOCAL_DOC",
+      );
+      try {
+        await startTerminalTask({
+          sessionId: terminalSessionId,
+          taskType: "SCAN_LOCAL_DOC",
+          args: {
+            project,
+            branch: effectiveBranch,
+            username: projectInfo.gitlabUsername,
+          },
+        });
+      } catch (error) {
+        waiter.cancel();
+        throw error;
+      }
+      const outcome = await waiter.promise;
+      const result = readTerminalTaskData<DocLocalScanResult>(
+        outcome,
+        t("pages.documentation.actions.errors.unexpected"),
+      );
       appendTerminal(
         t("pages.documentation.actions.terminal.scanCompleted", {
           scanned: result.scannedFileCount,
@@ -396,9 +531,12 @@ export function ProductDocsPage() {
     branch,
     lastClone,
     loadDocs,
+    openTerminal,
     projectId,
     t,
     terminalSessionId,
+    token,
+    waitForTerminalClient,
   ]);
 
   const selectedDoc = useMemo(() => {
@@ -448,12 +586,22 @@ export function ProductDocsPage() {
           <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
             {t("pages.documentation.actions.projectId")}
             <input
+              list="gitlab-project-options"
               type="number"
               min={1}
               value={projectId}
               onChange={(event) => setProjectId(event.target.value)}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
             />
+            <datalist id="gitlab-project-options">
+              {projects.map((project) => (
+                <option
+                  key={project.id}
+                  value={project.id}
+                  label={project.pathWithNamespace}
+                />
+              ))}
+            </datalist>
           </label>
           <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300 md:col-span-2">
             {t("pages.documentation.actions.branch")}
@@ -624,18 +772,24 @@ export function ProductDocsPage() {
         <StructuredDocDetail doc={selectedDoc} section={selectedSection} />
       </div>
 
-      <VirtualTerminalPanel
-        title={t("pages.documentation.terminal.title")}
-        subtitle={t("pages.documentation.terminal.subtitle")}
-        bootLines={bootLines}
-        sessionId={terminalSessionId}
-        variant="floating"
-        open={terminalOpen}
-        dismissible={!terminalBusy}
-        onRequestClose={() => setTerminalOpen(false)}
-        onConnectionStatusChange={setTerminalConnectionState}
-        onSessionReady={onSessionReady}
-      />
+      {terminalOpen ? (
+        <VirtualTerminalPanel
+          key={terminalPanelKey}
+          title={t("pages.documentation.terminal.title")}
+          subtitle={t("pages.documentation.terminal.subtitle")}
+          bootLines={bootLines}
+          sessionId={terminalSessionId}
+          variant="floating"
+          open={terminalOpen}
+          dismissible={!terminalBusy}
+          onRequestClose={() => {
+            terminalClientRef.current = null;
+            setTerminalOpen(false);
+          }}
+          onConnectionStatusChange={setTerminalConnectionState}
+          onSessionReady={onSessionReady}
+        />
+      ) : null}
 
       <div className="mt-14 space-y-3">
         {sections.map((section) => (
@@ -1004,6 +1158,96 @@ function createSessionIdFallback() {
     return crypto.randomUUID();
   }
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+type TerminalTaskResultEnvelope = {
+  status?: string;
+  message?: string;
+  data?: unknown;
+};
+
+type TerminalTaskOutcome = {
+  exitCode: number;
+  result?: TerminalTaskResultEnvelope;
+};
+
+type TerminalTaskMessage = {
+  type?: string;
+  sessionId?: string;
+  taskType?: string;
+  exitCode?: number;
+  data?: TerminalTaskResultEnvelope;
+};
+
+function createTerminalTaskWaiter(
+  client: TerminalClient,
+  sessionId: string,
+  taskType: TerminalTaskType,
+  timeoutMs = 60 * 60 * 1000,
+) {
+  let cleanup: () => void = () => undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const promise = new Promise<TerminalTaskOutcome>((resolve, reject) => {
+    let result: TerminalTaskResultEnvelope | undefined;
+
+    const finish = (complete: () => void) => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      cleanup();
+      complete();
+    };
+
+    timeoutId = setTimeout(() => {
+      finish(() => reject(new Error("Terminal task timed out")));
+    }, timeoutMs);
+
+    cleanup = client.onMessage((rawMessage) => {
+      const message = rawMessage as TerminalTaskMessage;
+      if (message.sessionId && message.sessionId !== sessionId) {
+        return;
+      }
+      if (message.type === "result" && message.taskType === taskType) {
+        result = message.data;
+        return;
+      }
+      if (message.type === "exit") {
+        finish(() =>
+          resolve({
+            exitCode:
+              typeof message.exitCode === "number" ? message.exitCode : -1,
+            result,
+          }),
+        );
+      }
+    });
+  });
+
+  return {
+    promise,
+    cancel: () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      cleanup();
+    },
+  };
+}
+
+function readTerminalTaskData<T>(
+  outcome: TerminalTaskOutcome,
+  fallbackMessage: string,
+): T {
+  const message = outcome.result?.message || fallbackMessage;
+  if (outcome.exitCode !== 0 || outcome.result?.status === "FAILED") {
+    throw new Error(message);
+  }
+  if (!outcome.result || outcome.result.data == null) {
+    throw new Error(message);
+  }
+  return outcome.result.data as T;
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {

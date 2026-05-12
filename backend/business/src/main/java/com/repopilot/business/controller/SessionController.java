@@ -21,6 +21,8 @@ public class SessionController {
 
     //路由函数，都是调用对应service层函数实现对应功能
     @PostMapping("/setGitlabToken")
+    //这里的 HttpSession session 是 Spring MVC 自动注入的
+    //不需要写request.getSession()
     public ApiResponse<String> setGitlabToken(@RequestParam String token, HttpSession session) {
         String username = gitLabSessionContextService.saveTokenAndResolveUsername(token, session);
         log.info("GitLab token set in session, username={}", username);

@@ -33,3 +33,4 @@ yarn-error.log*
 
 # Local runtime workspace
 /workspace/
+/backend/workspace/

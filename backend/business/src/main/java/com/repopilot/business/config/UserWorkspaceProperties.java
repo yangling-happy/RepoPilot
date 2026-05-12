@@ -12,5 +12,5 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "user.workspace")
 public class UserWorkspaceProperties {
     //如果配置文件没写baseDir则保持.当前目录
-    private String baseDir = ".";
+    private String baseDir = "";
 }

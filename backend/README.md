@@ -201,7 +201,7 @@ curl -sS -X POST -b "$COOKIE_JAR" \
 默认克隆目录为：
 
 ```text
-backend/business/workspace/{gitlabUsername}/repos/project-2
+backend/workspace/{gitlabUsername}/repos/project-2
 ```
 
 如果接口提示目录已存在，说明仓库已经克隆过；可以直接继续执行文档扫描或刷新。
@@ -237,13 +237,13 @@ curl -sS -X POST -b "$COOKIE_JAR" \
 同时，结构化文档会落盘到：
 
 ```text
-backend/business/workspace/{gitlabUsername}/docs/2/main/{commitId}/{filePathHash}/...
+backend/workspace/{gitlabUsername}/docs/2/main/{commitId}/{filePathHash}/...
 ```
 
 例如某次生成后，`doc_file_path` 可能指向：
 
 ```text
-/path/to/RepoPilot/backend/business/workspace/{gitlabUsername}/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/doc.json
+/path/to/RepoPilot/backend/workspace/{gitlabUsername}/docs/2/main/375a7d75fcf0924e819e9e5f567568e7be08c308/6b874d87/doc.json
 ```
 
 查询当前可展示的文档：
@@ -271,7 +271,7 @@ find ./workspace/{gitlabUsername}/docs/2/main -name 'doc.json' -print
 - 目前 `.md`、`.py` 等未支持后缀会被跳过并记录日志，不会生成 `doc_file_dtl` 成功文档。
 - `/doc/scan-local` 是本地仓库全量扫描；`/doc/refresh` 是 GitLab 提交差异增量解析，两者会共用同一套后缀分发和文档生成器。
 - `workspace/{gitlabUsername}/repos` 和 `workspace/{gitlabUsername}/docs` 都在 `workspace` 忽略范围内，不会提交到项目仓库。
-- 用户工作区根目录可通过 `USER_WORKSPACE_BASE` 或 `--user.workspace.base-dir=...` 覆盖；默认从 business 服务工作目录下的 `workspace/{gitlabUsername}` 开始。
+- 用户工作区根目录可通过 `USER_WORKSPACE_BASE` 或 `--user.workspace.base-dir=...` 覆盖；默认从 backend 目录下的 `workspace/{gitlabUsername}` 开始。
 
 ## 写入接口结构速览
 

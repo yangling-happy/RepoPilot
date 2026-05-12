@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -58,8 +59,28 @@ public class UserWorkspaceResolver {
     }
 
     private Path baseRoot() {
-        String baseDir = StringUtils.hasText(properties.getBaseDir()) ? properties.getBaseDir() : ".";
-        return Paths.get(baseDir).toAbsolutePath().normalize();
+        if (StringUtils.hasText(properties.getBaseDir())) {
+            return Paths.get(properties.getBaseDir()).toAbsolutePath().normalize();
+        }
+        return resolveDefaultBackendRoot();
+    }
+
+    private Path resolveDefaultBackendRoot() {
+        Path cwd = Paths.get(System.getProperty("user.dir")).toAbsolutePath().normalize();
+        if (Files.exists(cwd.resolve("business").resolve("pom.xml"))) {
+            return cwd;
+        }
+        if (Files.exists(cwd.resolve("backend").resolve("business").resolve("pom.xml"))) {
+            return cwd.resolve("backend").toAbsolutePath().normalize();
+        }
+        Path parent = cwd.getParent();
+        if (parent != null && Files.exists(parent.resolve("business").resolve("pom.xml"))) {
+            return parent;
+        }
+        if (parent != null && Files.exists(parent.resolve("backend").resolve("business").resolve("pom.xml"))) {
+            return parent.resolve("backend").toAbsolutePath().normalize();
+        }
+        return cwd;
     }
 
     private Path resolveUnder(Path root, String segment) {
