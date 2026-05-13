@@ -37,6 +37,8 @@ public class GitLabUserClient {
             throw new BusinessException(400, "GitLab token is required");
         }
 
+        //GitLab Personal Access Token 通过 PRIVATE-TOKEN header 传递
+        //这里不把 token 放到 URL 里，避免它出现在访问日志或浏览器历史中
         HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase() + "/user"))
                 .header("PRIVATE-TOKEN", token.trim())
                 .header("Accept", "application/json")
@@ -54,6 +56,8 @@ public class GitLabUserClient {
             }
 
             JsonNode json = objectMapper.readTree(response.body());
+            //GitLab /user 的 username 是登录名，不是展示昵称 name
+            //后续用它来隔离本地工作空间目录和数据库记录
             String username = json.path("username").asText(null);
             if (!StringUtils.hasText(username)) {
                 throw new BusinessException(500, "GitLab username is empty");
@@ -71,6 +75,7 @@ public class GitLabUserClient {
         if (!StringUtils.hasText(gitlabApiUrl)) {
             throw new BusinessException(500, "GitLab API URL is not configured");
         }
+        //统一去掉结尾斜杠，避免拼接 /user 时出现双斜杠
         String trimmed = gitlabApiUrl.trim();
         return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }

@@ -29,7 +29,8 @@ import static org.springframework.util.StringUtils.hasText;
 //Lombok 注解，自动生成包含 final 字段的构造函数，Spring 会通过这个构造函数注入私有成员
 @RequiredArgsConstructor
 public class DeployController {
-    //一个集合，记录状态
+    //部署/构建任务允许写入数据库的运行状态集合
+    //Controller 在入库前先校验状态，避免把拼写错误或未知状态写进表里
     private static final Set<String> ALLOWED_RUN_STATUS = Set.of(
             "PENDING", "RUNNING", "SUCCESS", "FAILED", "CANCELLED", "TIMEOUT");
     
@@ -40,6 +41,10 @@ public class DeployController {
     //从 HTTP 会话中获取当前 GitLab 用户上下文
     private final GitLabSessionContextService gitLabSessionContextService;
 
+    //触发一次部署
+    //
+    //当前还只是占位接口：已经完成用户认证和日志记录，
+    //真正执行部署脚本、创建任务、推送日志的逻辑后续再补。
     @PostMapping("/trigger")
     public ApiResponse<String> triggerDeploy(@RequestParam String project,
             @RequestParam String branch,
@@ -64,7 +69,7 @@ public class DeployController {
         BizAssert.isTrue(validationError == null, 400, validationError);
         //获取用户上下文：从会话中取出 GitLabUserContext
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
-        
+
         //这里的deployTask是数据库实体，其作用是插入一条数据库数据，不能也不应该交给 Spring 容器管理
         //如果试图将其作为 Spring Bean 注入，那容器中只会有一个实例（默认单例），所有请求共享同一个对象，这会造成严重的数据混乱
         DeployTask deployTask = new DeployTask();
@@ -87,14 +92,19 @@ public class DeployController {
         return ApiResponse.success("Deploy task created", deployTask);
     }
 
+    //创建构建任务记录
+    //
+    //这个接口只负责“登记构建任务结果/状态”，不实际执行构建。
+    //实际构建执行器可以在构建开始、结束或失败时调用它，把状态写入 build_task 表。
     @PostMapping("/build/task/create")
     public ApiResponse<BuildTask> createBuildTask(@RequestBody CreateBuildTaskRequest request,
                                                   HttpSession session) {
         String validationError = validateCreateBuildTaskRequest(request);
         BizAssert.isTrue(validationError == null, 400, validationError);
         GitLabUserContext context = gitLabSessionContextService.requireContext(session);
-        
-        
+
+        //BuildTask 是数据库实体对象，每次请求都创建一个新实例再写入数据库
+        //不要把实体类设计成 Spring Bean，否则多个请求会共享同一个对象状态
         BuildTask buildTask = new BuildTask();
         buildTask.setGitlabUsername(context.username());
         buildTask.setBuildTaskId(request.getBuildTaskId().trim());
@@ -140,6 +150,11 @@ public class DeployController {
         return ApiResponse.success("Deploy cancelled", null);
     }
 
+    //校验创建部署任务的请求体
+    //返回 null 表示校验通过；返回字符串表示具体错误信息
+    //
+    //这里选择返回错误字符串，而不是在每个分支直接抛异常，
+    //是为了让 Controller 主流程保持“先校验，再执行业务”的结构。
     private String validateCreateDeployTaskRequest(CreateDeployTaskRequest request) {
         if (request == null) {
             return "Request body is required";
@@ -169,6 +184,8 @@ public class DeployController {
         return null;
     }
 
+    //校验创建构建任务的请求体
+    //规则和部署任务类似：必填字段不能为空，状态必须在允许集合里，耗时不能为负数
     private String validateCreateBuildTaskRequest(CreateBuildTaskRequest request) {
         if (request == null) {
             return "Request body is required";

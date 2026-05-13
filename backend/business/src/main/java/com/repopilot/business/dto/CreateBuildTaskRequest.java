@@ -2,6 +2,13 @@ package com.repopilot.business.dto;
 
 import lombok.Data;
 
+//手动创建构建任务时的请求体 DTO
+//对应 DeployController 的 /deploy/build/task/create 接口
+//
+//构建任务通常描述“把某个 commit 构建成产物”的过程：
+//  1. 记录构建脚本、日志目录、产物路径
+//  2. 记录运行状态和耗时
+//  3. 可选关联到一个部署任务 deployTaskId
 //Lombok 注解，自动生成 getter/setter、toString()、equals()、hashCode() 等方法，减少样板代码
 @Data
 public class CreateBuildTaskRequest {

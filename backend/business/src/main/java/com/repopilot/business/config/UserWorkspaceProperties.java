@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 //Spring 的类级别注解，将该类作为一个 Spring Bean 交由容器管理，使得其他地方可以通过 @Autowired 注入使用
 @ConfigurationProperties(prefix = "user.workspace")
 public class UserWorkspaceProperties {
-    //如果配置文件没写baseDir则保持.当前目录
+    //用户工作空间的基础目录
+    //最终目录结构大致是：{baseDir}/workspace/{username}/repos/project-{projectId}
+    //如果配置文件没写 baseDir，则使用当前进程启动目录
     private String baseDir = ".";
 }

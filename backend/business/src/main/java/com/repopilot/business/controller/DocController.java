@@ -33,8 +33,12 @@ import static org.springframework.util.StringUtils.hasText;
 @RequiredArgsConstructor
 public class DocController {
 
+    //文档任务允许写入数据库的状态集合
+    //手动创建任务时会校验这个集合，避免出现拼写错误的状态值
     private static final Set<String> ALLOWED_TASK_STATUS = Set.of(
             "PENDING", "RUNNING", "SUCCESS", "FAILED", "SKIPPED");
+    //单个文档文件解析结果允许的状态集合
+    //DocFile 记录的是“某个源文件对应的文档产物是否生成/解析成功”
     private static final Set<String> ALLOWED_PARSE_STATUS = Set.of(
             "PENDING", "SUCCESS", "FAILED");
             
@@ -58,14 +62,20 @@ public class DocController {
     
         log.info("Refresh doc request: username={}, project={}, branch={}",
                 context.username(), request.getProject(), request.getBranch());
-    
+
         // 调用 service 层执行刷新：先同步远程仓库，再扫描文档变更
         DocRefreshResult result = docPipelineService.refresh(
                 context.username(), request.getProject(), request.getBranch(), context.token());
-    
+
         return ApiResponse.success("Refresh completed", result);
     }
-    
+
+    //本地全量扫描接口
+    //
+    //它不会访问 GitLab 远程 API，而是直接读取当前用户工作空间中的本地仓库：
+    //  1. 遍历仓库文件
+    //  2. 跳过 .git 和 .gitignore 忽略的内容
+    //  3. 为支持的文件类型生成结构化文档
     @PostMapping("/scan-local")
     public ApiResponse<DocLocalScanResult> scanLocalDoc(@RequestBody DocLocalScanRequest request,
             HttpSession session) {
@@ -116,6 +126,10 @@ public class DocController {
         return ApiResponse.success(docPipelineService.query(context.username(), project, branch, filePath, commitId));
     }
 
+    //手动创建文档任务记录
+    //
+    //这类接口通常用于调试、外部系统回调或未来接入异步任务调度。
+    //真正的文档流水线会自动创建任务；手动接口只负责把可信参数落库。
     @PostMapping("/task/create")
     public ApiResponse<DocTask> createDocTask(@RequestBody CreateDocTaskRequest request,
             HttpSession session) {
@@ -179,6 +193,8 @@ public class DocController {
         return ApiResponse.success("Doc file created", docFile);
     }
 
+    //校验手动创建文档任务的请求体
+    //返回 null 表示通过；返回具体字符串表示错误原因
     private String validateCreateDocTaskRequest(CreateDocTaskRequest request) {
         if (request == null) {
             return "Request body is required";
@@ -208,6 +224,10 @@ public class DocController {
         return null;
     }
 
+    //校验手动创建文档文件记录的请求体
+    //
+    //这里只做“字段格式”校验；taskId 是否存在、是否属于当前用户，
+    //会在 createDocFile 主流程里查数据库后再校验。
     private String validateCreateDocFileRequest(CreateDocFileRequest request) {
         if (request == null) {
             return "Request body is required";

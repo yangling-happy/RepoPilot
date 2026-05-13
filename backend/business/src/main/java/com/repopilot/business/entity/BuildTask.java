@@ -11,6 +11,10 @@ import java.time.LocalDateTime;
 @Data
 //指定实体对应的数据库表名
 @TableName("build_task")
+//构建任务数据库实体
+//
+//它对应 build_task 表中的一行记录，用来描述一次构建过程：
+//谁发起、哪个项目/分支/commit、脚本在哪里、产物在哪里、运行状态如何。
 public class BuildTask {
     
     //TableId标记主键字段，并指定主键策略

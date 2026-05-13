@@ -35,11 +35,19 @@ DocGenerationContext context = DocGenerationContext.builder()
 @Builder
 public class DocGenerationContext {
 
+    //项目标识，用于组织输出目录，也用于写入结构化文档元信息
     String project;
+    //分支名，用于区分同一项目不同分支生成的文档
     String branch;
+    //commit hash，表示这次生成文档所基于的源码版本
     String commitId;
+    //源文件在仓库中的相对路径，如 src/main/java/com/example/Demo.java
+    //生成器会用这个路径恢复临时源码目录结构，javadoc 也依赖这个结构定位源码
     String filePath;
+    //源文件内容；远程增量场景来自 GitLab API，本地扫描场景来自本地文件读取
     String sourceContent;
+    //本地仓库根目录；传给 javadoc 的 sourcepath，帮助它解析 import 的其他源码
     Path sourceRoot;
+    //文档输出根目录；最终结构化 JSON 会写入这个目录下面
     Path outputRoot;
 }

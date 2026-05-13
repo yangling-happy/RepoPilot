@@ -42,7 +42,8 @@ public class GitLabDocClient {
     @Value("${gitlab.api-url}")
     private String apiUrl;
 
-    // 获取分支 head commit id。
+    //获取分支 head commit id
+    //用于 refresh 时判断远程分支当前最新代码版本
     public String getHeadCommit(String token, String project, String branch) {
         JsonNode branchInfo = getJson(token,
                 "/projects/" + encodePathSegment(project) + "/repository/branches/" + encodePathSegment(branch),
@@ -54,12 +55,17 @@ public class GitLabDocClient {
         return commitId;
     }
 
-    // 按时间顺序列出 baseline 到 head 之间的 commit id。
+    //按时间顺序列出 baseline 到 head 之间的 commit id
+    //
+    //baselineCommit 是上次处理到的 commit，headCommit 是这次分支最新 commit。
+    //GitLab compare 接口返回两者之间的 commits，文档流水线再按时间顺序逐个处理。
     public List<String> listCommitIdsSince(String token, String project, String baselineCommit, String headCommit) {
         if (!StringUtils.hasText(baselineCommit)) {
+            //没有基线说明是第一次处理，至少要处理 headCommit
             return List.of(headCommit);
         }
         if (Objects.equals(baselineCommit, headCommit)) {
+            //基线和最新提交一致，说明没有新增 commit
             return List.of();
         }
 
@@ -91,13 +97,17 @@ public class GitLabDocClient {
         return commitIds.isEmpty() ? List.of(headCommit) : commitIds;
     }
 
-    // 通过与首个 parent compare，获取某个 commit 的文件级变更。
+    //通过与首个 parent compare，获取某个 commit 的文件级变更
+    //
+    //GitLab commit 接口本身会返回 parent_ids。
+    //这里取第一个 parent 和当前 commit 做 compare，就能得到这个 commit 引入的文件差异。
     public List<CommitFileChange> listCommitFileChanges(String token, String project, String commitId) {
         JsonNode commit = getJson(token,
                 "/projects/" + encodePathSegment(project) + "/repository/commits/" + encodePathSegment(commitId),
                 "load commit");
         JsonNode parentIds = commit.path("parent_ids");
         if (!parentIds.isArray() || parentIds.isEmpty()) {
+            //没有 parent 通常是仓库初始提交，当前逻辑暂不按增量 diff 处理
             return List.of();
         }
 
@@ -123,7 +133,10 @@ public class GitLabDocClient {
         return changes;
     }
 
-    // 读取指定 commit 的文件内容，并解码 GitLab base64 内容。
+    //读取指定 commit 的文件内容，并解码 GitLab base64 内容
+    //
+    //GitLab repository/files 接口返回的 content 字段是 base64，
+    //所以文档生成前必须先解码成真正的 UTF-8 源码文本。
     public String readFileContent(String token, String project, String filePath, String commitId) {
         try {
             JsonNode repositoryFile = getJson(token,
@@ -145,7 +158,10 @@ public class GitLabDocClient {
         }
     }
 
-    // 将 GitLab diff 标记映射为内部变更类型。
+    //将 GitLab diff 标记映射为内部变更类型
+    //
+    //GitLab 原始字段是 deleted_file/renamed_file/new_file 这种布尔标记，
+    //后续业务更适合用 ADDED/MODIFIED/RENAMED/DELETED 枚举来判断。
     private CommitFileChange toFileChange(JsonNode diff) {
         String oldPath = diff.path("old_path").asText(null);
         String newPath = diff.path("new_path").asText(null);
@@ -167,6 +183,10 @@ public class GitLabDocClient {
             throw new BusinessException(400, "GitLab token is required");
         }
 
+        //所有 GitLab API 调用都走这个统一方法：
+        //  - 统一拼接 apiBase
+        //  - 统一设置 PRIVATE-TOKEN
+        //  - 统一把 HTTP 状态码翻译成业务异常
         HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase() + pathAndQuery))
                 .header("PRIVATE-TOKEN", token.trim())
                 .header("Accept", "application/json")
@@ -199,16 +219,21 @@ public class GitLabDocClient {
         if (!StringUtils.hasText(apiUrl)) {
             throw new BusinessException(500, "GitLab API URL is not configured");
         }
+        //配置里可能写成 https://gitlab.com/api/v4/，这里去掉末尾斜杠，
+        //这样拼接 pathAndQuery 时不会出现双斜杠
         String trimmed = apiUrl.trim();
         return trimmed.endsWith("/") ? trimmed.substring(0, trimmed.length() - 1) : trimmed;
     }
 
     private String encodePathSegment(String value) {
+        //GitLab 的 project、branch、filePath 都可能包含 /、空格等特殊字符，
+        //放进 URL 前必须编码，否则会被误认为路径分隔符或非法字符
         return encodeQueryParam(value);
     }
 
     private String encodeQueryParam(String value) {
         return URLEncoder.encode(value == null ? "" : value, StandardCharsets.UTF_8)
+        //URL编码字符, “%20”表示空格
                 .replace("+", "%20");
     }
 
@@ -217,9 +242,11 @@ public class GitLabDocClient {
             return null;
         }
         try {
+            //GitLab 常见时间格式带时区偏移，例如 2026-05-13T10:00:00.000+08:00
             return OffsetDateTime.parse(value).toInstant();
         } catch (RuntimeException ignored) {
             try {
+                //有些接口或测试数据可能已经是标准 Instant 格式，例如 2026-05-13T02:00:00Z
                 return Instant.parse(value);
             } catch (RuntimeException ignoredAgain) {
                 return null;
@@ -227,6 +254,8 @@ public class GitLabDocClient {
         }
     }
 
+    //把 GitLab 错误响应压缩成一小段，放进异常消息
+    //避免接口失败时把过长的 HTML/JSON body 整个塞进日志和前端响应
     private String summarize(String body) {
         if (!StringUtils.hasText(body)) {
             return "";

@@ -1,5 +1,8 @@
 package com.repopilot.business.service.impl;
 
+//MyBatis-Plus 提供的 Lambda 查询条件构造器
+//用法：new LambdaQueryWrapper<DocFile>().eq(DocFile::getProjectName, "xxx")
+//好处：用方法引用（DocFile::getProjectName）代替字符串字段名，避免拼写错误，编译期就能检查
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.repopilot.business.dto.DocLocalScanResult;
@@ -59,7 +62,7 @@ import java.util.stream.Collectors;
 
 //文档流水线服务的核心实现类
 //职责：协调 GitLab API、文档生成器、数据库，完成文档的增量刷新、重建、本地扫描和查询
-//这是整个文档生成功能的"大脑"，负责串联各个组件完成完整的业务流程
+//这是整个文档生成功能的中枢，负责串联各个组件完成完整的业务流程
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -87,52 +90,77 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     //增量刷新文档：对比本地 HEAD 和远程 HEAD，找出新增 commit，为变更的 Java 文件生成文档
+    //
+    //整体流程：
+    //  1. 打开本地 Git 仓库，切到目标分支
+    //  2. 记录当前本地 HEAD（oldHead）
+    //  3. 从远程拉取最新代码（git fetch + git pull）
+    //  4. 记录拉取后的 HEAD（newHead）
+    //  5. 如果 oldHead != newHead，说明有新 commit，计算两次 HEAD 之间的 diff
+    //  6. 根据 diff 中变更的文件，调用文档生成器生成文档
     @Override
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
+        //第一步：校验必填参数，不合法直接抛异常
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
         validateToken(token);
 
+        //第二步：找到本地仓库的根目录
+        //路径格式：{baseDir}/workspace/{username}/repos/project-{projectId}
         Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
 
+        //将分支名标准化（去掉 refs/heads/ 前缀）
         String normalizedBranch = normalizeBranchName(branch);
-        String oldHead;
-        String newHead;
-        List<String> detectedCommitIds = List.of();
-        List<CommitFileChange> changes = List.of();
+        String oldHead;  //拉取前的 commit hash
+        String newHead;  //拉取后的 commit hash
+        List<String> detectedCommitIds = List.of();  //检测到的新 commit 列表
+        List<CommitFileChange> changes = List.of();  //文件变更列表
 
+        //try-with-resources 语法：括号里打开的资源（Git）会在 try 块结束时自动关闭
+        //Git.open 打开本地已有的 Git 仓库（相当于 cd 到仓库目录执行 git 命令）
         try (Git git = Git.open(sourceRoot.toFile())) {
+            //确保当前在目标分支上（如果不在就 checkout 过去）
             checkoutLocalBranch(git, normalizedBranch);
 
+            //记录拉取前的 HEAD commit
             oldHead = resolveLocalHeadCommit(sourceRoot);
+            //从远程仓库拉取最新代码（git fetch + git pull）
             fetchAndPullBranch(git, normalizedBranch, token.trim());
+            //记录拉取后的 HEAD commit
             newHead = resolveLocalHeadCommit(sourceRoot);
 
+            //如果 HEAD 发生了变化（有新 commit），计算变更
             if (!Objects.equals(oldHead, newHead)) {
+                //列出 oldHead 到 newHead 之间的所有 commit ID（按时间排序）
                 detectedCommitIds = listCommitIdsInRange(git.getRepository(), oldHead, newHead);
                 if (detectedCommitIds.isEmpty()) {
                     detectedCommitIds = List.of(newHead);
                 }
+                //比较两个 commit 的文件树，找出哪些文件被新增/修改/删除/重命名
                 changes = listLocalDiffChanges(git, oldHead, newHead);
             }
         } catch (BusinessException ex) {
+            //业务异常直接向上抛
             throw ex;
         } catch (IOException | GitAPIException ex) {
+            //JGit 操作异常包装成业务异常
             log.error("Local doc refresh failed. project={}, branch={}, sourceRoot={}",
                     project, normalizedBranch, sourceRoot, ex);
             throw new BusinessException(500, "Local repository refresh failed");
         }
 
+        //组装返回结果
         DocRefreshResult result = new DocRefreshResult();
         result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
         result.setBranch(normalizedBranch);
-        result.setBaselineCommit(oldHead);
-        result.setHeadCommit(newHead);
+        result.setBaselineCommit(oldHead);  //上次刷新时的 commit（增量起点）
+        result.setHeadCommit(newHead);       //本次刷新时的最新 commit
 
+        //如果没有新 commit，直接返回
         if (Objects.equals(oldHead, newHead)) {
             result.setMessage("No new commits.");
             return result;
@@ -141,6 +169,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         result.setDetectedCommitIds(detectedCommitIds);
         result.setNewCommitCount(detectedCommitIds.size());
 
+        //核心步骤：根据文件变更列表，为变更的 Java 文件生成文档
+        //返回值是最终状态（SUCCESS/SKIPPED/FAILED）
         String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes);
         if (STATUS_FAILED.equals(status)) {
             result.getFailedTaskCommitIds().add(newHead);
@@ -148,6 +178,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             result.getCreatedTaskCommitIds().add(newHead);
         }
 
+        //组装汇总消息
         result.setMessage(String.format(
                 "Detected %d commit(s), created %d task(s), skipped %d task(s), failed %d task(s).",
                 result.getNewCommitCount(),
@@ -158,6 +189,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     }
 
     //重建文档：为指定的 commit 重新生成所有文档（覆盖旧产物）
+    //与 refresh 的区别：refresh 是增量的（只处理新 commit），rebuild 是全量的（重新处理指定 commit）
+    //适用场景：文档生成器升级后想重新生成旧 commit 的文档，或者某个 commit 的文档生成失败想重试
     @Override
     public void rebuild(String gitlabUsername, String project, String branch, String commitId, String token) {
         validateGitlabUsername(gitlabUsername);
@@ -166,32 +199,50 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             throw new BusinessException(400, "commitId is required for rebuild");
         }
 
+        //通过 GitLab API 获取该 commit 的文件变更，然后为每个变更的文件重新生成文档
         String status = runExtractionTask(gitlabUsername, project, branch, commitId, token);
         if (STATUS_FAILED.equals(status)) {
             throw new BusinessException(500, "Rebuild failed for commit: " + commitId);
         }
     }
 
+    //无终端输出的重载版本，直接调用带终端参数的版本（sessionId 传 null）
     @Override
     public DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch) {
         return scanLocal(gitlabUsername, project, branch, null);
     }
 
+    //本地全量扫描并生成文档
+    //与 refresh 的区别：
+    //  - refresh: 增量，只处理新 commit 的变更文件，通过 git pull 拉取最新代码
+    //  - scanLocal: 全量，扫描本地仓库中所有文件（不拉取远程），为每个支持的文件生成文档
+    //适用场景：首次克隆仓库后，需要一次性为所有 Java 文件生成文档
+    //
+    //整体流程：
+    //  1. 遍历本地仓库中的所有文件（跳过 .git 目录和 .gitignore 中的文件）
+    //  2. 过滤出支持的文件类型（如 .java）
+    //  3. 对每个文件调用文档生成器（如 JavaDocGenerator）
+    //  4. 将生成结果存入数据库
     @Override
     public DocLocalScanResult scanLocal(String gitlabUsername, String project, String branch,
             String terminalSessionId) {
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
 
+        //向前端终端发送进度消息（如果 sessionId 不为空）
         emitTerminal(terminalSessionId, "[doc] local scan accepted, project=" + project + ", branch=" + branch);
+        //找到本地仓库目录
         Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
             emitTerminal(terminalSessionId, "[doc] local scan failed, repository not found: " + project);
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
 
+        //获取当前 HEAD 的 commit hash（不拉取远程，直接读本地 .git/HEAD）
         String commitId = resolveLocalHeadCommit(sourceRoot);
         emitTerminal(terminalSessionId, "[doc] local scan repository=" + sourceRoot + ", HEAD=" + commitId);
+
+        //组装扫描结果对象（最终返回给调用方）
         DocLocalScanResult result = new DocLocalScanResult();
         result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
@@ -199,6 +250,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         result.setCommitId(commitId);
         result.setLocalRepoPath(sourceRoot.toString());
 
+        //在数据库中创建一条文档任务记录（状态为 RUNNING）
+        //这个任务记录用于追踪本次扫描的状态和耗时
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-local-scan", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -209,40 +262,53 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         task.setDuration(0);
         docTaskMapper.insert(task);
 
+        //记录开始时间，用于计算耗时
         long start = System.currentTimeMillis();
         try {
+            //遍历本地仓库中的所有文件（排除 .git 目录和 .gitignore 中的文件）
             List<Path> files = listLocalRepoFiles(sourceRoot);
             result.setScannedFileCount(files.size());
             emitTerminal(terminalSessionId, "[doc] local scan found " + files.size() + " file(s)");
 
+            //逐个文件处理
             for (Path file : files) {
+                //将绝对路径转为相对于仓库根的路径（如 src/main/java/Demo.java）
                 String filePath = toRepoRelativePath(sourceRoot, file);
+                //检查是否有对应的文档生成器（如 .java 文件有 JavaDocGenerator）
                 if (!isSupportedDocFile(filePath)) {
+                    //不支持的文件类型跳过（如 .xml、.yml、图片等）
                     result.setSkippedFileCount(result.getSkippedFileCount() + 1);
                     continue;
                 }
 
                 try {
+                    //调用文档生成器生成文档（执行 javadoc 命令 -> 解析 HTML -> 输出 JSON）
                     generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, file,
                             filePath);
                     result.setGeneratedFileCount(result.getGeneratedFileCount() + 1);
                     result.getGeneratedFilePaths().add(filePath);
                     emitTerminal(terminalSessionId, "[doc] generated " + filePath);
                 } catch (Exception ex) {
+                    //单个文件生成失败不影响其他文件，记录错误继续处理下一个
                     log.error("Local doc generation failed. project={}, branch={}, filePath={}",
                             project, branch, filePath, ex);
                     emitTerminal(terminalSessionId, "[doc] failed " + filePath + ": " + summarizeError(ex));
                     result.setFailedFileCount(result.getFailedFileCount() + 1);
                     result.getFailedFilePaths().add(filePath);
+                    //将失败记录也写入数据库（状态为 FAILED，记录错误信息）
                     upsertDocFile(gitlabUsername, project, branch, filePath, commitId, task.getId(),
                             STATUS_FAILED, null, summarizeError(ex));
                 }
             }
 
+            //根据扫描结果确定最终状态：有失败 -> FAILED，有生成 -> SUCCESS，否则 -> SKIPPED
             String finalStatus = localScanStatus(result);
             task.setStatus(finalStatus);
+            //计算耗时（毫秒转秒）
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
+            //更新数据库中的任务状态
             docTaskMapper.updateById(task);
+            //组装汇总消息
             result.setMessage(String.format(
                     "Scanned %d file(s), generated %d doc(s), skipped %d file(s), failed %d file(s).",
                     result.getScannedFileCount(),
@@ -254,11 +320,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                     + ", skipped=" + result.getSkippedFileCount() + ", failed=" + result.getFailedFileCount());
             return result;
         } catch (Exception ex) {
+            //整体扫描失败（如仓库目录损坏等严重错误）
             log.error("Local doc scan failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
             emitTerminal(terminalSessionId, "[doc] local scan failed: " + summarizeError(ex));
             task.setStatus(STATUS_FAILED);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
+            //如果是运行时异常直接抛出，否则包装成 BusinessException
             if (ex instanceof RuntimeException runtimeException) {
                 throw runtimeException;
             }
@@ -266,7 +334,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
-    //查询已生成的文档记录，支持按项目/分支/文件路径/commit 过滤
+    //查询已生成的文档记录
+    //支持按 gitlabUsername（必填）、project（必填）、branch、filePath、commitId 过滤
+    //
+    //查询逻辑的两种模式：
+    //  1. 指定了 commitId：返回该 commit 下的所有文档记录（精确查询）
+    //  2. 未指定 commitId：对每个文件只返回最新的文档记录（去重查询）
+    //     因为同一个文件可能有多个 commit 的文档，用户通常只关心最新的
     @Override
     public List<DocQueryItem> query(String gitlabUsername, String project, String branch, String filePath,
             String commitId) {
@@ -275,9 +349,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             throw new BusinessException(400, "project is required");
         }
 
+        //使用 LambdaQueryWrapper 构建 SQL 查询条件
+        //等价于 SQL: SELECT * FROM doc_file_dtl WHERE gitlab_username = ? AND project_name = ? [AND ...]
         LambdaQueryWrapper<DocFile> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DocFile::getGitlabUsername, gitlabUsername)
                 .eq(DocFile::getProjectName, project);
+        //以下条件都是可选的，有值才加上
         if (StringUtils.hasText(branch)) {
             wrapper.eq(DocFile::getBranchName, branch);
         }
@@ -287,27 +364,43 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         if (StringUtils.hasText(commitId)) {
             wrapper.eq(DocFile::getCommitId, commitId);
         }
+        //按 ID 降序排列（ID 越大越新）
         wrapper.orderByDesc(DocFile::getId);
 
+        //执行查询
         List<DocFile> rows = docFileMapper.selectList(wrapper);
+
+        //模式1：指定了 commitId，直接返回所有结果
         if (StringUtils.hasText(commitId)) {
             return rows.stream().map(this::toQueryItem).collect(Collectors.toList());
         }
 
+        //模式2：未指定 commitId，对每个文件只保留最新的记录
+        //使用 LinkedHashMap 保持插入顺序（ID 降序），putIfAbsent 确保只保留第一条（即最新的）
         Map<String, DocFile> latestByFile = new LinkedHashMap<>();
         for (DocFile row : rows) {
             String key = row.getBranchName() + "|" + row.getFilePath();
             latestByFile.putIfAbsent(key, row);
         }
 
+        //过滤掉没有文档文件路径的记录（说明文档生成失败了），转换为查询结果 DTO
         return latestByFile.values().stream()
                 .filter(row -> StringUtils.hasText(row.getDocFilePath()))
                 .map(this::toQueryItem)
                 .collect(Collectors.toList());
     }
 
+    //远程文档提取任务：通过 GitLab API 获取某个 commit 的文件变更，然后生成文档
+    //被 rebuild() 方法调用，处理流程：
+    //  1. 在数据库中创建一条任务记录（状态 RUNNING）
+    //  2. 调用 GitLab API 获取该 commit 的文件变更列表
+    //  3. 对每个变更的文件调用文档生成器
+    //  4. 更新任务状态（SUCCESS/SKIPPED/FAILED）
+    //
+    //与 runLocalExtractionTask 的区别：这个方法通过 GitLab API 读取文件内容，不依赖本地仓库
     private String runExtractionTask(String gitlabUsername, String project, String branch, String commitId,
             String token) {
+        //在数据库创建任务记录，用于追踪执行状态
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -320,15 +413,19 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         long start = System.currentTimeMillis();
         try {
+            //通过 GitLab API 获取该 commit 相比其父 commit 的文件变更
             List<CommitFileChange> changes = gitLabDocClient.listCommitFileChanges(token, project, commitId);
+            //遍历变更列表，为每个支持的文件生成文档
             int handledDocFiles = applyChanges(gitlabUsername, project, branch, commitId, task.getId(), token, changes);
 
+            //没有处理任何文件 -> SKIPPED，否则 -> SUCCESS
             String finalStatus = handledDocFiles == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
             task.setStatus(finalStatus);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
             docTaskMapper.updateById(task);
             return finalStatus;
         } catch (Exception ex) {
+            //异常时标记任务为 FAILED，但不向上抛异常（返回状态让调用方判断）
             log.error("Doc extraction failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
             task.setStatus(STATUS_FAILED);
             task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
@@ -337,12 +434,19 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    //本地文档提取任务：从本地 Git 仓库读取文件内容并生成文档
+    //被 refresh() 方法调用，处理流程与 runExtractionTask 类似，但文件来源是本地仓库而非 GitLab API
+    //
+    //与 runExtractionTask 的区别：
+    //  - runExtractionTask: 通过 GitLab API 读取文件内容（适合 rebuild 场景，不需要本地仓库）
+    //  - runLocalExtractionTask: 从本地磁盘读取文件内容（适合 refresh 场景，本地已有最新代码）
     private String runLocalExtractionTask(String gitlabUsername,
             String project,
             String branch,
             String commitId,
             Path sourceRoot,
             List<CommitFileChange> changes) {
+        //创建数据库任务记录
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-refresh", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -355,6 +459,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         long start = System.currentTimeMillis();
         try {
+            //遍历变更列表，从本地仓库读取文件并生成文档
             int handledDocFiles = applyLocalChanges(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot,
                     changes);
 
@@ -372,6 +477,14 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    //处理本地文件变更列表：根据每个文件的变更类型（新增/修改/删除/重命名），调用对应的文档处理方法
+    //
+    //变更类型处理逻辑：
+    //  - ADDED/MODIFIED: 文件是新增或修改的 -> 从本地仓库读取内容 -> 生成文档 -> 存入数据库
+    //  - DELETED: 文件被删除 -> 在数据库中标记该文件的文档为"已删除"
+    //  - RENAMED: 文件被重命名 -> 旧路径标记删除 + 新路径生成文档（相当于两个操作）
+    //
+    //返回值：成功处理的文件数量（用于判断最终状态是 SUCCESS 还是 SKIPPED）
     private int applyLocalChanges(String gitlabUsername,
             String project,
             String branch,
@@ -386,14 +499,17 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         int handled = 0;
         for (CommitFileChange change : changes) {
             switch (change.getChangeType()) {
+                //新增或修改的文件：从本地读取内容并生成文档
                 case ADDED, MODIFIED -> {
                     if (upsertActiveLocalDoc(gitlabUsername, project, branch, change.getNewPath(), commitId, taskId,
                             sourceRoot)) {
                         handled++;
                     } else {
+                        //不支持的文件类型（如 .xml），记录日志跳过
                         logUnsupportedFile(project, commitId, change.getNewPath());
                     }
                 }
+                //删除的文件：在数据库标记文档为已删除
                 case DELETED -> {
                     if (isSupportedDocFile(change.getOldPath())) {
                         upsertDeletedDoc(gitlabUsername, project, branch, change.getOldPath(), commitId, taskId);
@@ -402,6 +518,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                         logUnsupportedFile(project, commitId, change.getOldPath());
                     }
                 }
+                //重命名的文件：旧路径标记删除 + 新路径生成文档
                 case RENAMED -> {
                     if (isSupportedDocFile(change.getOldPath())) {
                         upsertDeletedDoc(gitlabUsername, project, branch, change.getOldPath(), commitId, taskId);
@@ -422,6 +539,12 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return handled;
     }
 
+    //处理远程文件变更列表：通过 GitLab API 读取文件内容并生成文档
+    //逻辑与 applyLocalChanges 完全一致，唯一区别是文件内容来源：
+    //  - applyLocalChanges: 从本地磁盘读取（Path sourceRoot）
+    //  - applyChanges: 通过 GitLab API 读取（String token）
+    //
+    //这两个方法是"策略模式"的体现：同样的变更处理逻辑，不同的文件读取方式
     private int applyChanges(String gitlabUsername,
             String project,
             String branch,
@@ -472,6 +595,15 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return handled;
     }
 
+    //为远程仓库中的活跃文件（新增或修改）生成文档
+    //处理流程：
+    //  1. 根据文件后缀查找对应的文档生成器（如 .java -> JavaDocGenerator）
+    //  2. 如果没有匹配的生成器，返回 false（调用方会记录"不支持"日志）
+    //  3. 通过 GitLab API 读取文件的源代码内容
+    //  4. 调用文档生成器生成结构化文档（如执行 javadoc -> 解析 HTML -> 输出 JSON）
+    //  5. 将文档记录写入数据库（upsert：存在则更新，不存在则插入）
+    //
+    //返回 true 表示成功处理，false 表示文件类型不支持
     private boolean upsertActiveDoc(String gitlabUsername,
             String project,
             String branch,
@@ -479,12 +611,15 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             String commitId,
             Long taskId,
             String token) {
+        //步骤1：查找文档生成器
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
-            return false;
+            return false; //没有对应的生成器（如 .xml 文件），跳过
         }
 
+        //步骤2：通过 GitLab API 读取文件的源代码内容
         String fileContent = gitLabDocClient.readFileContent(token, project, filePath, commitId);
+        //步骤3：调用文档生成器（如 JavaDocGenerator）生成结构化文档
         DocGenerationResult result = generator.generate(DocGenerationContext.builder()
                 .project(project)
                 .branch(branch)
@@ -495,10 +630,21 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .outputRoot(resolveDocOutputRoot(gitlabUsername))
                 .build());
 
+        //步骤4：将生成结果写入数据库
         upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
         return true;
     }
 
+    //为本地仓库中的活跃文件（新增或修改）生成文档
+    //与 upsertActiveDoc 的区别：文件内容从本地磁盘读取，而非通过 GitLab API
+    //
+    //处理流程：
+    //  1. 查找文档生成器
+    //  2. 拼接本地文件的绝对路径（sourceRoot + filePath）
+    //  3. 检查文件是否存在（git pull 后文件应该在本地）
+    //  4. 从本地磁盘读取文件内容
+    //  5. 调用文档生成器生成结构化文档
+    //  6. 将文档记录写入数据库
     private boolean upsertActiveLocalDoc(String gitlabUsername,
             String project,
             String branch,
@@ -506,22 +652,26 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             String commitId,
             Long taskId,
             Path sourceRoot) {
+        //步骤1：查找文档生成器
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
             return false;
         }
 
+        //步骤2：拼接本地文件路径并检查文件是否存在
         Path sourceFile = resolveRepoFile(sourceRoot, filePath);
         if (!Files.isRegularFile(sourceFile)) {
             throw new BusinessException(400, "Local source file not found after pull: " + filePath);
         }
 
+        //步骤3：从本地磁盘读取文件内容
         String fileContent;
         try {
             fileContent = Files.readString(sourceFile, StandardCharsets.UTF_8);
         } catch (IOException ex) {
             throw new BusinessException(500, "Failed to read local source file: " + filePath);
         }
+        //步骤4：调用文档生成器
         DocGenerationResult result = generator.generate(DocGenerationContext.builder()
                 .project(project)
                 .branch(branch)
@@ -532,10 +682,16 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .outputRoot(resolveDocOutputRoot(gitlabUsername))
                 .build());
 
+        //步骤5：将生成结果写入数据库
         upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
         return true;
     }
 
+    //为单个本地文件生成文档（被 scanLocal 方法调用）
+    //与 upsertActiveLocalDoc 类似，但有两个区别：
+    //  1. 不返回 boolean（不支持的文件直接 return，不抛异常）
+    //  2. 接收的是已经解析好的 sourceFile 绝对路径（Path），不需要再 resolve
+    //  3. 方法签名声明了 throws IOException，由调用方处理
     private void generateLocalDoc(String gitlabUsername,
             String project,
             String branch,
@@ -544,11 +700,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             Path sourceRoot,
             Path sourceFile,
             String filePath) throws IOException {
+        //查找文档生成器，不支持的文件类型直接跳过
         DocGenerator generator = docGeneratorRegistry.findGenerator(filePath).orElse(null);
         if (generator == null) {
             return;
         }
 
+        //从本地磁盘读取文件内容并生成文档
         String fileContent = Files.readString(sourceFile, StandardCharsets.UTF_8);
         DocGenerationResult result = generator.generate(DocGenerationContext.builder()
                 .project(project)
@@ -560,14 +718,19 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .outputRoot(resolveDocOutputRoot(gitlabUsername))
                 .build());
 
+        //将生成结果写入数据库
         upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, result.getDocFilePath(), null);
     }
 
+    //标记已删除文件的文档状态
+    //当文件被删除时，不会删除数据库记录（保留历史），而是将 docFilePath 设为 null，parseErrorMsg 设为 "File deleted"
     private void upsertDeletedDoc(String gitlabUsername, String project, String branch, String filePath,
             String commitId, Long taskId) {
         upsertDocFile(gitlabUsername, project, branch, filePath, commitId, taskId, null, "File deleted");
     }
 
+    //upsertDocFile 的简化版本：默认状态为 SUCCESS
+    //被 upsertActiveDoc、upsertActiveLocalDoc、generateLocalDoc 调用
     private void upsertDocFile(String gitlabUsername,
             String project,
             String branch,
@@ -580,6 +743,19 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 parseErrorMsg);
     }
 
+    //文档文件记录的核心 upsert 方法（insert or update）
+    //
+    //upsert 逻辑：先按 (username, project, branch, filePath, commitId) 查询数据库
+    //  - 记录不存在 -> INSERT 新记录
+    //  - 记录已存在 -> UPDATE 已有记录（更新 taskId、docFilePath、parseStatus、parseErrorMsg）
+    //
+    //为什么用 upsert 而不是先 delete 再 insert？
+    //  因为同一条记录可能被多次刷新，upsert 可以避免产生重复记录，也保留了记录的自增 ID（便于追踪）
+    //
+    //参数说明：
+    //  - parseStatus: 文档解析状态（SUCCESS/FAILED）
+    //  - docFilePath: 生成的结构化文档文件路径（如 doc.json 的绝对路径），删除时为 null
+    //  - parseErrorMsg: 解析错误信息，成功时为 null
     private void upsertDocFile(String gitlabUsername,
             String project,
             String branch,
@@ -589,16 +765,18 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             String parseStatus,
             String docFilePath,
             String parseErrorMsg) {
+        //按唯一键组合查询是否已存在记录
         LambdaQueryWrapper<DocFile> query = new LambdaQueryWrapper<>();
         query.eq(DocFile::getGitlabUsername, gitlabUsername)
                 .eq(DocFile::getProjectName, project)
                 .eq(DocFile::getBranchName, branch)
                 .eq(DocFile::getFilePath, filePath)
                 .eq(DocFile::getCommitId, commitId)
-                .last("LIMIT 1");
+                .last("LIMIT 1"); //只取一条，提高性能
 
         DocFile existing = docFileMapper.selectOne(query);
         if (existing == null) {
+            //记录不存在，插入新记录
             DocFile item = new DocFile();
             item.setTaskId(taskId);
             item.setGitlabUsername(gitlabUsername);
@@ -613,6 +791,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             return;
         }
 
+        //记录已存在，更新字段
         existing.setTaskId(taskId);
         existing.setDocFilePath(docFilePath);
         existing.setParseStatus(parseStatus);
@@ -620,22 +799,38 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         docFileMapper.updateById(existing);
     }
 
+    //生成任务的唯一事件 ID，格式：{prefix}-{commitId}-{nanoTime的36进制}
+    //例如："doc-refresh-a1b2c3d4-k5m6n7p8"
+    //使用 System.nanoTime() 确保同一 commit 的多次刷新也有不同的 eventId
+    //36 进制（0-9 + a-z）让 ID 更短更易读
     private String buildTaskEventId(String prefix, String commitId) {
         String safeCommitId = StringUtils.hasText(commitId) ? commitId.trim() : "unknown";
         return prefix + "-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
+    //列出 oldHead 到 newHead 之间的所有 commit ID（按提交时间升序）
+    //使用 JGit 的 RevWalk（提交遍历器）来遍历 commit 链
+    //
+    //原理：
+    //  - markStart(newCommit): 从 newHead 开始遍历
+    //  - markUninteresting(oldCommit): 标记 oldHead 为"不感兴趣"，遍历到它就停止
+    //  - 这样遍历出来的就是 oldHead..newHead 之间的所有 commit
+    //
+    //返回值：按时间排序的 commit ID 列表，如果解析失败则返回 [newHead]
     private List<String> listCommitIdsInRange(Repository repository, String oldHead, String newHead)
             throws IOException {
+        //将 commit hash 字符串解析为 ObjectId（JGit 的内部标识）
         ObjectId oldObjectId = repository.resolve(oldHead);
         ObjectId newObjectId = repository.resolve(newHead);
         if (oldObjectId == null || newObjectId == null) {
             return List.of(newHead);
         }
 
+        //RevWalk 是 JGit 的提交遍历工具，可以沿着 parent 链遍历 commit 树
         try (RevWalk revWalk = new RevWalk(repository)) {
             RevCommit oldCommit = revWalk.parseCommit(oldObjectId);
             RevCommit newCommit = revWalk.parseCommit(newObjectId);
+            //从 newCommit 开始遍历，遇到 oldCommit 停止
             revWalk.markStart(newCommit);
             revWalk.markUninteresting(oldCommit);
 
@@ -644,38 +839,54 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 commits.add(commit);
             }
 
+            //按提交时间排序（升序，从旧到新）
             commits.sort(Comparator.comparingInt(RevCommit::getCommitTime));
             List<String> commitIds = commits.stream().map(RevCommit::getName).collect(Collectors.toList());
             return commitIds.isEmpty() ? List.of(newHead) : commitIds;
         }
     }
 
+    //比较两个 commit 的文件树，找出所有文件级变更（新增/修改/删除/重命名）
+    //使用 JGit 的 diff 功能，类似命令行的 "git diff oldHead..newHead"
+    //
+    //处理流程：
+    //  1. 将 commit hash 解析为"树对象"（tree），树对象是 Git 存储文件快照的方式
+    //  2. 用 CanonicalTreeParser 创建两个文件树的迭代器
+    //  3. 调用 git.diff() 比较两个树，得到 DiffEntry 列表
+    //  4. 用 RenameDetector 检测重命名（Git 的 rename 检测是基于内容相似度的）
+    //  5. 将 DiffEntry 转换为内部的 CommitFileChange 对象
     private List<CommitFileChange> listLocalDiffChanges(Git git, String oldHead, String newHead)
             throws IOException, GitAPIException {
         Repository repository = git.getRepository();
+        //^{tree} 是 Git 语法，表示取该 commit 对应的树对象（而不是 commit 对象本身）
         ObjectId oldTree = repository.resolve(oldHead + "^{tree}");
         ObjectId newTree = repository.resolve(newHead + "^{tree}");
         if (oldTree == null || newTree == null) {
             throw new BusinessException(500, "Unable to resolve commit trees for local diff");
         }
 
+        //ObjectReader 用于读取 Git 对象（blob/tree/commit/tag）
         try (ObjectReader reader = repository.newObjectReader()) {
+            //CanonicalTreeParser 是树对象的迭代器，可以逐个遍历树中的文件
             CanonicalTreeParser oldTreeParser = new CanonicalTreeParser();
             oldTreeParser.reset(reader, oldTree);
             CanonicalTreeParser newTreeParser = new CanonicalTreeParser();
             newTreeParser.reset(reader, newTree);
 
+            //执行 diff 操作，比较两个文件树
             List<DiffEntry> entries = git.diff()
                     .setOldTree(oldTreeParser)
                     .setNewTree(newTreeParser)
                     .call();
 
+            //检测重命名：Git 会比较文件内容的相似度，如果相似度超过阈值就认为是重命名
             if (!entries.isEmpty()) {
                 RenameDetector renameDetector = new RenameDetector(repository);
                 renameDetector.addAll(entries);
                 entries = renameDetector.compute();
             }
 
+            //将 JGit 的 DiffEntry 转换为内部的 CommitFileChange 对象
             List<CommitFileChange> changes = new ArrayList<>();
             for (DiffEntry entry : entries) {
                 changes.add(toCommitFileChange(entry));
@@ -684,6 +895,13 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    //将 JGit 的 DiffEntry 转换为内部的 CommitFileChange 对象
+    //DiffEntry 包含 oldPath（变更前路径）和 newPath（变更后路径），不同变更类型的路径含义不同：
+    //  - ADD: 新增文件，oldPath 为 null，newPath 是新文件路径
+    //  - MODIFY: 修改文件，oldPath 和 newPath 相同（路径没变，内容变了）
+    //  - DELETE: 删除文件，oldPath 是被删文件路径，newPath 为 null
+    //  - RENAME: 重命名文件，oldPath 是旧路径，newPath 是新路径
+    //  - COPY: 复制文件，视为新增（oldPath 为 null），newPath 是复制后的路径
     private CommitFileChange toCommitFileChange(DiffEntry entry) {
         return switch (entry.getChangeType()) {
             case ADD -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
@@ -696,35 +914,59 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         };
     }
 
+    //切换到指定的本地分支（相当于 git checkout branch）
+    //如果已经在目标分支上，直接返回（避免不必要的操作）
+    //
+    //注意：这个方法只切换本地分支，不涉及远程操作
+    //后续的 fetchAndPullBranch 会从远程拉取最新代码
     private void checkoutLocalBranch(Git git, String branch) throws IOException, GitAPIException {
         Repository repository = git.getRepository();
+        //将分支名转为完整的引用路径（如 "main" -> "refs/heads/main"）
         String localBranchRef = toBranchRef(branch);
         Ref localBranch = repository.findRef(localBranchRef);
         if (localBranch == null) {
             throw new BusinessException(400, "Local branch not found: " + branch);
         }
 
+        //getFullBranch 返回当前分支的完整引用（如 "refs/heads/main"）
+        //如果已经是目标分支，跳过 checkout
         String currentBranch = repository.getFullBranch();
         if (localBranchRef.equals(currentBranch)) {
             return;
         }
 
+        //执行 git checkout
         CheckoutCommand checkoutCommand = git.checkout().setName(branch);
         checkoutCommand.call();
     }
 
+    //从远程仓库拉取最新代码（相当于 git fetch + git pull）
+    //
+    //为什么要先 fetch 再 pull？
+    //  - git fetch: 只下载远程的最新提交到本地的远程跟踪分支（如 origin/main），不合并
+    //  - git pull: 相当于 git fetch + git merge，将远程跟踪分支合并到当前分支
+    //  - 这里先 fetch 是为了确保远程跟踪分支是最新的，再 pull 合并
+    //
+    //认证方式：使用 GitLab Personal Access Token 作为密码
+    //  UsernamePasswordCredentialsProvider("git", token) 中：
+    //  - 用户名固定为 "git"（GitLab 的惯例）
+    //  - 密码是用户的 Personal Access Token
     private void fetchAndPullBranch(Git git, String branch, String token) throws GitAPIException {
+        //创建认证提供者（用户名固定为 "git"，密码是 token）
         UsernamePasswordCredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider("git", token);
-        String branchRef = toBranchRef(branch);
-        String remoteTrackingRef = "refs/remotes/origin/" + branch;
+        String branchRef = toBranchRef(branch); //如 "refs/heads/main"
+        String remoteTrackingRef = "refs/remotes/origin/" + branch; //如 "refs/remotes/origin/main"
 
         try {
+            //步骤1：fetch 远程分支的最新提交到本地的远程跟踪分支
+            //RefSpec 指定要拉取的引用映射关系：远程分支 -> 本地远程跟踪分支
             git.fetch()
                     .setRemote("origin")
                     .setCredentialsProvider(credentialsProvider)
                     .setRefSpecs(new RefSpec(branchRef + ":" + remoteTrackingRef))
                     .call();
 
+            //步骤2：pull 将远程跟踪分支合并到当前本地分支
             PullResult pullResult = git.pull()
                     .setRemote("origin")
                     .setRemoteBranchName(branch)
@@ -735,10 +977,17 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 throw new BusinessException(500, "git pull failed for branch: " + branch);
             }
         } catch (TransportException ex) {
+            //TransportException 通常是网络问题或认证失败
             throw new BusinessException(401, "Git fetch/pull failed, please check token and repository permissions");
         }
     }
 
+    //安全地将相对文件路径解析为绝对路径（防止路径穿越攻击）
+    //例如：sourceRoot="/repo"，filePath="src/Main.java" -> 返回 "/repo/src/Main.java"
+    //
+    //安全检查：解析后的路径必须以 sourceRoot 开头
+    //如果 filePath 包含 "../" 等路径穿越字符，解析后可能跳出仓库目录，此时抛出异常
+    //这是一种常见的安全防护措施，防止恶意路径读取仓库外的文件
     private Path resolveRepoFile(Path sourceRoot, String filePath) {
         if (!StringUtils.hasText(filePath)) {
             throw new BusinessException(400, "Invalid file path from local diff");
@@ -746,12 +995,16 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         Path normalizedRoot = sourceRoot.toAbsolutePath().normalize();
         Path resolved = normalizedRoot.resolve(filePath).normalize();
+        //安全检查：确保解析后的路径仍在仓库目录内
         if (!resolved.startsWith(normalizedRoot)) {
             throw new BusinessException(400, "Invalid file path from local diff: " + filePath);
         }
         return resolved;
     }
 
+    //将分支名转为完整的 Git 引用路径
+    //例如："main" -> "refs/heads/main"
+    //如果已经是完整引用（以 "refs/heads/" 开头），直接返回
     private String toBranchRef(String branch) {
         if (branch.startsWith("refs/heads/")) {
             return branch;
@@ -759,6 +1012,9 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return "refs/heads/" + branch;
     }
 
+    //标准化分支名：去掉 refs/heads/ 前缀，只保留纯分支名
+    //例如："refs/heads/main" -> "main"
+    //用户输入可能是 "main" 或 "refs/heads/main"，统一转为纯分支名方便后续使用
     private String normalizeBranchName(String branch) {
         String normalized = branch.trim();
         if (normalized.startsWith("refs/heads/")) {
@@ -767,19 +1023,36 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return normalized;
     }
 
+    //检查文件是否有对应的文档生成器（即是否是支持的文件类型）
+    //委托给 DocGeneratorRegistry，它会根据文件后缀查找匹配的 DocGenerator
+    //例如：.java 文件返回 true（有 JavaDocGenerator），.xml 文件返回 false
     private boolean isSupportedDocFile(String path) {
         return docGeneratorRegistry.supports(path);
     }
 
+    //记录不支持文件类型的日志（warn 级别）
+    //当遇到不支持的文件类型时，跳过处理并记录日志，方便排查问题
     private void logUnsupportedFile(String project, String commitId, String filePath) {
         if (StringUtils.hasText(filePath)) {
             log.warn("Skip unsupported doc file. project={}, commitId={}, filePath={}", project, commitId, filePath);
         }
     }
 
+    //遍历本地仓库中的所有文件（用于 scanLocal 的全量扫描）
+    //
+    //过滤规则（按优先级）：
+    //  1. 跳过 .git 目录（Git 内部数据，不是源代码）
+    //  2. 跳过 .gitignore 中忽略的文件（如 node_modules、target 等）
+    //  3. 只保留普通文件（排除目录、符号链接等）
+    //
+    //使用 Java NIO 的 Files.walkFileTree 遍历目录树
+    //通过 SimpleFileVisitor 回调控制遍历行为：
+    //  - preVisitDirectory: 进入目录前决定是否跳过（可以跳过整个子树）
+    //  - visitFile: 访问每个文件时决定是否加入结果列表
     private List<Path> listLocalRepoFiles(Path sourceRoot) throws IOException {
         Path normalizedRoot = sourceRoot.toAbsolutePath().normalize();
         Path gitDir = normalizedRoot.resolve(".git").normalize();
+        //加载 .gitignore 规则，用于判断文件是否被忽略
         GitIgnoreMatcher gitIgnoreMatcher = GitIgnoreMatcher.load(normalizedRoot);
         List<Path> files = new ArrayList<>();
 
@@ -787,9 +1060,11 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                 Path normalizedDir = dir.toAbsolutePath().normalize();
+                //跳过 .git 目录及其所有子目录
                 if (normalizedDir.equals(gitDir) || normalizedDir.startsWith(gitDir)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
+                //跳过 .gitignore 中忽略的目录（如 target/、node_modules/）
                 if (!normalizedDir.equals(normalizedRoot) && gitIgnoreMatcher.isIgnored(normalizedDir, true)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
@@ -799,6 +1074,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                 Path normalizedFile = file.toAbsolutePath().normalize();
+                //只保留普通文件，排除 .git 目录下的文件和 .gitignore 中忽略的文件
                 if (attrs.isRegularFile()
                         && !normalizedFile.equals(gitDir)
                         && !normalizedFile.startsWith(gitDir)
@@ -809,11 +1085,15 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             }
         });
 
+        //按相对路径排序，保证处理顺序一致（方便日志追踪和调试）
         return files.stream()
                 .sorted(Comparator.comparing(path -> toRepoRelativePath(normalizedRoot, path)))
                 .collect(Collectors.toList());
     }
 
+    //将绝对路径转为相对于仓库根目录的路径
+    //例如：sourceRoot="/repo"，file="/repo/src/main/java/Demo.java" -> "src/main/java/Demo.java"
+    //同时将 Windows 的反斜杠 (\) 统一替换为正斜杠 (/)，保证跨平台一致性
     private String toRepoRelativePath(Path sourceRoot, Path file) {
         return sourceRoot.toAbsolutePath().normalize()
                 .relativize(file.toAbsolutePath().normalize())
@@ -821,6 +1101,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 .replace('\\', '/');
     }
 
+    //根据本地扫描结果确定最终状态
+    //规则：有任何失败 -> FAILED，有生成成功 -> SUCCESS，否则 -> SKIPPED
     private String localScanStatus(DocLocalScanResult result) {
         if (result.getFailedFileCount() > 0) {
             return STATUS_FAILED;
@@ -828,15 +1110,27 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return result.getGeneratedFileCount() == 0 ? STATUS_SKIPPED : STATUS_SUCCESS;
     }
 
+    //读取本地 Git 仓库当前 HEAD 的 commit hash（不使用 JGit，直接读 .git 目录下的文件）
+    //
+    //Git 的 HEAD 文件有两种内容：
+    //  1. "ref: refs/heads/main" —— 表示当前在 main 分支上（符号引用）
+    //  2. "a1b2c3d4..." —— 表示当前处于 detached HEAD 状态（直接指向某个 commit）
+    //
+    //对于情况1（最常见），需要进一步读取引用文件获取 commit hash：
+    //  - 先尝试读取 .git/refs/heads/main 文件
+    //  - 如果文件不存在（Git 会打包引用到 packed-refs 文件），再读取 .git/packed-refs
     private String resolveLocalHeadCommit(Path sourceRoot) {
         try {
+            //找到 .git 目录（可能是目录，也可能是文件——worktree 场景下 .git 是文件）
             Path gitDir = resolveGitDir(sourceRoot);
             Path headFile = gitDir.resolve("HEAD");
             if (!Files.isRegularFile(headFile)) {
                 throw new BusinessException(400, "Local repository HEAD not found: " + sourceRoot);
             }
 
+            //读取 .git/HEAD 的内容
             String head = Files.readString(headFile, StandardCharsets.UTF_8).trim();
+            //如果不是符号引用（detached HEAD），直接返回 commit hash
             if (!head.startsWith("ref:")) {
                 if (StringUtils.hasText(head)) {
                     return head;
@@ -844,7 +1138,9 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 throw new BusinessException(400, "Local repository HEAD is empty: " + sourceRoot);
             }
 
+            //是符号引用，解析引用名（如 "refs/heads/main"）
             String refName = head.substring("ref:".length()).trim();
+            //尝试读取引用文件（如 .git/refs/heads/main）
             Path refFile = gitDir.resolve(refName).normalize();
             if (refFile.startsWith(gitDir) && Files.isRegularFile(refFile)) {
                 String commitId = Files.readString(refFile, StandardCharsets.UTF_8).trim();
@@ -853,6 +1149,8 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                 }
             }
 
+            //引用文件不存在，尝试从 packed-refs 文件中查找
+            //Git 会定期将散落的引用文件打包到 packed-refs 文件中以节省空间
             String packedCommit = readPackedRef(gitDir, refName);
             if (StringUtils.hasText(packedCommit)) {
                 return packedCommit;
@@ -863,15 +1161,27 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    //解析 .git 目录的实际路径
+    //
+    //Git 的 .git 有两种形式：
+    //  1. 普通仓库：.git 是一个目录，包含所有 Git 数据
+    //  2. Git worktree（工作树）：.git 是一个文件，内容格式为 "gitdir: /path/to/.git/worktrees/xxx"
+    //     worktree 是 Git 的一个功能，允许在多个目录中同时检出同一个仓库的不同分支
+    //
+    //这个方法统一处理两种情况，返回实际的 .git 数据目录
     private Path resolveGitDir(Path sourceRoot) throws IOException {
         Path gitPath = sourceRoot.toAbsolutePath().normalize().resolve(".git");
+        //情况1：.git 是目录（普通仓库）
         if (Files.isDirectory(gitPath)) {
             return gitPath;
         }
+        //情况2：.git 是文件（worktree）
         if (Files.isRegularFile(gitPath)) {
             String gitFile = Files.readString(gitPath, StandardCharsets.UTF_8).trim();
             if (gitFile.startsWith("gitdir:")) {
+                //提取实际的 git 目录路径
                 Path gitDir = Path.of(gitFile.substring("gitdir:".length()).trim());
+                //如果是相对路径，相对于仓库根目录解析
                 if (!gitDir.isAbsolute()) {
                     gitDir = sourceRoot.resolve(gitDir);
                 }
@@ -884,6 +1194,15 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         throw new BusinessException(400, "Local repository is not a Git repository: " + sourceRoot);
     }
 
+    //从 Git 的 packed-refs 文件中查找指定引用对应的 commit hash
+    //
+    //什么是 packed-refs？
+    //  Git 会定期执行 "git pack-refs" 命令，将散落在 refs/ 目录下的引用文件
+    //  合并到一个 packed-refs 文件中，以节省磁盘空间和提高性能
+    //  文件格式：每行一个引用，格式为 "{commitHash} {refName}"
+    //  例如：a1b2c3d4e5f6 refs/heads/main
+    //
+    //  以 # 开头的是注释行，以 ^ 开头的是 peeled tag（剥离的标签），都跳过
     private String readPackedRef(Path gitDir, String refName) throws IOException {
         Path packedRefs = gitDir.resolve("packed-refs");
         if (!Files.isRegularFile(packedRefs)) {
@@ -892,17 +1211,22 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         for (String line : Files.readAllLines(packedRefs, StandardCharsets.UTF_8)) {
             String trimmed = line.trim();
+            //跳过空行、注释行、peeled tag
             if (!StringUtils.hasText(trimmed) || trimmed.startsWith("#") || trimmed.startsWith("^")) {
                 continue;
             }
+            //按空白字符分割为两部分：commit hash 和引用名
             String[] parts = trimmed.split("\\s+", 2);
             if (parts.length == 2 && refName.equals(parts[1])) {
-                return parts[0];
+                return parts[0]; //返回 commit hash
             }
         }
-        return null;
+        return null; //没找到
     }
 
+    //截取异常信息的前 500 个字符作为错误摘要
+    //用于日志记录和终端输出，避免过长的堆栈信息
+    //如果没有异常消息，使用异常类名作为摘要
     private String summarizeError(Exception ex) {
         String message = ex.getMessage();
         if (!StringUtils.hasText(message)) {
@@ -912,6 +1236,11 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return normalized.length() <= 500 ? normalized : normalized.substring(0, 500);
     }
 
+    //解析本地仓库的根目录路径
+    //路径格式：{baseDir}/workspace/{username}/repos/project-{projectId}
+    //如果目录不存在（仓库未克隆），返回 null
+    //
+    //注意：project 必须是纯数字（GitLab 项目 ID），否则返回 null
     private Path resolveSourceRoot(String gitlabUsername, String project) {
         if (!StringUtils.hasText(project) || !project.trim().matches("\\d+")) {
             return null;
@@ -924,10 +1253,15 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return candidate;
     }
 
+    //获取文档输出的根目录路径
+    //路径格式：{baseDir}/workspace/{username}/docs
+    //所有生成的结构化文档都存放在这个目录下
     private Path resolveDocOutputRoot(String gitlabUsername) {
         return userWorkspaceResolver.docOutputRoot(gitlabUsername);
     }
 
+    //将数据库记录（DocFile）转换为查询结果 DTO（DocQueryItem）
+    //除了复制基本字段外，还会读取结构化文档的 JSON 内容（readStructuredDoc）
     private DocQueryItem toQueryItem(DocFile row) {
         DocQueryItem item = new DocQueryItem();
         item.setGitlabUsername(row.getGitlabUsername());
@@ -938,16 +1272,26 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         item.setDocFilePath(row.getDocFilePath());
         item.setParseStatus(row.getParseStatus());
         item.setParseErrorMsg(row.getParseErrorMsg());
+        //读取结构化文档的 JSON 文件并反序列化为 DocStructuredContent 对象
         item.setStructuredDoc(readStructuredDoc(row));
         item.setUpdateTime(row.getUpdateTime());
         return item;
     }
 
+    //读取结构化文档的 JSON 文件并反序列化为 DocStructuredContent 对象
+    //这个 JSON 文件是文档生成器（如 JavaDocGenerator）生成的最终产物
+    //
+    //安全检查：
+    //  1. 只有状态为 SUCCESS 且 docFilePath 有值的记录才尝试读取
+    //  2. docFilePath 必须在用户的文档输出目录内（防止路径穿越读取其他用户的文件）
+    //  3. 文件必须是 .json 后缀（防止读取非文档文件）
+    //  4. 文件必须存在（可能被手动删除）
     private DocStructuredContent readStructuredDoc(DocFile row) {
         if (!STATUS_SUCCESS.equals(row.getParseStatus()) || !StringUtils.hasText(row.getDocFilePath())) {
             return null;
         }
 
+        //安全检查：确保 docFilePath 在用户的文档输出目录内
         Path docPath = Path.of(row.getDocFilePath()).toAbsolutePath().normalize();
         Path outputRoot = resolveDocOutputRoot(row.getGitlabUsername()).toAbsolutePath().normalize();
         if (!docPath.startsWith(outputRoot)
@@ -958,6 +1302,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             return null;
         }
 
+        //反序列化 JSON 文件为 Java 对象
         try {
             return objectMapper.readValue(docPath.toFile(), DocStructuredContent.class);
         } catch (IOException ex) {
@@ -967,22 +1312,28 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         }
     }
 
+    //向 WebSocket 终端发送进度消息
+    //如果 sessionId 为空（没有连接终端），则不发送
+    //这些消息会在前端的终端界面实时显示，让用户看到文档生成的进度
     private void emitTerminal(String sessionId, String line) {
         terminalRelayClient.emit(sessionId, line);
     }
 
+    //参数校验：project 和 branch 都不能为空
     private void validateProjectAndBranch(String project, String branch) {
         if (!StringUtils.hasText(project) || !StringUtils.hasText(branch)) {
             throw new BusinessException(400, "project and branch are required");
         }
     }
 
+    //参数校验：GitLab Personal Access Token 不能为空
     private void validateToken(String token) {
         if (!StringUtils.hasText(token)) {
             throw new BusinessException(400, "token is required");
         }
     }
 
+    //参数校验：GitLab 用户名不能为空
     private void validateGitlabUsername(String gitlabUsername) {
         if (!StringUtils.hasText(gitlabUsername)) {
             throw new BusinessException(400, "GitLab username is required");

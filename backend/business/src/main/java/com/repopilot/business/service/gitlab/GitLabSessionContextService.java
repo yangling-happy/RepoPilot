@@ -39,6 +39,7 @@ public class GitLabSessionContextService {
     public String requireToken(HttpSession session) {
         Object value = session.getAttribute(TOKEN_SESSION_KEY);
         //instanceof 模式匹配：同时检查类型和值是否为有效字符串
+        //如果 Session 过期、用户还没设置 token，或者存进去的不是字符串，都会走这里
         if (!(value instanceof String token) || !StringUtils.hasText(token)) {
             throw new BusinessException(400,
                     "GitLab token not found in session. Call /api/session/setGitlabToken first.");

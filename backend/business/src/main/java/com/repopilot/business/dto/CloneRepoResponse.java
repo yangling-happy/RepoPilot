@@ -2,6 +2,9 @@ package com.repopilot.business.dto;
 
 import lombok.Data;
 
+//仓库克隆接口返回给前端的结果 DTO
+//它把“远程 GitLab 项目信息”和“本地工作空间路径”放在一起返回，
+//方便前端知道这次克隆到了哪里、对应哪个 commit。
 //Lombok 注解，自动生成 getter/setter、toString()、equals()、hashCode() 等方法，减少样板代码
 @Data
 public class CloneRepoResponse {

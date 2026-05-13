@@ -8,6 +8,10 @@ import java.time.LocalDateTime;
 @Data
 //指定实体对应的数据库表名
 @TableName("deploy_task")
+//部署任务数据库实体
+//
+//它对应 deploy_task 表中的一行记录，用来描述一次部署过程：
+//谁发起、部署哪个项目/分支/commit、部署参数是什么、日志和结果在哪里、最终状态是什么。
 public class DeployTask {
 
     //TableId标记主键字段，并指定主键策略

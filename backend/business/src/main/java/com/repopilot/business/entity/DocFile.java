@@ -8,6 +8,10 @@ import java.time.LocalDateTime;
 @Data
 //指定实体对应的数据库表名
 @TableName("doc_file_dtl")
+//文档文件明细数据库实体
+//
+//一条 DocTask 可能会处理多个源文件，每个源文件的文档生成结果都会落一条 DocFile。
+//因此它更像“文档任务的明细行”：记录源文件路径、生成产物路径、解析状态和错误信息。
 public class DocFile {
 
     //TableId标记主键字段，并指定主键策略

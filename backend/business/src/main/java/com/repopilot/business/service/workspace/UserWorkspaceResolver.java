@@ -22,6 +22,7 @@ public class UserWorkspaceResolver {
     //获取用户的根工作空间目录：{baseDir}/workspace/{username}
     public Path userWorkspace(String gitlabUsername) {
         Path baseRoot = baseRoot();
+        //用户名会先做 safeUsername 处理，避免把斜杠、冒号等特殊字符带入文件系统路径
         Path workspace = baseRoot.resolve("workspace").resolve(safeUsername(gitlabUsername)).normalize();
         //安全检查：防止路径穿越攻击（如 username 传入 "../../etc"）
         if (!workspace.startsWith(baseRoot)) {
@@ -69,11 +70,20 @@ public class UserWorkspaceResolver {
         return safe;
     }
 
+    //解析配置中的基础目录
+    //
+    //这里统一转成绝对路径并 normalize：
+    //  - 绝对路径方便后续 startsWith 做安全检查
+    //  - normalize 会消除路径中的 "."、".." 等片段
     private Path baseRoot() {
         String baseDir = StringUtils.hasText(properties.getBaseDir()) ? properties.getBaseDir() : ".";
         return Paths.get(baseDir).toAbsolutePath().normalize();
     }
 
+    //把某个目录片段解析到指定根目录下，并确认最终结果没有逃出根目录
+    //
+    //这类方法常用于处理“由用户输入参与拼接的路径”：
+    //即使上游传入恶意值，也不能让最终路径跳到工作空间外面。
     private Path resolveUnder(Path root, String segment) {
         Path normalizedRoot = root.toAbsolutePath().normalize();
         Path resolved = normalizedRoot.resolve(segment).normalize();

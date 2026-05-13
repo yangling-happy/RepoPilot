@@ -2,6 +2,13 @@ package com.repopilot.business.dto;
 
 import lombok.Data;
 
+//手动创建部署任务时的请求体 DTO
+//对应 DeployController 的 /deploy/task/create 接口
+//
+//部署任务通常描述“把某个 commit 部署到某个环境”的过程：
+//  1. 记录项目、分支、commit
+//  2. 记录部署参数、日志目录、结果路径
+//  3. 记录运行状态、错误信息和耗时
 //Lombok 注解，自动生成 getter/setter、toString()、equals()、hashCode() 等方法，减少样板代码
 @Data
 public class CreateDeployTaskRequest {
