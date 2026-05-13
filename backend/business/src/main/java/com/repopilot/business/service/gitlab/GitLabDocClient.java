@@ -149,6 +149,7 @@ public class GitLabDocClient {
     private CommitFileChange toFileChange(JsonNode diff) {
         String oldPath = diff.path("old_path").asText(null);
         String newPath = diff.path("new_path").asText(null);
+        //asBoolean是设置默认值的意思，不是“当xxx为False时执行以下语句”
         if (diff.path("deleted_file").asBoolean(false)) {
             return new CommitFileChange(oldPath, newPath, CommitFileChange.ChangeType.DELETED);
         }
