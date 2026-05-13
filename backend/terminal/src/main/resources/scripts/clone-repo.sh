@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/common.sh"
 
 PROJECT_ID=""
 BRANCH=""
@@ -10,7 +10,7 @@ USERNAME=""
 REPO_URL=""
 WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --project-id)
       PROJECT_ID="${2:-}"
@@ -42,14 +42,14 @@ require_value "projectId" "$PROJECT_ID"
 require_value "branch" "$BRANCH"
 require_value "username" "$USERNAME"
 require_value "repoUrl" "$REPO_URL"
-if [[ "$REPO_URL" =~ ://[^/]+@ ]]; then
+if echo "$REPO_URL" | grep -qE '://[^/]+@'; then
   fail "repoUrl must not contain credentials"
 fi
 
 TARGET_DIR="$WORKSPACE_ROOT/$USERNAME/$PROJECT_ID"
 
 info "clone request accepted, projectId=$PROJECT_ID, branch=$BRANCH, username=$USERNAME"
-if [[ -e "$TARGET_DIR" ]]; then
+if [ -e "$TARGET_DIR" ]; then
   fail "local directory already exists: $TARGET_DIR"
 fi
 

@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/common.sh"
 
 PROJECT=""
 BRANCH=""
@@ -10,7 +10,7 @@ USERNAME=""
 REPO_DIR=""
 WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --project)
       PROJECT="${2:-}"
@@ -46,16 +46,17 @@ REPO_DIR="$(resolve_repo_dir "$USERNAME" "$PROJECT" "$REPO_DIR" "$WORKSPACE_ROOT
 ensure_git_repo "$REPO_DIR"
 
 info "build request accepted, project=$PROJECT, branch=$BRANCH, username=$USERNAME"
-if [[ -x "$REPO_DIR/mvnw" ]]; then
+if [ -x "$REPO_DIR/mvnw" ]; then
   info "running Maven wrapper build"
   (cd "$REPO_DIR" && ./mvnw -B -DskipTests package)
-elif [[ -f "$REPO_DIR/pom.xml" ]]; then
+elif [ -f "$REPO_DIR/pom.xml" ]; then
+  ensure_maven || fail "failed to install Maven"
   info "running Maven build"
   (cd "$REPO_DIR" && mvn -B -DskipTests package)
-elif [[ -f "$REPO_DIR/package.json" && -f "$REPO_DIR/pnpm-lock.yaml" ]]; then
+elif [ -f "$REPO_DIR/package.json" ] && [ -f "$REPO_DIR/pnpm-lock.yaml" ]; then
   info "running pnpm build"
   (cd "$REPO_DIR" && pnpm install --offline && pnpm build)
-elif [[ -f "$REPO_DIR/package.json" ]]; then
+elif [ -f "$REPO_DIR/package.json" ]; then
   info "running npm build"
   (cd "$REPO_DIR" && npm ci --offline && npm run build)
 else

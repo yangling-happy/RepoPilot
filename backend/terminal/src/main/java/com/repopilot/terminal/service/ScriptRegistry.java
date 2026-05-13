@@ -121,6 +121,7 @@ public class ScriptRegistry {
 
         Map<String, String> environment = new LinkedHashMap<>();
         definition.addEnvironment(safeArgs, environment);
+        augmentPath(environment);
 
         return new ScriptLaunchPlan(taskType, List.copyOf(command), Map.copyOf(environment), scriptDirectory);
     }
