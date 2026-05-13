@@ -86,7 +86,7 @@ public class ScriptRegistry {
                         optional("artifactPath", "--artifact-path"),
                         optional("repoDir", "--repo-dir"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of()));
+                Map.of("deployTargetDir", "DEPLOY_TARGET_DIR")));
     }
 
     @PostConstruct

@@ -71,6 +71,11 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
             commitId = gitLabDocClient.getHeadCommit(context.token(), project, branch);
         }
 
+        String deployHost = trimToNull(request.getDeployHost());
+        Integer deployPort = request.getDeployPort();
+        String deployUser = trimToNull(request.getDeployUser());
+        String deployTargetDir = trimToNull(request.getDeployTargetDir());
+
         DeployTask existing = findRunningTask(context.username(), project, branch, commitId);
         if (existing != null) {
             return new DeployTriggerResponse(existing.getDeployTaskId(), existing.getRunStatus(), sessionId, commitId);
@@ -103,7 +108,11 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
                 buildEnabled,
                 artifactPath,
                 repoDir,
-                context.username());
+                context.username(),
+                deployHost,
+                deployPort,
+                deployUser,
+                deployTargetDir);
         deployExecutor.execute(() -> runPipeline(plan));
 
         return new DeployTriggerResponse(deployTask.getDeployTaskId(), deployTask.getRunStatus(), sessionId, commitId);
@@ -304,6 +313,18 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
             args.put("artifactPath", plan.artifactPath());
         }
         args.put("repoDir", plan.repoDir());
+        if (StringUtils.hasText(plan.deployTargetDir())) {
+            args.put("deployTargetDir", plan.deployTargetDir());
+        }
+        if (StringUtils.hasText(plan.deployHost())) {
+            args.put("deployHost", plan.deployHost());
+        }
+        if (plan.deployPort() != null) {
+            args.put("deployPort", String.valueOf(plan.deployPort()));
+        }
+        if (StringUtils.hasText(plan.deployUser())) {
+            args.put("deployUser", plan.deployUser());
+        }
         return args;
     }
 
@@ -418,7 +439,11 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
             boolean buildEnabled,
             String artifactPath,
             String repoDir,
-            String username) {
+            String username,
+            String deployHost,
+            Integer deployPort,
+            String deployUser,
+            String deployTargetDir) {
     }
 
     private record DeployParams(
