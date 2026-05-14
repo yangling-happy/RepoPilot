@@ -21,7 +21,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     //注册 WebSocket 处理器
     //路径 /ws/terminal/{sessionId} 映射到 terminalWebSocketHandler
-    //setAllowedOrigins("*") 允许所有来源的跨域连接（开发阶段方便调试）
+    //setAllowedOrigins("*") 允许所有来源的跨域连接
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(terminalWebSocketHandler, "/ws/terminal/*")
