@@ -27,6 +27,12 @@ fail() {
   exit 1
 }
 
+emit_result() {
+  local key="$1"
+  local value="${2:-}"
+  printf 'REPOPILOT_RESULT_%s=%s\n' "$key" "$value"
+}
+
 require_value() {
   local name="$1"
   local value="${2:-}"
@@ -54,4 +60,25 @@ ensure_git_repo() {
   if [[ ! -d "$repo_dir/.git" && ! -f "$repo_dir/.git" ]]; then
     fail "local repository not found: $repo_dir"
   fi
+}
+
+setup_git_auth() {
+  export GIT_TERMINAL_PROMPT=0
+  if [[ -z "${GITLAB_TOKEN:-}" ]]; then
+    return
+  fi
+
+  export GIT_USERNAME="${GIT_USERNAME:-git}"
+  REPOPILOT_GIT_ASKPASS_FILE="$(mktemp)"
+  cat >"$REPOPILOT_GIT_ASKPASS_FILE" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  *Username*) printf '%s\n' "${GIT_USERNAME:-git}" ;;
+  *Password*) printf '%s\n' "${GITLAB_TOKEN:-}" ;;
+  *) printf '\n' ;;
+esac
+EOF
+  chmod 700 "$REPOPILOT_GIT_ASKPASS_FILE"
+  export GIT_ASKPASS="$REPOPILOT_GIT_ASKPASS_FILE"
+  trap 'rm -f "${REPOPILOT_GIT_ASKPASS_FILE:-}"' EXIT
 }

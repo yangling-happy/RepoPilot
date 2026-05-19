@@ -65,7 +65,11 @@ public class DocController {
 
         // 调用 service 层执行刷新：先同步远程仓库，再扫描文档变更
         DocRefreshResult result = docPipelineService.refresh(
-                context.username(), request.getProject(), request.getBranch(), context.token());
+                context.username(),
+                request.getProject(),
+                request.getBranch(),
+                context.token(),
+                request.getTerminalSessionId());
 
         return ApiResponse.success("Refresh completed", result);
     }

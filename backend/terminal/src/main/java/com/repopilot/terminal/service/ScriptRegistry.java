@@ -61,9 +61,10 @@ public class ScriptRegistry {
                 List.of(required("projectId", "--project-id"),
                         required("branch", "--branch"),
                         required("username", "--username"),
-                        optional("repoUrl", "--repo-url"),
+                        required("repoUrl", "--repo-url"),
+                        optional("targetDir", "--target-dir"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of("gitlabToken", "GITLAB_TOKEN")));
+                Map.of()));
         definitions.put(TerminalTaskType.REFRESH_DOC, new ScriptDefinition(
                 "refresh-doc.sh",
                 List.of(required("project", "--project"),
@@ -71,7 +72,7 @@ public class ScriptRegistry {
                         required("username", "--username"),
                         optional("repoDir", "--repo-dir"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of("gitlabToken", "GITLAB_TOKEN")));
+                Map.of()));
         definitions.put(TerminalTaskType.SCAN_LOCAL_DOC, new ScriptDefinition(
                 "scan-local-doc.sh",
                 List.of(required("project", "--project"),

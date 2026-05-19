@@ -15,4 +15,5 @@ public class DocRefreshRequest {
     private String project;
     //要刷新的分支名，如 main、dev；支持传 refs/heads/main，Service 层会做标准化
     private String branch;
+    private String terminalSessionId;
 }

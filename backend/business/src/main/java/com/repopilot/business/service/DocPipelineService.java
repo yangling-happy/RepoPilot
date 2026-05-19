@@ -15,6 +15,8 @@ public interface DocPipelineService {
     //找出新增的 commit，为每个包含 Java 文件变更的 commit 创建文档任务
     DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token);
 
+    DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token, String terminalSessionId);
+
     //重建：为指定的 commit 重新生成文档（覆盖已有的文档产物）
     void rebuild(String gitlabUsername, String project, String branch, String commitId, String token);
 

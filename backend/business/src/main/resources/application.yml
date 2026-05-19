@@ -43,3 +43,5 @@ user:
 terminal:
   relay:
     base-url: ${TERMINAL_RELAY_BASE_URL:http://localhost:8081/internal/terminal/sessions}
+  tasks:
+    run-url: ${TERMINAL_TASK_RUN_URL:http://localhost:8081/internal/terminal/tasks/run}

@@ -13,8 +13,11 @@ import com.repopilot.business.mapper.DocTaskMapper;
 import com.repopilot.business.service.docgen.DocGeneratorRegistry;
 import com.repopilot.business.service.docgen.JavaDocGenerator;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
+import com.repopilot.business.service.gitlab.model.CommitFileChange;
 import com.repopilot.business.service.terminal.TerminalRelayClient;
+import com.repopilot.business.service.terminal.TerminalScriptTaskClient;
 import com.repopilot.business.service.workspace.UserWorkspaceResolver;
+import com.repopilot.common.terminal.ScriptTaskRunResult;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,10 +31,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -51,6 +58,8 @@ class DocPipelineServiceImplTest {
     private GitLabDocClient gitLabDocClient;
     @Mock
     private TerminalRelayClient terminalRelayClient;
+    @Mock
+    private TerminalScriptTaskClient terminalScriptTaskClient;
 
     private DocPipelineServiceImpl service;
     private Path workspaceBaseDir;
@@ -68,7 +77,8 @@ class DocPipelineServiceImplTest {
                 gitLabDocClient,
                 registry,
                 new UserWorkspaceResolver(workspaceProperties),
-                terminalRelayClient);
+                terminalRelayClient,
+                terminalScriptTaskClient);
     }
 
     @Test
@@ -81,6 +91,7 @@ class DocPipelineServiceImplTest {
             String initialHead = commitFile(originGit, "src/Test.java", "/** hello */\npublic class Test {}\n", "init");
             checkoutOrCreateBranch(originGit, branch);
             cloneToWorkspace(origin, projectId, branch);
+            stubRefreshScript(initialHead, initialHead);
 
             DocRefreshResult result = service.refresh(USERNAME, projectId, branch, "token");
 
@@ -106,6 +117,15 @@ class DocPipelineServiceImplTest {
             checkoutOrCreateBranch(originGit, branch);
             cloneToWorkspace(origin, projectId, branch);
             String newHead = commitFile(originGit, "src/Test.java", "/** updated */\npublic class Test {}\n", "update-test");
+            Files.writeString(repoPath(USERNAME, projectId).resolve("src/Test.java"),
+                    "/** updated */\npublic class Test {}\n");
+            stubRefreshScript(oldHead, newHead);
+            when(gitLabDocClient.listCommitIdsSince("token", projectId, oldHead, newHead)).thenReturn(List.of(newHead));
+            when(gitLabDocClient.listFileChangesBetween("token", projectId, oldHead, newHead))
+                    .thenReturn(List.of(new CommitFileChange(
+                            "src/Test.java",
+                            "src/Test.java",
+                            CommitFileChange.ChangeType.MODIFIED)));
 
             stubTaskInsertWithId(42L);
             when(docTaskMapper.updateById(any())).thenReturn(1);
@@ -140,7 +160,7 @@ class DocPipelineServiceImplTest {
             assertThat(saved.getDocFilePath()).endsWith("doc.json");
             assertThat(Files.exists(Path.of(saved.getDocFilePath()))).isTrue();
             assertThat(outputDirectoryContainsHtml(Path.of(saved.getDocFilePath()).getParent())).isFalse();
-            verifyNoInteractions(gitLabDocClient, terminalRelayClient);
+            verifyNoInteractions(terminalRelayClient);
         }
     }
 
@@ -151,10 +171,17 @@ class DocPipelineServiceImplTest {
         Path origin = Files.createTempDirectory(workspaceBaseDir, "origin-refresh-unsupported-");
 
         try (Git originGit = Git.init().setDirectory(origin.toFile()).call()) {
-            commitFile(originGit, "README.md", "# init\n", "init");
+            String oldHead = commitFile(originGit, "README.md", "# init\n", "init");
             checkoutOrCreateBranch(originGit, branch);
             cloneToWorkspace(origin, projectId, branch);
             String newHead = commitFile(originGit, "README.md", "# changed\n", "update-readme");
+            stubRefreshScript(oldHead, newHead);
+            when(gitLabDocClient.listCommitIdsSince("token", projectId, oldHead, newHead)).thenReturn(List.of(newHead));
+            when(gitLabDocClient.listFileChangesBetween("token", projectId, oldHead, newHead))
+                    .thenReturn(List.of(new CommitFileChange(
+                            "README.md",
+                            "README.md",
+                            CommitFileChange.ChangeType.MODIFIED)));
 
             stubTaskInsertWithId(43L);
             when(docTaskMapper.updateById(any())).thenReturn(1);
@@ -164,7 +191,6 @@ class DocPipelineServiceImplTest {
             assertThat(result.getCreatedTaskCommitIds()).containsExactly(newHead);
             assertThat(result.getFailedTaskCommitIds()).isEmpty();
             verifyNoInteractions(docFileMapper);
-            verifyNoInteractions(gitLabDocClient);
         }
     }
 
@@ -175,10 +201,18 @@ class DocPipelineServiceImplTest {
         Path origin = Files.createTempDirectory(workspaceBaseDir, "origin-refresh-deleted-");
 
         try (Git originGit = Git.init().setDirectory(origin.toFile()).call()) {
-            commitFile(originGit, "src/OldFile.java", "/** old */\npublic class OldFile {}\n", "init");
+            String oldHead = commitFile(originGit, "src/OldFile.java", "/** old */\npublic class OldFile {}\n", "init");
             checkoutOrCreateBranch(originGit, branch);
             cloneToWorkspace(origin, projectId, branch);
             String newHead = deleteFileAndCommit(originGit, "src/OldFile.java", "delete-old-file");
+            Files.deleteIfExists(repoPath(USERNAME, projectId).resolve("src/OldFile.java"));
+            stubRefreshScript(oldHead, newHead);
+            when(gitLabDocClient.listCommitIdsSince("token", projectId, oldHead, newHead)).thenReturn(List.of(newHead));
+            when(gitLabDocClient.listFileChangesBetween("token", projectId, oldHead, newHead))
+                    .thenReturn(List.of(new CommitFileChange(
+                            "src/OldFile.java",
+                            null,
+                            CommitFileChange.ChangeType.DELETED)));
 
             stubTaskInsertWithId(44L);
             when(docTaskMapper.updateById(any())).thenReturn(1);
@@ -378,6 +412,23 @@ class DocPipelineServiceImplTest {
             task.setId(id);
             return 1;
         }).when(docTaskMapper).insert(any(DocTask.class));
+    }
+
+    private void stubRefreshScript(String oldHead, String newHead) {
+        ScriptTaskRunResult result = new ScriptTaskRunResult();
+        result.setExitCode(0);
+        result.setResults(Map.of(
+                "OLD_HEAD", oldHead,
+                "NEW_HEAD", newHead,
+                "HEAD", newHead));
+        when(terminalScriptTaskClient.run(
+                eq("REFRESH_DOC"),
+                any(),
+                any(),
+                any(),
+                anyLong())).thenReturn(result);
+        when(terminalScriptTaskClient.requireResult(eq(result), eq("OLD_HEAD"), anyString())).thenReturn(oldHead);
+        when(terminalScriptTaskClient.requireResult(eq(result), eq("NEW_HEAD"), anyString())).thenReturn(newHead);
     }
 
     private void checkoutOrCreateBranch(Git git, String branch) throws GitAPIException, IOException {

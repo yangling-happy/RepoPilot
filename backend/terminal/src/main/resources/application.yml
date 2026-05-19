@@ -12,3 +12,4 @@ terminal:
   tasks:
     shell: ${TERMINAL_TASK_SHELL:bash}
     script-dir: ${TERMINAL_TASK_SCRIPT_DIR:}
+    default-timeout-seconds: ${TERMINAL_TASK_DEFAULT_TIMEOUT_SECONDS:600}

@@ -49,9 +49,13 @@ info "refresh doc request accepted, project=$PROJECT, branch=$BRANCH, username=$
 OLD_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD)"
 info "current HEAD=$OLD_HEAD"
 
-export GIT_TERMINAL_PROMPT=0
+setup_git_auth
 git -C "$REPO_DIR" fetch origin "$BRANCH"
-git -C "$REPO_DIR" checkout "$BRANCH"
+if git -C "$REPO_DIR" show-ref --verify --quiet "refs/heads/$BRANCH"; then
+  git -C "$REPO_DIR" checkout "$BRANCH"
+else
+  git -C "$REPO_DIR" checkout -b "$BRANCH" "origin/$BRANCH"
+fi
 git -C "$REPO_DIR" pull --ff-only origin "$BRANCH"
 
 NEW_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD)"
@@ -60,3 +64,6 @@ if [[ "$OLD_HEAD" == "$NEW_HEAD" ]]; then
 else
   info "refresh completed, new HEAD=$NEW_HEAD"
 fi
+emit_result "OLD_HEAD" "$OLD_HEAD"
+emit_result "NEW_HEAD" "$NEW_HEAD"
+emit_result "HEAD" "$NEW_HEAD"
