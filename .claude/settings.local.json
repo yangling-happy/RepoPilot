@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(wsl --list --verbose)",
-      "Bash(wsl *)"
+      "Bash(wsl *)",
+      "Bash(dir /b \"d:\\\\RepoPilot\\\\apps\")",
+      "Bash(grep -rn \"^\\\\s*//\" --include=\"*.java\" backend/)"
     ]
   }
 }

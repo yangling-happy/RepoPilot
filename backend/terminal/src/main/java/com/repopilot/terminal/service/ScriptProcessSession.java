@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.IntConsumer;
 
 //脚本进程会话
 //职责：管理一个 shell 脚本进程的生命周期，包括：
@@ -23,8 +24,8 @@ public class ScriptProcessSession {
     private final Process process;
     //日志发布器，将输出推送到 WebSocket
     private final TerminalLogPublisher terminalLogPublisher;
-    //进程退出后的回调（用于从活跃会话列表中移除）
-    private final Runnable onExit;
+    //进程退出后的回调（传入 exitCode，用于从活跃会话列表中移除并记录状态）
+    private final IntConsumer onExit;
     //防止重复启动的标志位（CAS 操作，线程安全）
     private final AtomicBoolean started = new AtomicBoolean(false);
 
@@ -37,7 +38,7 @@ public class ScriptProcessSession {
                                 TerminalTaskType taskType,
                                 Process process,
                                 TerminalLogPublisher terminalLogPublisher,
-                                Runnable onExit) {
+                                IntConsumer onExit) {
         this.sessionId = sessionId;
         this.taskType = taskType;
         this.process = process;
@@ -100,8 +101,8 @@ public class ScriptProcessSession {
         } finally {
             //无论成功还是失败，都发布退出事件
             terminalLogPublisher.publishExit(sessionId, exitCode);
-            //执行回调，从活跃会话列表中移除
-            onExit.run();
+            //执行回调，从活跃会话列表中移除并记录退出状态
+            onExit.accept(exitCode);
             log.debug("Terminal task exited, sessionId={}, taskType={}, exitCode={}",
                     sessionId, taskType, exitCode);
         }

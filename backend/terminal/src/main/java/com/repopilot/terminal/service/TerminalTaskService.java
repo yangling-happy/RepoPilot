@@ -4,6 +4,7 @@ import com.repopilot.common.terminal.ScriptTaskRunRequest;
 import com.repopilot.common.terminal.ScriptTaskRunResult;
 import com.repopilot.terminal.dto.TerminalTaskStartRequest;
 import com.repopilot.terminal.dto.TerminalTaskStartResponse;
+import com.repopilot.terminal.dto.TerminalTaskStatusResponse;
 import com.repopilot.terminal.dto.TerminalTaskType;
 import com.repopilot.terminal.exception.TerminalTaskException;
 import lombok.RequiredArgsConstructor;
@@ -15,9 +16,11 @@ import org.springframework.util.StringUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -30,6 +33,11 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class TerminalTaskService {
 
+    private static final String STATUS_RUNNING = "RUNNING";
+    private static final String STATUS_SUCCESS = "SUCCESS";
+    private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
+
     //脚本注册表，用于将任务类型映射到具体的 shell 脚本
     private final ScriptRegistry scriptRegistry;
     //日志发布器
@@ -37,10 +45,15 @@ public class TerminalTaskService {
     //活跃的任务会话映射：sessionId -> 正在运行的脚本进程
     //用于防止同一会话重复启动任务，以及支持任务销毁
     private final ConcurrentMap<String, ScriptProcessSession> activeSessions = new ConcurrentHashMap<>();
+    //任务快照：sessionId -> 最后一次任务状态（用于查询已完成的任务）
+    private final ConcurrentMap<String, TaskSnapshot> sessionSnapshots = new ConcurrentHashMap<>();
+    //已取消的会话集合
+    private final Set<String> cancelledSessions = ConcurrentHashMap.newKeySet();
 
     @Value("${terminal.tasks.default-timeout-seconds:600}")
     private long defaultTimeoutSeconds;
 
+    //异步启动任务，立即返回响应
     public TerminalTaskStartResponse start(TerminalTaskStartRequest request) {
         if (request == null) {
             throw new TerminalTaskException(400, "request body is required");
@@ -56,13 +69,16 @@ public class TerminalTaskService {
 
             ScriptProcessSession processSession = createProcessSession(sessionId, taskType, launchPlan);
             activeSessions.put(sessionId, processSession);
+            cancelledSessions.remove(sessionId);
+            sessionSnapshots.put(sessionId, TaskSnapshot.running(taskType));
             terminalLogPublisher.publishStdout(sessionId,
                     "[terminal-task] started taskType=" + taskType + ", sessionId=" + sessionId + "\r\n");
             processSession.start();
         }
-        return new TerminalTaskStartResponse(sessionId, taskType, "RUNNING");
+        return new TerminalTaskStartResponse(sessionId, taskType, STATUS_RUNNING);
     }
 
+    //同步执行任务，等待完成后返回结果（供 TerminalScriptTaskClient 调用）
     public ScriptTaskRunResult runAndWait(ScriptTaskRunRequest request) {
         if (request == null) {
             throw new TerminalTaskException(400, "request body is required");
@@ -138,6 +154,35 @@ public class TerminalTaskService {
         }
     }
 
+    //查询任务状态
+    public TerminalTaskStatusResponse status(String sessionId) {
+        String normalized = normalizeSessionId(sessionId);
+        TaskSnapshot snapshot = sessionSnapshots.get(normalized);
+        if (activeSessions.containsKey(normalized)) {
+            if (snapshot == null) {
+                snapshot = TaskSnapshot.running(null);
+            }
+            return toStatusResponse(normalized, snapshot.withStatus(STATUS_RUNNING));
+        }
+        if (snapshot == null) {
+            throw new TerminalTaskException(404, "terminal session not found: " + normalized);
+        }
+        return toStatusResponse(normalized, snapshot);
+    }
+
+    //停止任务
+    public TerminalTaskStatusResponse stop(String sessionId) {
+        String normalized = normalizeSessionId(sessionId);
+        ScriptProcessSession session = activeSessions.get(normalized);
+        if (session == null) {
+            return status(normalized);
+        }
+        cancelledSessions.add(normalized);
+        session.destroy();
+        TaskSnapshot snapshot = sessionSnapshots.getOrDefault(normalized, TaskSnapshot.running(null));
+        return toStatusResponse(normalized, snapshot.withStatus(STATUS_CANCELLED));
+    }
+
     private ScriptProcessSession createProcessSession(String sessionId,
                                                       TerminalTaskType taskType,
                                                       ScriptLaunchPlan launchPlan) {
@@ -157,11 +202,32 @@ public class TerminalTaskService {
                     taskType,
                     process,
                     terminalLogPublisher,
-                    () -> activeSessions.remove(sessionId));
+                    exitCode -> onSessionExit(sessionId, taskType, exitCode));
         } catch (IOException e) {
             terminalLogPublisher.publishError(sessionId, "failed to start terminal task: " + e.getMessage());
             throw new TerminalTaskException(500, "failed to start terminal task: " + e.getMessage());
         }
+    }
+
+    //任务退出回调：记录快照并从活跃会话中移除
+    private void onSessionExit(String sessionId, TerminalTaskType taskType, int exitCode) {
+        activeSessions.remove(sessionId);
+        boolean cancelled = cancelledSessions.remove(sessionId);
+        String status;
+        if (cancelled) {
+            status = STATUS_CANCELLED;
+        } else {
+            status = exitCode == 0 ? STATUS_SUCCESS : STATUS_FAILED;
+        }
+        sessionSnapshots.put(sessionId, new TaskSnapshot(taskType, status, exitCode, Instant.now()));
+    }
+
+    private TerminalTaskStatusResponse toStatusResponse(String sessionId, TaskSnapshot snapshot) {
+        return new TerminalTaskStatusResponse(
+                sessionId,
+                snapshot.taskType(),
+                snapshot.status(),
+                snapshot.exitCode());
     }
 
     private String normalizeSessionId(String sessionId) {
@@ -238,6 +304,7 @@ public class TerminalTaskService {
         }
     }
 
+    //解析脚本输出中的 REPOPILOT_RESULT_* 行
     private Map<String, String> parseMachineResults(String... outputs) {
         Map<String, String> results = new LinkedHashMap<>();
         for (String output : outputs) {
@@ -259,5 +326,21 @@ public class TerminalTaskService {
             }
         }
         return results;
+    }
+
+    //任务快照记录
+    private record TaskSnapshot(
+            TerminalTaskType taskType,
+            String status,
+            Integer exitCode,
+            Instant updatedAt) {
+
+        private static TaskSnapshot running(TerminalTaskType taskType) {
+            return new TaskSnapshot(taskType, STATUS_RUNNING, null, Instant.now());
+        }
+
+        private TaskSnapshot withStatus(String status) {
+            return new TaskSnapshot(taskType, status, exitCode, Instant.now());
+        }
     }
 }

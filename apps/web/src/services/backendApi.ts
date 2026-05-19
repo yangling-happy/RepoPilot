@@ -113,6 +113,41 @@ export type DocQueryItem = {
   updateTime?: string | null;
 };
 
+export type DeployTriggerRequest = {
+  project: string;
+  branch: string;
+  environment: string;
+  commitId?: string;
+  terminalSessionId?: string;
+  build?: boolean;
+  artifactPath?: string;
+  deployHost?: string;
+  deployPort?: number;
+  deployUser?: string;
+  deployTargetDir?: string;
+};
+
+export type DeployTriggerResponse = {
+  deployTaskId: string;
+  status: string;
+  terminalSessionId?: string;
+  commitId?: string;
+};
+
+export type DeployTask = {
+  deployTaskId: string;
+  projectName: string;
+  branchName: string;
+  commitId: string;
+  runStatus: string;
+  deployParams?: string | null;
+  logDirPath?: string | null;
+  resultPath?: string | null;
+  errorMsg?: string | null;
+  startTime?: string | null;
+  duration?: number | null;
+};
+
 export async function setGitlabToken(token: string): Promise<void> {
   const body = new URLSearchParams({ token });
   await requestApi<void>("/api/session/setGitlabToken", {
@@ -181,6 +216,38 @@ export async function queryDocs(payload: {
   }
   return requestApi<DocQueryItem[]>(`/api/doc/query?${params.toString()}`, {
     method: "GET",
+  });
+}
+
+export async function triggerDeploy(
+  payload: DeployTriggerRequest,
+): Promise<DeployTriggerResponse> {
+  return requestApi<DeployTriggerResponse>("/api/deploy/trigger", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getDeployTask(taskId: string): Promise<DeployTask> {
+  const params = new URLSearchParams({ taskId });
+  return requestApi<DeployTask>(`/api/deploy/task?${params.toString()}`, {
+    method: "GET",
+  });
+}
+
+export async function cancelDeploy(
+  taskId: string,
+  terminalSessionId?: string,
+): Promise<DeployTask> {
+  const params = new URLSearchParams({ taskId });
+  if (terminalSessionId) {
+    params.set("terminalSessionId", terminalSessionId);
+  }
+  return requestApi<DeployTask>(`/api/deploy/cancel?${params.toString()}`, {
+    method: "POST",
   });
 }
 

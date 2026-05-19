@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/common.sh"
 
 PROJECT=""
 BRANCH=""
@@ -10,7 +10,7 @@ USERNAME=""
 REPO_DIR=""
 WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --project)
       PROJECT="${2:-}"
@@ -51,4 +51,5 @@ JAVA_FILE_COUNT="$(
     -path "$REPO_DIR/.git" -prune -o \
     -type f -name "*.java" -print | wc -l
 )"
-info "scan completed, supported java files=${JAVA_FILE_COUNT//[[:space:]]/}"
+JAVA_FILE_COUNT="$(echo $JAVA_FILE_COUNT)"
+info "scan completed, supported java files=$JAVA_FILE_COUNT"

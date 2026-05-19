@@ -8,6 +8,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -61,10 +62,9 @@ public class ScriptRegistry {
                 List.of(required("projectId", "--project-id"),
                         required("branch", "--branch"),
                         required("username", "--username"),
-                        required("repoUrl", "--repo-url"),
-                        optional("targetDir", "--target-dir"),
+                        optional("repoUrl", "--repo-url"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of()));
+                Map.of("gitlabToken", "GITLAB_TOKEN")));
         definitions.put(TerminalTaskType.REFRESH_DOC, new ScriptDefinition(
                 "refresh-doc.sh",
                 List.of(required("project", "--project"),
@@ -72,7 +72,7 @@ public class ScriptRegistry {
                         required("username", "--username"),
                         optional("repoDir", "--repo-dir"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of()));
+                Map.of("gitlabToken", "GITLAB_TOKEN")));
         definitions.put(TerminalTaskType.SCAN_LOCAL_DOC, new ScriptDefinition(
                 "scan-local-doc.sh",
                 List.of(required("project", "--project"),
@@ -98,7 +98,10 @@ public class ScriptRegistry {
                         optional("artifactPath", "--artifact-path"),
                         optional("repoDir", "--repo-dir"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of()));
+                Map.of("deployTargetDir", "DEPLOY_TARGET_DIR",
+                       "deployHost", "DEPLOY_HOST",
+                       "deployPort", "DEPLOY_PORT",
+                       "deployUser", "DEPLOY_USER")));
     }
 
     //@PostConstruct 注解：Spring Bean 初始化完成后自动调用此方法
@@ -135,6 +138,7 @@ public class ScriptRegistry {
 
         Map<String, String> environment = new LinkedHashMap<>();
         definition.addEnvironment(safeArgs, environment);
+        augmentPath(environment);
 
         return new ScriptLaunchPlan(taskType, List.copyOf(command), Map.copyOf(environment), scriptDirectory);
     }
@@ -189,6 +193,17 @@ public class ScriptRegistry {
                     PosixFilePermission.GROUP_EXECUTE));
         } catch (UnsupportedOperationException | IOException ignored) {
             // Windows and some filesystems do not support POSIX permissions; bash can still read the script.
+        }
+    }
+
+    //将脚本目录加入 PATH 环境变量，使脚本可以调用同目录下的其他脚本
+    private void augmentPath(Map<String, String> environment) {
+        String currentPath = System.getenv("PATH");
+        String scriptDir = scriptDirectory.toAbsolutePath().toString();
+        if (currentPath != null && !currentPath.isEmpty()) {
+            environment.put("PATH", scriptDir + File.pathSeparator + currentPath);
+        } else {
+            environment.put("PATH", scriptDir);
         }
     }
 

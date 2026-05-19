@@ -1,8 +1,8 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env sh
+set -eu
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/common.sh"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/common.sh"
 
 PROJECT=""
 BRANCH=""
@@ -10,7 +10,7 @@ USERNAME=""
 REPO_DIR=""
 WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
 
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --project)
       PROJECT="${2:-}"
@@ -59,7 +59,7 @@ fi
 git -C "$REPO_DIR" pull --ff-only origin "$BRANCH"
 
 NEW_HEAD="$(git -C "$REPO_DIR" rev-parse HEAD)"
-if [[ "$OLD_HEAD" == "$NEW_HEAD" ]]; then
+if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
   info "refresh completed, no new commits"
 else
   info "refresh completed, new HEAD=$NEW_HEAD"
