@@ -46,6 +46,10 @@ export function ProductDeployPage() {
   const [environment, setEnvironment] = useState("staging");
   const [artifactPath, setArtifactPath] = useState("");
   const [buildEnabled, setBuildEnabled] = useState(true);
+  const [deployHost, setDeployHost] = useState("");
+  const [deployPort, setDeployPort] = useState("22");
+  const [deployUser, setDeployUser] = useState("");
+  const [deployTargetDir, setDeployTargetDir] = useState("");
   const [deploying, setDeploying] = useState(false);
   const [status, setStatus] = useState<StatusMessage>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -138,6 +142,10 @@ export function ProductDeployPage() {
         terminalSessionId,
         build: buildEnabled,
         artifactPath: artifactPath.trim() || undefined,
+        deployHost: deployHost.trim() || undefined,
+        deployPort: deployPort.trim() ? Number(deployPort.trim()) : undefined,
+        deployUser: deployUser.trim() || undefined,
+        deployTargetDir: deployTargetDir.trim() || undefined,
       });
       setActiveTaskId(response.deployTaskId);
       setStatus({
@@ -170,6 +178,10 @@ export function ProductDeployPage() {
     artifactPath,
     branch,
     buildEnabled,
+    deployHost,
+    deployPort,
+    deployUser,
+    deployTargetDir,
     environment,
     projectId,
     t,
@@ -315,6 +327,42 @@ export function ProductDeployPage() {
               value={artifactPath}
               onChange={(event) => setArtifactPath(event.target.value)}
               placeholder={t("pages.deploy.actions.artifactPlaceholder")}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
+            {t("pages.deploy.actions.deployHost")}
+            <input
+              value={deployHost}
+              onChange={(event) => setDeployHost(event.target.value)}
+              placeholder={t("pages.deploy.actions.deployHostPlaceholder")}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
+            {t("pages.deploy.actions.deployPort")}
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              value={deployPort}
+              onChange={(event) => setDeployPort(event.target.value)}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
+            {t("pages.deploy.actions.deployUser")}
+            <input
+              value={deployUser}
+              onChange={(event) => setDeployUser(event.target.value)}
+              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
+            {t("pages.deploy.actions.deployTargetDir")}
+            <input
+              value={deployTargetDir}
+              onChange={(event) => setDeployTargetDir(event.target.value)}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
             />
           </label>

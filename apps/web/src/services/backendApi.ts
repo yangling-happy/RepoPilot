@@ -121,6 +121,10 @@ export type DeployTriggerRequest = {
   terminalSessionId?: string;
   build?: boolean;
   artifactPath?: string;
+  deployHost?: string;
+  deployPort?: number;
+  deployUser?: string;
+  deployTargetDir?: string;
 };
 
 export type DeployTriggerResponse = {

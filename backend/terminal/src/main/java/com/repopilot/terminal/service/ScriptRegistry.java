@@ -8,6 +8,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -86,7 +87,10 @@ public class ScriptRegistry {
                         optional("artifactPath", "--artifact-path"),
                         optional("repoDir", "--repo-dir"),
                         optional("workspaceRoot", "--workspace-root")),
-                Map.of("deployTargetDir", "DEPLOY_TARGET_DIR")));
+                Map.of("deployTargetDir", "DEPLOY_TARGET_DIR",
+                       "deployHost", "DEPLOY_HOST",
+                       "deployPort", "DEPLOY_PORT",
+                       "deployUser", "DEPLOY_USER")));
     }
 
     @PostConstruct
@@ -176,6 +180,16 @@ public class ScriptRegistry {
                     PosixFilePermission.GROUP_EXECUTE));
         } catch (UnsupportedOperationException | IOException ignored) {
             // Windows and some filesystems do not support POSIX permissions; bash can still read the script.
+        }
+    }
+
+    private void augmentPath(Map<String, String> environment) {
+        String currentPath = System.getenv("PATH");
+        String scriptDir = scriptDirectory.toAbsolutePath().toString();
+        if (currentPath != null && !currentPath.isEmpty()) {
+            environment.put("PATH", scriptDir + File.pathSeparator + currentPath);
+        } else {
+            environment.put("PATH", scriptDir);
         }
     }
 
