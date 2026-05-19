@@ -97,6 +97,25 @@ public class GitLabDocClient {
         return commitIds.isEmpty() ? List.of(headCommit) : commitIds;
     }
 
+    public List<CommitFileChange> listFileChangesBetween(String token, String project, String fromCommit,
+            String toCommit) {
+        JsonNode compareResults = getJson(token,
+                "/projects/" + encodePathSegment(project)
+                        + "/repository/compare?from=" + encodeQueryParam(fromCommit)
+                        + "&to=" + encodeQueryParam(toCommit),
+                "load commit diffs");
+        JsonNode diffs = compareResults.path("diffs");
+        if (!diffs.isArray()) {
+            return List.of();
+        }
+
+        List<CommitFileChange> changes = new ArrayList<>();
+        for (JsonNode diff : diffs) {
+            changes.add(toFileChange(diff));
+        }
+        return changes;
+    }
+
     //通过与首个 parent compare，获取某个 commit 的文件级变更
     //
     //GitLab commit 接口本身会返回 parent_ids。

@@ -13,7 +13,7 @@ public class TerminalTaskStartRequest {
     private String sessionId;
     //任务类型（如 CLONE_REPO、REFRESH_DOC 等），字符串形式，后续会转为枚举
     private String taskType;
-    //任务参数键值对（如 projectId、branch、token 等）
+    //任务参数键值对（如 projectId、branch、repoDir 等），密钥不允许放在这里
     //使用 LinkedHashMap 保持参数插入顺序
     private Map<String, Object> args = new LinkedHashMap<>();
 }

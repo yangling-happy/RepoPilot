@@ -22,26 +22,12 @@ import com.repopilot.business.service.gitignore.GitIgnoreMatcher;
 import com.repopilot.business.service.gitlab.GitLabDocClient;
 import com.repopilot.business.service.gitlab.model.CommitFileChange;
 import com.repopilot.business.service.terminal.TerminalRelayClient;
+import com.repopilot.business.service.terminal.TerminalScriptTaskClient;
 import com.repopilot.business.service.workspace.UserWorkspaceResolver;
 import com.repopilot.common.exception.BusinessException;
+import com.repopilot.common.terminal.ScriptTaskRunResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.eclipse.jgit.api.CheckoutCommand;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.PullResult;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.api.errors.TransportException;
-import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.diff.RenameDetector;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.ObjectReader;
-import org.eclipse.jgit.lib.Ref;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevWalk;
-import org.eclipse.jgit.transport.RefSpec;
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
-import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -86,6 +72,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     private final UserWorkspaceResolver userWorkspaceResolver;
     //WebSocket 终端消息推送客户端
     private final TerminalRelayClient terminalRelayClient;
+    private final TerminalScriptTaskClient terminalScriptTaskClient;
     //JSON 序列化工具
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -100,77 +87,68 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     //  6. 根据 diff 中变更的文件，调用文档生成器生成文档
     @Override
     public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token) {
-        //第一步：校验必填参数，不合法直接抛异常
+        return refresh(gitlabUsername, project, branch, token, null);
+    }
+
+    @Override
+    public DocRefreshResult refresh(String gitlabUsername, String project, String branch, String token,
+            String terminalSessionId) {
         validateGitlabUsername(gitlabUsername);
         validateProjectAndBranch(project, branch);
         validateToken(token);
 
-        //第二步：找到本地仓库的根目录
-        //路径格式：{baseDir}/workspace/{username}/repos/project-{projectId}
         Path sourceRoot = resolveSourceRoot(gitlabUsername, project);
         if (sourceRoot == null) {
             throw new BusinessException(400, "Local repository not found for project: " + project);
         }
 
-        //将分支名标准化（去掉 refs/heads/ 前缀）
         String normalizedBranch = normalizeBranchName(branch);
-        String oldHead;  //拉取前的 commit hash
-        String newHead;  //拉取后的 commit hash
-        List<String> detectedCommitIds = List.of();  //检测到的新 commit 列表
-        List<CommitFileChange> changes = List.of();  //文件变更列表
+        Map<String, Object> args = new LinkedHashMap<>();
+        args.put("project", project);
+        args.put("branch", normalizedBranch);
+        args.put("username", gitlabUsername);
+        args.put("repoDir", toScriptPath(sourceRoot));
 
-        //try-with-resources 语法：括号里打开的资源（Git）会在 try 块结束时自动关闭
-        //Git.open 打开本地已有的 Git 仓库（相当于 cd 到仓库目录执行 git 命令）
-        try (Git git = Git.open(sourceRoot.toFile())) {
-            //确保当前在目标分支上（如果不在就 checkout 过去）
-            checkoutLocalBranch(git, normalizedBranch);
-
-            //记录拉取前的 HEAD commit
-            oldHead = resolveLocalHeadCommit(sourceRoot);
-            //从远程仓库拉取最新代码（git fetch + git pull）
-            fetchAndPullBranch(git, normalizedBranch, token.trim());
-            //记录拉取后的 HEAD commit
-            newHead = resolveLocalHeadCommit(sourceRoot);
-
-            //如果 HEAD 发生了变化（有新 commit），计算变更
-            if (!Objects.equals(oldHead, newHead)) {
-                //列出 oldHead 到 newHead 之间的所有 commit ID（按时间排序）
-                detectedCommitIds = listCommitIdsInRange(git.getRepository(), oldHead, newHead);
-                if (detectedCommitIds.isEmpty()) {
-                    detectedCommitIds = List.of(newHead);
-                }
-                //比较两个 commit 的文件树，找出哪些文件被新增/修改/删除/重命名
-                changes = listLocalDiffChanges(git, oldHead, newHead);
-            }
-        } catch (BusinessException ex) {
-            //业务异常直接向上抛
-            throw ex;
-        } catch (IOException | GitAPIException ex) {
-            //JGit 操作异常包装成业务异常
-            log.error("Local doc refresh failed. project={}, branch={}, sourceRoot={}",
-                    project, normalizedBranch, sourceRoot, ex);
-            throw new BusinessException(500, "Local repository refresh failed");
+        ScriptTaskRunResult scriptResult = terminalScriptTaskClient.run(
+                "REFRESH_DOC",
+                terminalSessionId,
+                args,
+                Map.of("GITLAB_TOKEN", token.trim()),
+                600);
+        if (scriptResult.getExitCode() != 0) {
+            throw toRefreshScriptException(scriptResult);
         }
 
-        //组装返回结果
+        String oldHead = terminalScriptTaskClient.requireResult(
+                scriptResult,
+                "OLD_HEAD",
+                "Refresh script did not report OLD_HEAD");
+        String newHead = terminalScriptTaskClient.requireResult(
+                scriptResult,
+                "NEW_HEAD",
+                "Refresh script did not report NEW_HEAD");
+
         DocRefreshResult result = new DocRefreshResult();
         result.setGitlabUsername(gitlabUsername);
         result.setProject(project);
         result.setBranch(normalizedBranch);
-        result.setBaselineCommit(oldHead);  //上次刷新时的 commit（增量起点）
-        result.setHeadCommit(newHead);       //本次刷新时的最新 commit
+        result.setBaselineCommit(oldHead);
+        result.setHeadCommit(newHead);
 
-        //如果没有新 commit，直接返回
         if (Objects.equals(oldHead, newHead)) {
             result.setMessage("No new commits.");
             return result;
         }
 
+        List<String> detectedCommitIds = gitLabDocClient.listCommitIdsSince(token, project, oldHead, newHead);
+        if (detectedCommitIds.isEmpty()) {
+            detectedCommitIds = List.of(newHead);
+        }
+        List<CommitFileChange> changes = gitLabDocClient.listFileChangesBetween(token, project, oldHead, newHead);
+
         result.setDetectedCommitIds(detectedCommitIds);
         result.setNewCommitCount(detectedCommitIds.size());
 
-        //核心步骤：根据文件变更列表，为变更的 Java 文件生成文档
-        //返回值是最终状态（SUCCESS/SKIPPED/FAILED）
         String status = runLocalExtractionTask(gitlabUsername, project, normalizedBranch, newHead, sourceRoot, changes);
         if (STATUS_FAILED.equals(status)) {
             result.getFailedTaskCommitIds().add(newHead);
@@ -178,7 +156,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             result.getCreatedTaskCommitIds().add(newHead);
         }
 
-        //组装汇总消息
         result.setMessage(String.format(
                 "Detected %d commit(s), created %d task(s), skipped %d task(s), failed %d task(s).",
                 result.getNewCommitCount(),
@@ -188,9 +165,6 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return result;
     }
 
-    //重建文档：为指定的 commit 重新生成所有文档（覆盖旧产物）
-    //与 refresh 的区别：refresh 是增量的（只处理新 commit），rebuild 是全量的（重新处理指定 commit）
-    //适用场景：文档生成器升级后想重新生成旧 commit 的文档，或者某个 commit 的文档生成失败想重试
     @Override
     public void rebuild(String gitlabUsername, String project, String branch, String commitId, String token) {
         validateGitlabUsername(gitlabUsername);
@@ -808,186 +782,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return prefix + "-" + safeCommitId + "-" + Long.toString(System.nanoTime(), 36);
     }
 
-    //列出 oldHead 到 newHead 之间的所有 commit ID（按提交时间升序）
-    //使用 JGit 的 RevWalk（提交遍历器）来遍历 commit 链
-    //
-    //原理：
-    //  - markStart(newCommit): 从 newHead 开始遍历
-    //  - markUninteresting(oldCommit): 标记 oldHead 为"不感兴趣"，遍历到它就停止
-    //  - 这样遍历出来的就是 oldHead..newHead 之间的所有 commit
-    //
-    //返回值：按时间排序的 commit ID 列表，如果解析失败则返回 [newHead]
-    private List<String> listCommitIdsInRange(Repository repository, String oldHead, String newHead)
-            throws IOException {
-        //将 commit hash 字符串解析为 ObjectId（JGit 的内部标识）
-        ObjectId oldObjectId = repository.resolve(oldHead);
-        ObjectId newObjectId = repository.resolve(newHead);
-        if (oldObjectId == null || newObjectId == null) {
-            return List.of(newHead);
-        }
-
-        //RevWalk 是 JGit 的提交遍历工具，可以沿着 parent 链遍历 commit 树
-        try (RevWalk revWalk = new RevWalk(repository)) {
-            RevCommit oldCommit = revWalk.parseCommit(oldObjectId);
-            RevCommit newCommit = revWalk.parseCommit(newObjectId);
-            //从 newCommit 开始遍历，遇到 oldCommit 停止
-            revWalk.markStart(newCommit);
-            revWalk.markUninteresting(oldCommit);
-
-            List<RevCommit> commits = new ArrayList<>();
-            for (RevCommit commit : revWalk) {
-                commits.add(commit);
-            }
-
-            //按提交时间排序（升序，从旧到新）
-            commits.sort(Comparator.comparingInt(RevCommit::getCommitTime));
-            List<String> commitIds = commits.stream().map(RevCommit::getName).collect(Collectors.toList());
-            return commitIds.isEmpty() ? List.of(newHead) : commitIds;
-        }
-    }
-
-    //比较两个 commit 的文件树，找出所有文件级变更（新增/修改/删除/重命名）
-    //使用 JGit 的 diff 功能，类似命令行的 "git diff oldHead..newHead"
-    //
-    //处理流程：
-    //  1. 将 commit hash 解析为"树对象"（tree），树对象是 Git 存储文件快照的方式
-    //  2. 用 CanonicalTreeParser 创建两个文件树的迭代器
-    //  3. 调用 git.diff() 比较两个树，得到 DiffEntry 列表
-    //  4. 用 RenameDetector 检测重命名（Git 的 rename 检测是基于内容相似度的）
-    //  5. 将 DiffEntry 转换为内部的 CommitFileChange 对象
-    private List<CommitFileChange> listLocalDiffChanges(Git git, String oldHead, String newHead)
-            throws IOException, GitAPIException {
-        Repository repository = git.getRepository();
-        //^{tree} 是 Git 语法，表示取该 commit 对应的树对象（而不是 commit 对象本身）
-        ObjectId oldTree = repository.resolve(oldHead + "^{tree}");
-        ObjectId newTree = repository.resolve(newHead + "^{tree}");
-        if (oldTree == null || newTree == null) {
-            throw new BusinessException(500, "Unable to resolve commit trees for local diff");
-        }
-
-        //ObjectReader 用于读取 Git 对象（blob/tree/commit/tag）
-        try (ObjectReader reader = repository.newObjectReader()) {
-            //CanonicalTreeParser 是树对象的迭代器，可以逐个遍历树中的文件
-            CanonicalTreeParser oldTreeParser = new CanonicalTreeParser();
-            oldTreeParser.reset(reader, oldTree);
-            CanonicalTreeParser newTreeParser = new CanonicalTreeParser();
-            newTreeParser.reset(reader, newTree);
-
-            //执行 diff 操作，比较两个文件树
-            List<DiffEntry> entries = git.diff()
-                    .setOldTree(oldTreeParser)
-                    .setNewTree(newTreeParser)
-                    .call();
-
-            //检测重命名：Git 会比较文件内容的相似度，如果相似度超过阈值就认为是重命名
-            if (!entries.isEmpty()) {
-                RenameDetector renameDetector = new RenameDetector(repository);
-                renameDetector.addAll(entries);
-                entries = renameDetector.compute();
-            }
-
-            //将 JGit 的 DiffEntry 转换为内部的 CommitFileChange 对象
-            List<CommitFileChange> changes = new ArrayList<>();
-            for (DiffEntry entry : entries) {
-                changes.add(toCommitFileChange(entry));
-            }
-            return changes;
-        }
-    }
-
-    //将 JGit 的 DiffEntry 转换为内部的 CommitFileChange 对象
-    //DiffEntry 包含 oldPath（变更前路径）和 newPath（变更后路径），不同变更类型的路径含义不同：
-    //  - ADD: 新增文件，oldPath 为 null，newPath 是新文件路径
-    //  - MODIFY: 修改文件，oldPath 和 newPath 相同（路径没变，内容变了）
-    //  - DELETE: 删除文件，oldPath 是被删文件路径，newPath 为 null
-    //  - RENAME: 重命名文件，oldPath 是旧路径，newPath 是新路径
-    //  - COPY: 复制文件，视为新增（oldPath 为 null），newPath 是复制后的路径
-    private CommitFileChange toCommitFileChange(DiffEntry entry) {
-        return switch (entry.getChangeType()) {
-            case ADD -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
-            case MODIFY ->
-                new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.MODIFIED);
-            case DELETE -> new CommitFileChange(entry.getOldPath(), null, CommitFileChange.ChangeType.DELETED);
-            case RENAME ->
-                new CommitFileChange(entry.getOldPath(), entry.getNewPath(), CommitFileChange.ChangeType.RENAMED);
-            case COPY -> new CommitFileChange(null, entry.getNewPath(), CommitFileChange.ChangeType.ADDED);
-        };
-    }
-
-    //切换到指定的本地分支（相当于 git checkout branch）
-    //如果已经在目标分支上，直接返回（避免不必要的操作）
-    //
-    //注意：这个方法只切换本地分支，不涉及远程操作
-    //后续的 fetchAndPullBranch 会从远程拉取最新代码
-    private void checkoutLocalBranch(Git git, String branch) throws IOException, GitAPIException {
-        Repository repository = git.getRepository();
-        //将分支名转为完整的引用路径（如 "main" -> "refs/heads/main"）
-        String localBranchRef = toBranchRef(branch);
-        Ref localBranch = repository.findRef(localBranchRef);
-        if (localBranch == null) {
-            throw new BusinessException(400, "Local branch not found: " + branch);
-        }
-
-        //getFullBranch 返回当前分支的完整引用（如 "refs/heads/main"）
-        //如果已经是目标分支，跳过 checkout
-        String currentBranch = repository.getFullBranch();
-        if (localBranchRef.equals(currentBranch)) {
-            return;
-        }
-
-        //执行 git checkout
-        CheckoutCommand checkoutCommand = git.checkout().setName(branch);
-        checkoutCommand.call();
-    }
-
-    //从远程仓库拉取最新代码（相当于 git fetch + git pull）
-    //
-    //为什么要先 fetch 再 pull？
-    //  - git fetch: 只下载远程的最新提交到本地的远程跟踪分支（如 origin/main），不合并
-    //  - git pull: 相当于 git fetch + git merge，将远程跟踪分支合并到当前分支
-    //  - 这里先 fetch 是为了确保远程跟踪分支是最新的，再 pull 合并
-    //
-    //认证方式：使用 GitLab Personal Access Token 作为密码
-    //  UsernamePasswordCredentialsProvider("git", token) 中：
-    //  - 用户名固定为 "git"（GitLab 的惯例）
-    //  - 密码是用户的 Personal Access Token
-    private void fetchAndPullBranch(Git git, String branch, String token) throws GitAPIException {
-        //创建认证提供者（用户名固定为 "git"，密码是 token）
-        UsernamePasswordCredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider("git", token);
-        String branchRef = toBranchRef(branch); //如 "refs/heads/main"
-        String remoteTrackingRef = "refs/remotes/origin/" + branch; //如 "refs/remotes/origin/main"
-
-        try {
-            //步骤1：fetch 远程分支的最新提交到本地的远程跟踪分支
-            //RefSpec 指定要拉取的引用映射关系：远程分支 -> 本地远程跟踪分支
-            git.fetch()
-                    .setRemote("origin")
-                    .setCredentialsProvider(credentialsProvider)
-                    .setRefSpecs(new RefSpec(branchRef + ":" + remoteTrackingRef))
-                    .call();
-
-            //步骤2：pull 将远程跟踪分支合并到当前本地分支
-            PullResult pullResult = git.pull()
-                    .setRemote("origin")
-                    .setRemoteBranchName(branch)
-                    .setCredentialsProvider(credentialsProvider)
-                    .call();
-
-            if (!pullResult.isSuccessful()) {
-                throw new BusinessException(500, "git pull failed for branch: " + branch);
-            }
-        } catch (TransportException ex) {
-            //TransportException 通常是网络问题或认证失败
-            throw new BusinessException(401, "Git fetch/pull failed, please check token and repository permissions");
-        }
-    }
-
-    //安全地将相对文件路径解析为绝对路径（防止路径穿越攻击）
-    //例如：sourceRoot="/repo"，filePath="src/Main.java" -> 返回 "/repo/src/Main.java"
-    //
-    //安全检查：解析后的路径必须以 sourceRoot 开头
-    //如果 filePath 包含 "../" 等路径穿越字符，解析后可能跳出仓库目录，此时抛出异常
-    //这是一种常见的安全防护措施，防止恶意路径读取仓库外的文件
+    // Resolve a repository-relative file path without allowing traversal outside the repo.
     private Path resolveRepoFile(Path sourceRoot, String filePath) {
         if (!StringUtils.hasText(filePath)) {
             throw new BusinessException(400, "Invalid file path from local diff");
@@ -1002,19 +797,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         return resolved;
     }
 
-    //将分支名转为完整的 Git 引用路径
-    //例如："main" -> "refs/heads/main"
-    //如果已经是完整引用（以 "refs/heads/" 开头），直接返回
-    private String toBranchRef(String branch) {
-        if (branch.startsWith("refs/heads/")) {
-            return branch;
-        }
-        return "refs/heads/" + branch;
-    }
-
-    //标准化分支名：去掉 refs/heads/ 前缀，只保留纯分支名
-    //例如："refs/heads/main" -> "main"
-    //用户输入可能是 "main" 或 "refs/heads/main"，统一转为纯分支名方便后续使用
+    // Normalize branch names so downstream code sees "main" rather than "refs/heads/main".
     private String normalizeBranchName(String branch) {
         String normalized = branch.trim();
         if (normalized.startsWith("refs/heads/")) {
@@ -1317,6 +1100,34 @@ public class DocPipelineServiceImpl implements DocPipelineService {
     //这些消息会在前端的终端界面实时显示，让用户看到文档生成的进度
     private void emitTerminal(String sessionId, String line) {
         terminalRelayClient.emit(sessionId, line);
+    }
+
+    private String toScriptPath(Path path) {
+        return path.toAbsolutePath().normalize().toString().replace('\\', '/');
+    }
+
+    private BusinessException toRefreshScriptException(ScriptTaskRunResult result) {
+        if (result.isTimedOut()) {
+            return new BusinessException(500, "Local repository refresh timed out");
+        }
+        String output = summarizeScriptOutput(result);
+        String lower = output.toLowerCase();
+        if (lower.contains("authentication") || lower.contains("permission denied")
+                || lower.contains("could not read username") || lower.contains("access denied")) {
+            return new BusinessException(401, "Git fetch/pull failed, please check token and repository permissions");
+        }
+        return new BusinessException(500, "Local repository refresh failed: " + output);
+    }
+
+    private String summarizeScriptOutput(ScriptTaskRunResult result) {
+        String text = ((result.getStderr() == null ? "" : result.getStderr()) + "\n"
+                + (result.getStdout() == null ? "" : result.getStdout()))
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (!StringUtils.hasText(text)) {
+            return "exitCode=" + result.getExitCode();
+        }
+        return text.length() <= 300 ? text : text.substring(0, 300);
     }
 
     //参数校验：project 和 branch 都不能为空
