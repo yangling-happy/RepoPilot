@@ -17,6 +17,7 @@ target/
 # IDEs
 .idea/
 .vscode/
+.claude/
 **/.vs/
 
 # OS / editor temp files
