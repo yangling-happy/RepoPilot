@@ -7,7 +7,6 @@ public class DeployTriggerRequest {
 
     private String project;
     private String branch;
-    private String environment;
     private String commitId;
     private String terminalSessionId;
     private Boolean build;

@@ -116,7 +116,6 @@ export type DocQueryItem = {
 export type DeployTriggerRequest = {
   project: string;
   branch: string;
-  environment: string;
   commitId?: string;
   terminalSessionId?: string;
   build?: boolean;

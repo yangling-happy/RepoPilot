@@ -142,7 +142,7 @@
     },
     "deploy": {
       "title": "部署",
-      "lede": "一键将提交推进至预发或生产环境。任务由后端 PTY 执行器承载，WebSocket 实时输出日志，支持取消、超时与按 commit 维度的并发保护。",
+      "lede": "一键部署提交。任务由后端 PTY 执行器承载，WebSocket 实时输出日志，支持取消、超时与按 commit 维度的并发保护。",
       "contextRepo": "仓库 · {{repo}}",
       "terminal": {
         "title": "虚拟终端",
@@ -159,7 +159,6 @@
         "title": "触发部署",
         "projectId": "项目 ID",
         "branch": "分支",
-        "environment": "环境",
         "artifactPath": "产物路径（可选）",
         "artifactPlaceholder": "留空则自动查找最新产物",
         "deployHost": "目标主机（可选）",
@@ -171,22 +170,17 @@
         "trigger": "开始部署",
         "triggering": "正在触发...",
         "cancel": "取消",
-        "envOptions": {
-          "staging": "预发",
-          "production": "生产"
-        },
         "success": {
           "triggered": "部署已受理，任务 ID：{{taskId}}",
           "cancelled": "部署已取消。"
         },
         "errors": {
           "projectIdInvalid": "项目 ID 必须是有效的 GitLab 数字项目 ID。",
-          "environmentRequired": "部署环境不能为空。",
           "unexpected": "部署请求失败。",
           "noActiveTask": "当前没有可取消的运行中任务。"
         },
         "terminal": {
-          "triggered": "[deploy] 已受理，project={{project}}，branch={{branch}}，env={{environment}}",
+          "triggered": "[deploy] 已受理，project={{project}}，branch={{branch}}",
           "accepted": "[deploy] 任务已开始，id={{taskId}}",
           "failed": "[deploy] 请求失败：{{message}}"
         },

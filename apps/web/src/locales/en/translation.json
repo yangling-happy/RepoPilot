@@ -143,7 +143,7 @@
     },
     "deploy": {
       "title": "Deploy",
-      "lede": "Promote commits to staging or production with one click. Runs execute through the backend PTY runner with live WebSocket logs, cancellation, timeouts, and exactly-once protections per commit.",
+      "lede": "Deploy commits with one click. Runs execute through the backend PTY runner with live WebSocket logs, cancellation, timeouts, and exactly-once protections per commit.",
       "contextRepo": "Repository · {{repo}}",
       "terminal": {
         "title": "Virtual console",
@@ -160,7 +160,6 @@
         "title": "Trigger deployment",
         "projectId": "Project ID",
         "branch": "Branch",
-        "environment": "Environment",
         "artifactPath": "Artifact path (optional)",
         "artifactPlaceholder": "Leave empty to auto-discover the latest artifact",
         "deployHost": "Target host (optional)",
@@ -172,22 +171,17 @@
         "trigger": "Trigger deploy",
         "triggering": "Triggering...",
         "cancel": "Cancel",
-        "envOptions": {
-          "staging": "Staging",
-          "production": "Production"
-        },
         "success": {
           "triggered": "Deployment accepted. Task ID: {{taskId}}",
           "cancelled": "Deployment cancelled."
         },
         "errors": {
           "projectIdInvalid": "Project ID must be a valid numeric GitLab project id.",
-          "environmentRequired": "Environment is required.",
           "unexpected": "Deployment request failed.",
           "noActiveTask": "No running deployment task to cancel."
         },
         "terminal": {
-          "triggered": "[deploy] request accepted, project={{project}}, branch={{branch}}, environment={{environment}}",
+          "triggered": "[deploy] request accepted, project={{project}}, branch={{branch}}",
           "accepted": "[deploy] task started, id={{taskId}}",
           "failed": "[deploy] request failed: {{message}}"
         },

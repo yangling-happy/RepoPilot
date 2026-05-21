@@ -94,7 +94,6 @@ public class ScriptRegistry {
                 List.of(required("project", "--project"),
                         required("branch", "--branch"),
                         required("username", "--username"),
-                        required("environment", "--environment"),
                         optional("artifactPath", "--artifact-path"),
                         optional("repoDir", "--repo-dir"),
                         optional("workspaceRoot", "--workspace-root")),

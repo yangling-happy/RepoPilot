@@ -61,7 +61,6 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
         BizAssert.notNull(request, 400, "Request body is required");
         String project = normalizeProject(request.getProject());
         String branch = normalizeBranch(request.getBranch());
-        String environment = normalizeEnvironment(request.getEnvironment());
         String sessionId = trimToNull(request.getTerminalSessionId());
         boolean buildEnabled = request.getBuild() == null || request.getBuild();
         String artifactPath = trimToNull(request.getArtifactPath());
@@ -89,7 +88,7 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
         deployTask.setBranchName(branch);
         deployTask.setCommitId(commitId);
         deployTask.setDeployParams(
-                serializeDeployParams(new DeployParams(environment, sessionId, buildEnabled, artifactPath)));
+                serializeDeployParams(new DeployParams(sessionId, buildEnabled, artifactPath)));
         deployTask.setRunStatus(STATUS_RUNNING);
         deployTask.setStartTime(LocalDateTime.now());
         deployTask.setDuration(0);
@@ -103,7 +102,6 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
                 project,
                 branch,
                 commitId,
-                environment,
                 sessionId,
                 buildEnabled,
                 artifactPath,
@@ -308,7 +306,6 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
         args.put("project", plan.project());
         args.put("branch", plan.branch());
         args.put("username", plan.username());
-        args.put("environment", plan.environment());
         if (StringUtils.hasText(plan.artifactPath())) {
             args.put("artifactPath", plan.artifactPath());
         }
@@ -376,15 +373,6 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
         return branch.trim();
     }
 
-    private String normalizeEnvironment(String environment) {
-        BizAssert.hasText(environment, 400, "environment is required");
-        String normalized = environment.trim();
-        if (!normalized.matches("[a-zA-Z0-9._-]+")) {
-            throw new BusinessException(400, "environment contains invalid characters");
-        }
-        return normalized;
-    }
-
     private String generateDeployTaskId() {
         return "deploy-" + UUID.randomUUID();
     }
@@ -434,7 +422,6 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
             String project,
             String branch,
             String commitId,
-            String environment,
             String sessionId,
             boolean buildEnabled,
             String artifactPath,
@@ -447,7 +434,6 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
     }
 
     private record DeployParams(
-            String environment,
             String terminalSessionId,
             boolean build,
             String artifactPath) {

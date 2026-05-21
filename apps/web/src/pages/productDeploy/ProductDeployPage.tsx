@@ -48,7 +48,6 @@ export function ProductDeployPage() {
     },
   );
   const [branch, setBranch] = useSessionState(`deploy.${repoKey}.branch`, "main");
-  const [environment, setEnvironment] = useSessionState(`deploy.${repoKey}.environment`, "staging");
   const [artifactPath, setArtifactPath] = useSessionState(`deploy.${repoKey}.artifactPath`, "");
   const [buildEnabled, setBuildEnabled] = useSessionState(`deploy.${repoKey}.buildEnabled`, true);
   const [deployHost, setDeployHost] = useSessionState(`deploy.${repoKey}.deployHost`, "");
@@ -117,14 +116,6 @@ export function ProductDeployPage() {
     }
 
     const effectiveBranch = branch.trim() || "main";
-    const effectiveEnvironment = environment.trim();
-    if (!effectiveEnvironment) {
-      setStatus({
-        type: "error",
-        text: t("pages.deploy.actions.errors.environmentRequired"),
-      });
-      return;
-    }
 
     setTerminalOpen(true);
     terminalClientRef.current?.clear();
@@ -135,7 +126,6 @@ export function ProductDeployPage() {
       t("pages.deploy.actions.terminal.triggered", {
         project: trimmedProject,
         branch: effectiveBranch,
-        environment: effectiveEnvironment,
       }),
     );
 
@@ -143,7 +133,6 @@ export function ProductDeployPage() {
       const response = await triggerDeploy({
         project: trimmedProject,
         branch: effectiveBranch,
-        environment: effectiveEnvironment,
         terminalSessionId,
         build: buildEnabled,
         artifactPath: artifactPath.trim() || undefined,
@@ -187,7 +176,6 @@ export function ProductDeployPage() {
     deployPort,
     deployUser,
     deployTargetDir,
-    environment,
     projectId,
     t,
     terminalSessionId,
@@ -302,21 +290,6 @@ export function ProductDeployPage() {
               onChange={(event) => setProjectId(event.target.value)}
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
             />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
-            {t("pages.deploy.actions.environment")}
-            <select
-              value={environment}
-              onChange={(event) => setEnvironment(event.target.value)}
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
-            >
-              <option value="staging">
-                {t("pages.deploy.actions.envOptions.staging")}
-              </option>
-              <option value="production">
-                {t("pages.deploy.actions.envOptions.production")}
-              </option>
-            </select>
           </label>
           <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300 md:col-span-2">
             {t("pages.deploy.actions.branch")}

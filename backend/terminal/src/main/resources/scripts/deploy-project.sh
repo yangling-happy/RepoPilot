@@ -7,7 +7,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT=""
 BRANCH=""
 USERNAME=""
-ENVIRONMENT=""
 ARTIFACT_PATH=""
 REPO_DIR=""
 WORKSPACE_ROOT="${REPOPILOT_WORKSPACE_ROOT:-workspace/root/repos}"
@@ -24,10 +23,6 @@ while [ $# -gt 0 ]; do
       ;;
     --username)
       USERNAME="${2:-}"
-      shift 2
-      ;;
-    --environment)
-      ENVIRONMENT="${2:-}"
       shift 2
       ;;
     --artifact-path)
@@ -51,7 +46,6 @@ done
 require_value "project" "$PROJECT"
 require_value "branch" "$BRANCH"
 require_value "username" "$USERNAME"
-require_value "environment" "$ENVIRONMENT"
 
 if [ -z "$ARTIFACT_PATH" ]; then
   REPO_DIR="$(resolve_repo_dir "$USERNAME" "$PROJECT" "$REPO_DIR" "$WORKSPACE_ROOT")"
@@ -64,7 +58,7 @@ if [ ! -f "$ARTIFACT_PATH" ]; then
   fail "artifact not found: $ARTIFACT_PATH"
 fi
 
-info "deploy request accepted, project=$PROJECT, branch=$BRANCH, username=$USERNAME, environment=$ENVIRONMENT"
+info "deploy request accepted, project=$PROJECT, branch=$BRANCH, username=$USERNAME"
 if [ -z "${DEPLOY_TARGET_DIR:-}" ]; then
   fail "DEPLOY_TARGET_DIR is not configured"
 fi
@@ -74,7 +68,7 @@ DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_USER="${DEPLOY_USER:-}"
 DEPLOY_TARGET_DIR=$(echo "$DEPLOY_TARGET_DIR" | sed 's|\\|/|g' | sed 's|/$||')
 
-TARGET_DIR="$DEPLOY_TARGET_DIR/$ENVIRONMENT/$PROJECT"
+TARGET_DIR="$DEPLOY_TARGET_DIR/$PROJECT"
 ARTIFACT_NAME="$(basename "$ARTIFACT_PATH")"
 
 if [ -n "$DEPLOY_HOST" ]; then
