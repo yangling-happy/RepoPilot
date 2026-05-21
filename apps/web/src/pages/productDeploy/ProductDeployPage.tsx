@@ -20,6 +20,7 @@ import {
   triggerDeploy,
   type DeployTask,
 } from "../../services/backendApi";
+import { useSessionState } from "../../hooks/useSessionState";
 import { getTerminalUnavailableMessage } from "../productDocs/productDocsMessages";
 
 const TERMINAL_SESSION_STORAGE_KEY = "repopilot.deploy.terminalSessionId";
@@ -36,20 +37,24 @@ export function ProductDeployPage() {
   const terminalClientRef = useRef<TerminalClient | null>(null);
   const language = i18n.resolvedLanguage ?? i18n.language;
 
-  const [projectId, setProjectId] = useState(() => {
-    if (!repo) {
-      return "";
-    }
-    return /^\d+$/.test(repo) ? repo : "";
-  });
-  const [branch, setBranch] = useState("main");
-  const [environment, setEnvironment] = useState("staging");
-  const [artifactPath, setArtifactPath] = useState("");
-  const [buildEnabled, setBuildEnabled] = useState(true);
-  const [deployHost, setDeployHost] = useState("");
-  const [deployPort, setDeployPort] = useState("22");
-  const [deployUser, setDeployUser] = useState("");
-  const [deployTargetDir, setDeployTargetDir] = useState("");
+  const repoKey = repo || "default";
+  const [projectId, setProjectId] = useSessionState<string>(
+    `deploy.${repoKey}.projectId`,
+    () => {
+      if (!repo) {
+        return "";
+      }
+      return /^\d+$/.test(repo) ? repo : "";
+    },
+  );
+  const [branch, setBranch] = useSessionState(`deploy.${repoKey}.branch`, "main");
+  const [environment, setEnvironment] = useSessionState(`deploy.${repoKey}.environment`, "staging");
+  const [artifactPath, setArtifactPath] = useSessionState(`deploy.${repoKey}.artifactPath`, "");
+  const [buildEnabled, setBuildEnabled] = useSessionState(`deploy.${repoKey}.buildEnabled`, true);
+  const [deployHost, setDeployHost] = useSessionState(`deploy.${repoKey}.deployHost`, "");
+  const [deployPort, setDeployPort] = useSessionState(`deploy.${repoKey}.deployPort`, "22");
+  const [deployUser, setDeployUser] = useSessionState(`deploy.${repoKey}.deployUser`, "");
+  const [deployTargetDir, setDeployTargetDir] = useSessionState(`deploy.${repoKey}.deployTargetDir`, "");
   const [deploying, setDeploying] = useState(false);
   const [status, setStatus] = useState<StatusMessage>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);

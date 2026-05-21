@@ -72,6 +72,7 @@ fi
 DEPLOY_HOST="${DEPLOY_HOST:-}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_USER="${DEPLOY_USER:-}"
+DEPLOY_TARGET_DIR=$(echo "$DEPLOY_TARGET_DIR" | sed 's|\\|/|g' | sed 's|/$||')
 
 TARGET_DIR="$DEPLOY_TARGET_DIR/$ENVIRONMENT/$PROJECT"
 ARTIFACT_NAME="$(basename "$ARTIFACT_PATH")"
@@ -84,11 +85,29 @@ if [ -n "$DEPLOY_HOST" ]; then
     REMOTE_SSH="$DEPLOY_USER@$DEPLOY_HOST"
   fi
 
-  ssh -p "$DEPLOY_PORT" -o StrictHostKeyChecking=no "$REMOTE_SSH" "mkdir -p '$TARGET_DIR'" || \
-    fail "failed to create remote directory $TARGET_DIR on $DEPLOY_HOST"
+  SSH_OPTS="-p $DEPLOY_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o BatchMode=yes"
+  SCP_OPTS="-P $DEPLOY_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 
-  scp -P "$DEPLOY_PORT" -o StrictHostKeyChecking=no "$ARTIFACT_PATH" "$REMOTE_SSH:$TARGET_DIR/$ARTIFACT_NAME" || \
-    fail "failed to copy artifact to $REMOTE_SSH:$TARGET_DIR"
+  REMOTE_OS=$(ssh $SSH_OPTS "$REMOTE_SSH" "uname -s" 2>/dev/null || true)
+  case "$REMOTE_OS" in
+    Linux*|Darwin*) ;;
+    *) REMOTE_OS="Windows" ;;
+  esac
+
+  if [ "$REMOTE_OS" = "Windows" ]; then
+    scp $SCP_OPTS "$ARTIFACT_PATH" "$REMOTE_SSH:$ARTIFACT_NAME" || \
+      fail "failed to copy artifact to remote"
+    PS_DIR=$(echo "$TARGET_DIR" | sed 's|/|\\|g')
+    PS_DEST="${PS_DIR}\\${ARTIFACT_NAME}"
+    ssh $SSH_OPTS "$REMOTE_SSH" \
+      "powershell -Command \"New-Item -ItemType Directory -Force -Path '${PS_DIR}'; Move-Item -Path '${ARTIFACT_NAME}' -Destination '${PS_DEST}' -Force\"" || \
+      fail "failed to move artifact on remote Windows"
+  else
+    ssh $SSH_OPTS "$REMOTE_SSH" "mkdir -p '$TARGET_DIR'" || \
+      fail "failed to create remote directory $TARGET_DIR on $DEPLOY_HOST"
+    scp $SCP_OPTS "$ARTIFACT_PATH" "$REMOTE_SSH:$TARGET_DIR/$ARTIFACT_NAME" || \
+      fail "failed to copy artifact to $REMOTE_SSH:$TARGET_DIR"
+  fi
 
   info "remote deploy completed, artifact copied to $REMOTE_SSH:$TARGET_DIR/$ARTIFACT_NAME"
 else

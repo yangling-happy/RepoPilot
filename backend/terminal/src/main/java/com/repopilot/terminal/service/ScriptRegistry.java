@@ -177,9 +177,15 @@ public class ScriptRegistry {
         }
 
         ClassPathResource resource = new ClassPathResource(RESOURCE_ROOT + scriptFile);
+        String content;
         try (InputStream inputStream = resource.getInputStream()) {
-            Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
+            content = new String(inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
+        content = content.replace("\r\n", "\n").replace("\r", "\n");
+        Files.write(target, content.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                java.nio.file.StandardOpenOption.CREATE,
+                java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
+                java.nio.file.StandardOpenOption.WRITE);
         makeExecutable(target);
     }
 
