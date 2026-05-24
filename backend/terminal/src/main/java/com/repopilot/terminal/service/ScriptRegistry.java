@@ -41,6 +41,7 @@ public class ScriptRegistry {
             "scan-local-doc.sh",  //本地扫描文档脚本
             "build-project.sh",   //构建项目脚本
             "deploy-project.sh", //部署项目脚本
+            "custom-deploy.sh",  //自定义部署脚本（执行仓库内 deploy.sh）
             "setup-ssh-key.sh"); //SSH 密钥配置脚本
 
     //任务类型 -> 脚本定义的映射（EnumMap 比 HashMap 更高效）
@@ -102,6 +103,10 @@ public class ScriptRegistry {
                        "deployHost", "DEPLOY_HOST",
                        "deployPort", "DEPLOY_PORT",
                        "deployUser", "DEPLOY_USER")));
+        definitions.put(TerminalTaskType.CUSTOM_DEPLOY, new ScriptDefinition(
+                "custom-deploy.sh",
+                List.of(required("repoDir", "--repo-dir")),
+                Map.of()));
         definitions.put(TerminalTaskType.SETUP_SSH_KEY, new ScriptDefinition(
                 "setup-ssh-key.sh",
                 List.of(required("host", "--host"),

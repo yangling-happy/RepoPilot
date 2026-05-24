@@ -172,7 +172,7 @@ public class DeployController {
         secretEnv.put("SSH_PASSWORD", request.getPassword());
 
         ScriptTaskRunResult result = terminalScriptTaskClient.run(
-                "SETUP_SSH_KEY", null, args, secretEnv, 30);
+                "SETUP_SSH_KEY", null, args, secretEnv, 60);
 
         String status = result.getResults() != null ? result.getResults().get("STATUS") : null;
         if (result.getExitCode() == 0 && "SUCCESS".equals(status)) {
@@ -254,7 +254,7 @@ public class DeployController {
             for (int i = lines.length - 1; i >= 0; i--) {
                 String line = lines[i].trim();
                 if (!line.isEmpty()) {
-                    return stripLogPrefix(line);
+                    return line;
                 }
             }
         }
@@ -263,19 +263,15 @@ public class DeployController {
             String[] lines = stdout.split("\\R");
             for (int i = lines.length - 1; i >= 0; i--) {
                 String line = lines[i].trim();
-                if (line.contains("[ERROR]") || line.contains("fail")) {
-                    return stripLogPrefix(line);
+                if (line.startsWith("ERROR:")) {
+                    return line.substring("ERROR:".length()).trim();
+                }
+                if (line.contains("[ERROR]")) {
+                    return line.replaceFirst("^\\[.*?\\]\\s*\\[ERROR\\]\\s*", "").trim();
                 }
             }
         }
-        return "SSH key setup failed";
-    }
-
-    private String stripLogPrefix(String line) {
-        return line.replaceFirst("^\\[.*?\\]\\s*\\[ERROR\\]\\s*", "")
-                   .replaceFirst("^\\[.*?\\]\\s*\\[INFO\\]\\s*", "")
-                   .replaceFirst("^\\[.*?\\]\\s*\\[WARN\\]\\s*", "")
-                   .trim();
+        return "SSH key setup failed (exit code: " + result.getExitCode() + ")";
     }
 
     //如果字符串有内容（非空且包含非空白字符），则返回去除首尾空格后的值；否则返回 null(保证有一个默认值null)

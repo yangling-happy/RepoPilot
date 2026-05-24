@@ -44,6 +44,7 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
     private static final String STATUS_TIMEOUT = "TIMEOUT";
     private static final String TASK_BUILD = "BUILD_PROJECT";
     private static final String TASK_DEPLOY = "DEPLOY_PROJECT";
+    private static final String TASK_CUSTOM_DEPLOY = "CUSTOM_DEPLOY";
     private static final int POLL_INTERVAL_MILLIS = 1500;
 
     private final DeployTaskMapper deployTaskMapper;
@@ -171,7 +172,15 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
                 }
             }
 
-            TaskResult deployResult = runTerminalTask(plan, TASK_DEPLOY, deployArgs(plan));
+            String deployTaskType = TASK_DEPLOY;
+            Map<String, Object> deployTaskArgs = deployArgs(plan);
+            if (hasCustomDeployScript(plan.repoDir())) {
+                deployTaskType = TASK_CUSTOM_DEPLOY;
+                deployTaskArgs = customDeployArgs(plan);
+                terminalRelayClient.emit(plan.sessionId(),
+                        "[deploy] detected deploy.sh in repository, using custom deploy script");
+            }
+            TaskResult deployResult = runTerminalTask(plan, deployTaskType, deployTaskArgs);
             if (isCancelled(plan.deployId())) {
                 return;
             }
@@ -322,6 +331,19 @@ public class DeployPipelineServiceImpl implements DeployPipelineService {
         if (StringUtils.hasText(plan.deployUser())) {
             args.put("deployUser", plan.deployUser());
         }
+        return args;
+    }
+
+    private boolean hasCustomDeployScript(String repoDir) {
+        if (!StringUtils.hasText(repoDir)) {
+            return false;
+        }
+        return Files.exists(Path.of(repoDir, "deploy.sh"));
+    }
+
+    private Map<String, Object> customDeployArgs(DeployExecutionPlan plan) {
+        Map<String, Object> args = new LinkedHashMap<>();
+        args.put("repoDir", plan.repoDir());
         return args;
     }
 
