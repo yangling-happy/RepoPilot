@@ -6,7 +6,7 @@ interface SecondaryNavItem {
   labelKey: string;
 }
 
-const WORKBENCH_PATHS = new Set(["/dashboard", "/documentation", "/deploy"]);
+const WORKBENCH_PATHS = new Set(["/dashboard", "/documentation", "/documentation/view", "/deploy"]);
 
 const SECONDARY_NAV_ITEMS: SecondaryNavItem[] = [
   { path: "/documentation", labelKey: "header.documentation" },

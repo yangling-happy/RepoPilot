@@ -4,6 +4,9 @@ import com.repopilot.business.dto.CreateBuildTaskRequest;
 import com.repopilot.business.dto.CreateDeployTaskRequest;
 import com.repopilot.business.dto.DeployTriggerRequest;
 import com.repopilot.business.dto.DeployTriggerResponse;
+import com.repopilot.business.dto.SshKeySetupRequest;
+import com.repopilot.business.service.terminal.TerminalScriptTaskClient;
+import com.repopilot.common.terminal.ScriptTaskRunResult;
 import com.repopilot.business.entity.BuildTask;
 import com.repopilot.business.entity.DeployTask;
 import com.repopilot.business.mapper.BuildTaskMapper;
@@ -18,6 +21,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 import static org.springframework.util.StringUtils.hasText;
@@ -43,6 +48,7 @@ public class DeployController {
     private final GitLabSessionContextService gitLabSessionContextService;
     //部署流水线服务，负责触发部署、查询任务、取消部署等
     private final DeployPipelineService deployPipelineService;
+    private final TerminalScriptTaskClient terminalScriptTaskClient;
 
     //触发一次部署
     @PostMapping("/trigger")
@@ -147,6 +153,35 @@ public class DeployController {
         return ApiResponse.success("Deploy cancelled", task);
     }
 
+    @PostMapping("/setup-ssh-key")
+    public ApiResponse<String> setupSshKey(@RequestBody SshKeySetupRequest request, HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        BizAssert.isTrue(hasText(request.getHost()), 400, "host is required");
+        BizAssert.isTrue(hasText(request.getUser()), 400, "user is required");
+        BizAssert.isTrue(hasText(request.getPassword()), 400, "password is required");
+
+        int port = request.getPort() != null && request.getPort() > 0 ? request.getPort() : 22;
+        log.info("Setup SSH key: username={}, target={}:{}", context.username(), request.getHost(), port);
+
+        Map<String, Object> args = new LinkedHashMap<>();
+        args.put("host", request.getHost().trim());
+        args.put("port", String.valueOf(port));
+        args.put("user", request.getUser().trim());
+
+        Map<String, String> secretEnv = new LinkedHashMap<>();
+        secretEnv.put("SSH_PASSWORD", request.getPassword());
+
+        ScriptTaskRunResult result = terminalScriptTaskClient.run(
+                "SETUP_SSH_KEY", null, args, secretEnv, 30);
+
+        String status = result.getResults() != null ? result.getResults().get("STATUS") : null;
+        if (result.getExitCode() == 0 && "SUCCESS".equals(status)) {
+            return ApiResponse.success("SSH key setup completed");
+        }
+        String errorMsg = extractErrorMessage(result);
+        return ApiResponse.error(500, errorMsg);
+    }
+
     //校验创建部署任务的请求体
     //返回 null 表示校验通过；返回字符串表示具体错误信息
     //
@@ -210,6 +245,37 @@ public class DeployController {
             return "duration must be greater than or equal to 0";
         }
         return null;
+    }
+
+    private String extractErrorMessage(ScriptTaskRunResult result) {
+        String stderr = result.getStderr() != null ? result.getStderr().trim() : "";
+        if (!stderr.isEmpty()) {
+            String[] lines = stderr.split("\\R");
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String line = lines[i].trim();
+                if (!line.isEmpty()) {
+                    return stripLogPrefix(line);
+                }
+            }
+        }
+        String stdout = result.getStdout() != null ? result.getStdout().trim() : "";
+        if (!stdout.isEmpty()) {
+            String[] lines = stdout.split("\\R");
+            for (int i = lines.length - 1; i >= 0; i--) {
+                String line = lines[i].trim();
+                if (line.contains("[ERROR]") || line.contains("fail")) {
+                    return stripLogPrefix(line);
+                }
+            }
+        }
+        return "SSH key setup failed";
+    }
+
+    private String stripLogPrefix(String line) {
+        return line.replaceFirst("^\\[.*?\\]\\s*\\[ERROR\\]\\s*", "")
+                   .replaceFirst("^\\[.*?\\]\\s*\\[INFO\\]\\s*", "")
+                   .replaceFirst("^\\[.*?\\]\\s*\\[WARN\\]\\s*", "")
+                   .trim();
     }
 
     //如果字符串有内容（非空且包含非空白字符），则返回去除首尾空格后的值；否则返回 null(保证有一个默认值null)

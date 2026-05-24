@@ -40,7 +40,8 @@ public class ScriptRegistry {
             "refresh-doc.sh",     //刷新文档脚本
             "scan-local-doc.sh",  //本地扫描文档脚本
             "build-project.sh",   //构建项目脚本
-            "deploy-project.sh"); //部署项目脚本
+            "deploy-project.sh", //部署项目脚本
+            "setup-ssh-key.sh"); //SSH 密钥配置脚本
 
     //任务类型 -> 脚本定义的映射（EnumMap 比 HashMap 更高效）
     private final Map<TerminalTaskType, ScriptDefinition> definitions = new EnumMap<>(TerminalTaskType.class);
@@ -101,6 +102,12 @@ public class ScriptRegistry {
                        "deployHost", "DEPLOY_HOST",
                        "deployPort", "DEPLOY_PORT",
                        "deployUser", "DEPLOY_USER")));
+        definitions.put(TerminalTaskType.SETUP_SSH_KEY, new ScriptDefinition(
+                "setup-ssh-key.sh",
+                List.of(required("host", "--host"),
+                        optional("port", "--port"),
+                        required("user", "--user")),
+                Map.of("sshPassword", "SSH_PASSWORD")));
     }
 
     //@PostConstruct 注解：Spring Bean 初始化完成后自动调用此方法

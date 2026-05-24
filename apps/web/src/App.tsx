@@ -3,6 +3,7 @@ import { SiteShell } from "./components/siteShell/SiteShell";
 import { HomePage } from "./pages/homePage/HomePage";
 import { ProductDeployPage } from "./pages/productDeploy/ProductDeployPage";
 import { ProductDocsPage } from "./pages/productDocs/ProductDocsPage";
+import { DocViewPage } from "./pages/docView/DocViewPage";
 import { WorkbenchPage } from "./pages/workbench/WorkbenchPage";
 import { LoginPage } from "./pages/login/LoginPage";
 
@@ -18,6 +19,7 @@ function App() {
             element={<Navigate to="/dashboard" replace />}
           />
           <Route path="/documentation" element={<ProductDocsPage />} />
+          <Route path="/documentation/view" element={<DocViewPage />} />
           <Route path="/deploy" element={<ProductDeployPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

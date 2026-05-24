@@ -17,6 +17,7 @@ import {
   ApiError,
   cancelDeploy,
   getDeployTask,
+  setupSshKey,
   triggerDeploy,
   type DeployTask,
 } from "../../services/backendApi";
@@ -54,6 +55,8 @@ export function ProductDeployPage() {
   const [deployPort, setDeployPort] = useSessionState(`deploy.${repoKey}.deployPort`, "22");
   const [deployUser, setDeployUser] = useSessionState(`deploy.${repoKey}.deployUser`, "");
   const [deployTargetDir, setDeployTargetDir] = useSessionState(`deploy.${repoKey}.deployTargetDir`, "");
+  const [sshPassword, setSshPassword] = useState("");
+  const [sshKeySettingUp, setSshKeySettingUp] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [status, setStatus] = useState<StatusMessage>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -180,6 +183,59 @@ export function ProductDeployPage() {
     t,
     terminalSessionId,
   ]);
+
+  const handleSetupSshKey = useCallback(async () => {
+    const trimmedHost = deployHost.trim();
+    const trimmedUser = deployUser.trim();
+    const trimmedPassword = sshPassword.trim();
+
+    if (!trimmedHost || !trimmedUser || !trimmedPassword) {
+      setStatus({
+        type: "error",
+        text: t("pages.deploy.actions.errors.sshPasswordRequired"),
+      });
+      return;
+    }
+
+    setTerminalOpen(true);
+    terminalClientRef.current?.clear();
+    setSshKeySettingUp(true);
+    setStatus(null);
+    appendTerminal(
+      t("pages.deploy.actions.terminal.triggered", {
+        project: "ssh-key-setup",
+        branch: trimmedHost,
+      }),
+    );
+    appendTerminal(`[ssh] setting up key for ${trimmedUser}@${trimmedHost}...`);
+
+    try {
+      await setupSshKey({
+        host: trimmedHost,
+        port: deployPort.trim() ? Number(deployPort.trim()) : undefined,
+        user: trimmedUser,
+        password: trimmedPassword,
+      });
+      setStatus({
+        type: "success",
+        text: t("pages.deploy.actions.success.sshKeySetup"),
+      });
+      appendTerminal("[ssh] key setup succeeded");
+      setSshPassword("");
+    } catch (error) {
+      const message = toErrorMessage(
+        error,
+        t("pages.deploy.actions.errors.unexpected"),
+      );
+      setStatus({
+        type: "error",
+        text: t("pages.deploy.actions.errors.sshKeySetupFailed", { message }),
+      });
+      appendTerminal(`[ssh] key setup failed: ${message}`);
+    } finally {
+      setSshKeySettingUp(false);
+    }
+  }, [appendTerminal, deployHost, deployPort, deployUser, sshPassword, t]);
 
   const handleCancel = useCallback(async () => {
     if (!activeTaskId) {
@@ -344,6 +400,17 @@ export function ProductDeployPage() {
               className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
             />
           </label>
+          {deployHost.trim() ? (
+            <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300 md:col-span-2">
+              {t("pages.deploy.actions.sshPassword")}
+              <input
+                type="password"
+                value={sshPassword}
+                onChange={(event) => setSshPassword(event.target.value)}
+                className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
+              />
+            </label>
+          ) : null}
           <label className="flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-300">
             <input
               type="checkbox"
@@ -374,6 +441,18 @@ export function ProductDeployPage() {
           >
             {t("pages.deploy.actions.cancel")}
           </button>
+          {deployHost.trim() ? (
+            <button
+              type="button"
+              onClick={handleSetupSshKey}
+              disabled={sshKeySettingUp || deploying}
+              className="rounded-lg border border-emerald-300 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
+            >
+              {sshKeySettingUp
+                ? t("pages.deploy.actions.settingUpSshKey")
+                : t("pages.deploy.actions.setupSshKey")}
+            </button>
+          ) : null}
         </div>
 
         {status ? (

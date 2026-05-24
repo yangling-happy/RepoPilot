@@ -133,6 +133,13 @@ export type DeployTriggerResponse = {
   commitId?: string;
 };
 
+export type SshKeySetupRequest = {
+  host: string;
+  port?: number;
+  user: string;
+  password: string;
+};
+
 export type DeployTask = {
   deployTaskId: string;
   projectName: string;
@@ -234,6 +241,18 @@ export async function getDeployTask(taskId: string): Promise<DeployTask> {
   const params = new URLSearchParams({ taskId });
   return requestApi<DeployTask>(`/api/deploy/task?${params.toString()}`, {
     method: "GET",
+  });
+}
+
+export async function setupSshKey(
+  payload: SshKeySetupRequest,
+): Promise<string> {
+  return requestApi<string>("/api/deploy/setup-ssh-key", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
 }
 

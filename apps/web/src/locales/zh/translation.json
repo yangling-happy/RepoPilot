@@ -92,6 +92,7 @@
         "cloning": "克隆中...",
         "scanLocal": "生成本地文档",
         "scanning": "生成中...",
+        "viewDocs": "查看文档",
         "success": {
           "tokenSaved": "Token 已保存，会话可复用。",
           "cloneCompleted": "克隆完成：{{projectPath}}。已同步到控制台列表。",
@@ -170,14 +171,20 @@
         "trigger": "开始部署",
         "triggering": "正在触发...",
         "cancel": "取消",
+        "sshPassword": "SSH 密码",
+        "setupSshKey": "配置 SSH 密钥",
+        "settingUpSshKey": "正在配置...",
         "success": {
           "triggered": "部署已受理，任务 ID：{{taskId}}",
-          "cancelled": "部署已取消。"
+          "cancelled": "部署已取消。",
+          "sshKeySetup": "SSH 密钥配置成功，后续部署无需再输入密码。"
         },
         "errors": {
           "projectIdInvalid": "项目 ID 必须是有效的 GitLab 数字项目 ID。",
           "unexpected": "部署请求失败。",
-          "noActiveTask": "当前没有可取消的运行中任务。"
+          "noActiveTask": "当前没有可取消的运行中任务。",
+          "sshPasswordRequired": "请填写目标主机、远程用户名和 SSH 密码。",
+          "sshKeySetupFailed": "SSH 密钥配置失败：{{message}}"
         },
         "terminal": {
           "triggered": "[deploy] 已受理，project={{project}}，branch={{branch}}",
@@ -221,6 +228,15 @@
         "docsEndpoint": "已发布文档",
         "summary": "说明"
       }
+    },
+    "docView": {
+      "title": "文档浏览",
+      "empty": "暂无文档，请先在生成页面创建。",
+      "noRepo": "请从控制台选择仓库，或在生成页面完成文档生成。",
+      "loading": "加载文档中...",
+      "loadError": "加载文档失败",
+      "fileTree": "文件目录",
+      "backToGenerate": "返回生成"
     }
   }
 }

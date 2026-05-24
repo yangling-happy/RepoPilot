@@ -7,5 +7,6 @@ public enum TerminalTaskType {
     REFRESH_DOC,     //增量刷新文档（对比远程新 commit）
     SCAN_LOCAL_DOC,  //本地全量扫描并生成文档
     BUILD_PROJECT,   //构建项目
-    DEPLOY_PROJECT   //部署项目
+    DEPLOY_PROJECT,  //部署项目
+    SETUP_SSH_KEY    //一键配置 SSH 密钥
 }

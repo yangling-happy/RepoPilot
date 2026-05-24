@@ -92,6 +92,7 @@
         "cloning": "Cloning...",
         "scanLocal": "Generate local docs",
         "scanning": "Generating...",
+        "viewDocs": "View docs",
         "success": {
           "tokenSaved": "Token saved for this browser session.",
           "cloneCompleted": "Clone completed: {{projectPath}}. Synced to dashboard list.",
@@ -171,14 +172,20 @@
         "trigger": "Trigger deploy",
         "triggering": "Triggering...",
         "cancel": "Cancel",
+        "sshPassword": "SSH Password",
+        "setupSshKey": "Setup SSH Key",
+        "settingUpSshKey": "Setting up...",
         "success": {
           "triggered": "Deployment accepted. Task ID: {{taskId}}",
-          "cancelled": "Deployment cancelled."
+          "cancelled": "Deployment cancelled.",
+          "sshKeySetup": "SSH key setup succeeded. Future deploys will not require a password."
         },
         "errors": {
           "projectIdInvalid": "Project ID must be a valid numeric GitLab project id.",
           "unexpected": "Deployment request failed.",
-          "noActiveTask": "No running deployment task to cancel."
+          "noActiveTask": "No running deployment task to cancel.",
+          "sshPasswordRequired": "Please fill in target host, remote user, and SSH password.",
+          "sshKeySetupFailed": "SSH key setup failed: {{message}}"
         },
         "terminal": {
           "triggered": "[deploy] request accepted, project={{project}}, branch={{branch}}",
@@ -222,6 +229,15 @@
         "docsEndpoint": "Published documentation",
         "summary": "Description"
       }
+    },
+    "docView": {
+      "title": "Documentation Viewer",
+      "empty": "No docs yet. Generate them first.",
+      "noRepo": "Select a repository from the dashboard, or generate docs first.",
+      "loading": "Loading docs...",
+      "loadError": "Failed to load docs",
+      "fileTree": "File Tree",
+      "backToGenerate": "Back to generate"
     }
   }
 }

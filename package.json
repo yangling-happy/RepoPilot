@@ -13,7 +13,6 @@
     "dev:backend:business:run": "bash -lc \"cd backend && ./mvnw -f business/pom.xml spring-boot:run -DskipTests\"",
     "dev:backend:terminal": "pnpm run dev:backend:prepare && pnpm run dev:backend:terminal:run",
     "dev:backend:terminal:run": "bash -lc \"cd backend && ./mvnw -f terminal/pom.xml spring-boot:run -DskipTests\"",
-    "dev:backend:gateway": "bash -lc \"cd backend && ./mvnw -N install && ./mvnw -f gateway/pom.xml spring-boot:run -DskipTests\"",
     "dev:all": "concurrently \"pnpm:dev:frontend\" \"pnpm:dev:terminal\" \"pnpm:dev:backend\"",
     "build": "pnpm run build:all",
     "build:frontend": "pnpm --filter @repo-pilot/web build",
