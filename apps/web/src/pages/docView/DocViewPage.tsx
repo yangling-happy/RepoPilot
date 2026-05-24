@@ -17,77 +17,142 @@ type StructuredDocSelection = {
   section: StructuredDocSection;
 };
 
-type TreeNode = {
+type PackageNode = {
   name: string;
-  path: string;
-  children?: TreeNode[];
-  doc?: DocQueryItem;
+  packagePath: string;
+  children?: PackageNode[];
+  docs?: DocQueryItem[];
 };
 
-function buildTree(docs: DocQueryItem[]): TreeNode[] {
-  const root: TreeNode[] = [];
-  const folderMap = new Map<string, TreeNode>();
+const SOURCE_PREFIX_RE = /^src\/main\/(?:java|kotlin)\//;
+
+function extractPackageSegments(filePath: string): { segments: string[]; className: string } {
+  const withoutPrefix = filePath.replace(SOURCE_PREFIX_RE, "");
+  const parts = withoutPrefix.split("/");
+  const fileName = parts.pop() ?? withoutPrefix;
+  const className = fileName.replace(/\.\w+$/, "");
+  return { segments: parts, className };
+}
+
+function getClassName(doc: DocQueryItem): string {
+  if (doc.structuredDoc?.types?.length) {
+    return doc.structuredDoc.types[0].name;
+  }
+  const { className } = extractPackageSegments(doc.filePath);
+  return className;
+}
+
+function buildPackageTree(docs: DocQueryItem[]): PackageNode[] {
+  const root: PackageNode[] = [];
+  const nodeMap = new Map<string, PackageNode>();
 
   for (const doc of docs) {
-    const segments = doc.filePath.split("/");
+    const { segments } = extractPackageSegments(doc.filePath);
     let currentLevel = root;
     let currentPath = "";
 
-    for (let i = 0; i < segments.length - 1; i++) {
-      const folderName = segments[i];
-      currentPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+    for (const seg of segments) {
+      currentPath = currentPath ? `${currentPath}/${seg}` : seg;
 
-      if (!folderMap.has(currentPath)) {
-        const folderNode: TreeNode = {
-          name: folderName,
-          path: currentPath,
+      if (!nodeMap.has(currentPath)) {
+        const node: PackageNode = {
+          name: seg,
+          packagePath: currentPath.replace(/\//g, "."),
           children: [],
         };
-        folderMap.set(currentPath, folderNode);
-        currentLevel.push(folderNode);
+        nodeMap.set(currentPath, node);
+        currentLevel.push(node);
       }
-      currentLevel = folderMap.get(currentPath)!.children!;
+      currentLevel = nodeMap.get(currentPath)!.children!;
     }
 
-    const fileName = segments[segments.length - 1];
     currentLevel.push({
-      name: fileName,
-      path: doc.filePath,
-      doc,
+      name: getClassName(doc),
+      packagePath: currentPath.replace(/\//g, "."),
+      docs: [doc],
     });
   }
 
   return root;
 }
 
-function FileTree({
+function filterTree(nodes: PackageNode[], query: string): PackageNode[] {
+  const lower = query.toLowerCase();
+  const result: PackageNode[] = [];
+
+  for (const node of nodes) {
+    if (node.docs) {
+      const matches = node.docs.some(
+        (doc) =>
+          node.name.toLowerCase().includes(lower) ||
+          node.packagePath.toLowerCase().includes(lower) ||
+          doc.filePath.toLowerCase().includes(lower),
+      );
+      if (matches) {
+        result.push(node);
+      }
+    } else if (node.children) {
+      const filteredChildren = filterTree(node.children, query);
+      if (
+        filteredChildren.length > 0 ||
+        node.name.toLowerCase().includes(lower) ||
+        node.packagePath.toLowerCase().includes(lower)
+      ) {
+        result.push({
+          ...node,
+          children:
+            filteredChildren.length > 0
+              ? filteredChildren
+              : node.children,
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
+function collectExpandedPaths(nodes: PackageNode[]): Set<string> {
+  const paths = new Set<string>();
+  function walk(list: PackageNode[]) {
+    for (const node of list) {
+      if (node.children) {
+        paths.add(node.packagePath);
+        walk(node.children);
+      }
+    }
+  }
+  walk(nodes);
+  return paths;
+}
+
+function PackageTree({
   nodes,
   selectedDocKey,
-  expandedFolders,
+  expandedPackages,
   onSelectDoc,
-  onToggleFolder,
+  onTogglePackage,
   depth = 0,
 }: {
-  nodes: TreeNode[];
+  nodes: PackageNode[];
   selectedDocKey: string | null;
-  expandedFolders: Set<string>;
+  expandedPackages: Set<string>;
   onSelectDoc: (doc: DocQueryItem) => void;
-  onToggleFolder: (path: string) => void;
+  onTogglePackage: (path: string) => void;
   depth?: number;
 }) {
   return (
-    <div className={depth > 0 ? "ml-3 border-l border-neutral-200 dark:border-white/10" : ""}>
+    <div className={depth > 0 ? "ml-2 border-l border-neutral-200 dark:border-white/10" : ""}>
       {nodes.map((node) => {
-        const isFolder = !!node.children;
-        const isExpanded = expandedFolders.has(node.path);
-        const isActive = node.doc && getDocKey(node.doc) === selectedDocKey;
+        const isPackage = !!node.children;
+        const isExpanded = expandedPackages.has(node.packagePath);
 
-        if (isFolder) {
+        if (isPackage) {
           return (
-            <div key={node.path}>
+            <div key={node.packagePath}>
               <button
                 type="button"
-                onClick={() => onToggleFolder(node.path)}
+                onClick={() => onTogglePackage(node.packagePath)}
                 className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs text-neutral-700 transition hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-white/10"
               >
                 <span
@@ -98,12 +163,12 @@ function FileTree({
                 <span className="truncate font-medium">{node.name}</span>
               </button>
               {isExpanded && node.children ? (
-                <FileTree
+                <PackageTree
                   nodes={node.children}
                   selectedDocKey={selectedDocKey}
-                  expandedFolders={expandedFolders}
+                  expandedPackages={expandedPackages}
                   onSelectDoc={onSelectDoc}
-                  onToggleFolder={onToggleFolder}
+                  onTogglePackage={onTogglePackage}
                   depth={depth + 1}
                 />
               ) : null}
@@ -111,11 +176,14 @@ function FileTree({
           );
         }
 
+        const doc = node.docs?.[0];
+        const isActive = doc && getDocKey(doc) === selectedDocKey;
+
         return (
           <button
-            key={node.path}
+            key={node.packagePath}
             type="button"
-            onClick={() => node.doc && onSelectDoc(node.doc)}
+            onClick={() => doc && onSelectDoc(doc)}
             className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs transition ${
               isActive
                 ? "bg-neutral-900 text-white dark:bg-white dark:text-black"
@@ -123,19 +191,19 @@ function FileTree({
             }`}
             style={{ paddingLeft: `${depth * 12 + 8}px` }}
           >
-            <span className="shrink-0 text-[10px] opacity-40">📄</span>
-            <span className="truncate">{node.name}</span>
-            {node.doc ? (
+            <span className="shrink-0 text-[10px] opacity-40">C</span>
+            <span className="truncate font-mono">{node.name}</span>
+            {doc ? (
               <span
                 className={`ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
                   isActive
                     ? "bg-white/20 dark:bg-black/10"
-                    : node.doc.parseStatus === "SUCCESS"
+                    : doc.parseStatus === "SUCCESS"
                       ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-300"
                       : "bg-rose-50 text-rose-700 dark:bg-rose-400/10 dark:text-rose-300"
                 }`}
               >
-                {node.doc.parseStatus}
+                {doc.parseStatus}
               </span>
             ) : null}
           </button>
@@ -156,7 +224,8 @@ export function DocViewPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedDocSelection, setSelectedDocSelection] =
     useState<StructuredDocSelection | null>(null);
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedPackages, setExpandedPackages] = useState<Set<string>>(
     new Set(),
   );
 
@@ -180,7 +249,18 @@ export function DocViewPage() {
     loadDocs();
   }, [loadDocs]);
 
-  const tree = useMemo(() => buildTree(docs), [docs]);
+  const packageTree = useMemo(() => buildPackageTree(docs), [docs]);
+
+  const filteredTree = useMemo(() => {
+    if (!searchQuery.trim()) return packageTree;
+    return filterTree(packageTree, searchQuery.trim());
+  }, [packageTree, searchQuery]);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      setExpandedPackages(collectExpandedPaths(filteredTree));
+    }
+  }, [searchQuery, filteredTree]);
 
   const selectedDoc = useMemo(() => {
     const fallback =
@@ -203,8 +283,8 @@ export function DocViewPage() {
     });
   }, []);
 
-  const handleToggleFolder = useCallback((path: string) => {
-    setExpandedFolders((prev: Set<string>) => {
+  const handleTogglePackage = useCallback((path: string) => {
+    setExpandedPackages((prev: Set<string>) => {
       const next = new Set(prev);
       if (next.has(path)) {
         next.delete(path);
@@ -261,18 +341,27 @@ export function DocViewPage() {
           <section className="max-h-[720px] overflow-auto rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
             <div className="flex items-center justify-between gap-3 px-2 pb-2">
               <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                {t("pages.docView.fileTree")}
+                {t("pages.docView.classIndex", "Class Index")}
               </h2>
               <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-mono text-neutral-600 dark:bg-white/10 dark:text-neutral-300">
                 {docs.length}
               </span>
             </div>
-            <FileTree
-              nodes={tree}
+            <div className="px-1 pb-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t("pages.docView.searchPlaceholder", "Search classes...")}
+                className="w-full rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs text-neutral-900 placeholder-neutral-400 outline-none transition focus:border-neutral-400 focus:bg-white dark:border-white/15 dark:bg-white/[0.06] dark:text-neutral-100 dark:placeholder-neutral-500 dark:focus:border-white/30 dark:focus:bg-white/[0.1]"
+              />
+            </div>
+            <PackageTree
+              nodes={filteredTree}
               selectedDocKey={selectedDoc ? getDocKey(selectedDoc) : null}
-              expandedFolders={expandedFolders}
+              expandedPackages={expandedPackages}
               onSelectDoc={handleSelectDoc}
-              onToggleFolder={handleToggleFolder}
+              onTogglePackage={handleTogglePackage}
             />
           </section>
 

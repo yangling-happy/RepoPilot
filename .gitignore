@@ -18,6 +18,8 @@ target/
 .idea/
 .vscode/
 .claude/
+.cursor/
+.codegraph/
 **/.vs/
 
 # OS / editor temp files
