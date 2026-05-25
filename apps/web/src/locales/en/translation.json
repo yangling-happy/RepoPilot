@@ -2,6 +2,11 @@
   "brand": {
     "name": "RepoPilot"
   },
+  "common": {
+    "terminal": {
+      "unavailable": "The virtual terminal is currently unavailable. Clone and doc-generation requests can still run, but live logs will not stream into this page. Check the terminal service address or your `VITE_TERMINAL_WS_URL` / `/ws` proxy configuration."
+    }
+  },
   "header": {
     "home": "Home",
     "dashboard": "Dashboard",
@@ -10,6 +15,8 @@
     "activeRepo": "Repository: {{repo}}",
     "language": "Language",
     "theme": "Theme",
+    "themeLight": "Light mode",
+    "themeDark": "Dark mode",
     "github": "Open on GitHub",
     "loginPlaceholder": "Sign in"
   },
@@ -81,6 +88,9 @@
       "title": "Documentation",
       "lede": "RepoPilot turns JavaDoc and repository metadata into always-up-to-date internal documentation. GitLab webhooks trigger incremental rebuilds; parse issues surface as alerts without blocking your delivery pipeline.",
       "contextRepo": "Repository · {{repo}}",
+      "mockMode": {
+        "hint": "Demo mode: no GitLab or backend connection. You can try clone and doc generation locally."
+      },
       "actions": {
         "title": "Documentation loop",
         "token": "GitLab token",
@@ -101,7 +111,16 @@
           "tokenRequired": "Please enter a GitLab token first.",
           "projectIdInvalid": "Please enter a project ID greater than 0.",
           "projectIdRequiredForDoc": "Project ID is required before generating docs.",
-          "unexpected": "Unexpected error"
+          "unexpected": "Unexpected error",
+          "backend": {
+            "gitlabTokenRequired": "No GitLab token is available in the current browser session. Save the token again before cloning.",
+            "gitlabProjectNotFound": "GitLab project not found: {{projectId}}. Verify the project ID.",
+            "branchNotFound": "Branch not found: {{branch}}. Verify the branch name.",
+            "invalidToken": "The GitLab token is invalid, or the current account cannot access this repository.",
+            "cloneFailed": "Repository clone failed. Check the GitLab token and repository read permissions.",
+            "localDirExists": "{{message}}. If this repository was cloned before, you can generate local docs directly.",
+            "localFileIoFailed": "The backend hit an I/O error during cloning. This original message is generic and usually means the backend could not reach the GitLab repository URL, or it could not create or write the local clone directory. Check the GitLab API/repository URL, clone-directory permissions, and whether the target directory already exists."
+          }
         },
         "terminal": {
           "tokenSaved": "[session] GitLab token saved.",
@@ -188,7 +207,10 @@
         "terminal": {
           "triggered": "[deploy] request accepted, project={{project}}, branch={{branch}}",
           "accepted": "[deploy] task started, id={{taskId}}",
-          "failed": "[deploy] request failed: {{message}}"
+          "failed": "[deploy] request failed: {{message}}",
+          "sshSetupStarted": "[ssh] setting up key for {{user}}@{{host}}...",
+          "sshSetupSucceeded": "[ssh] key setup succeeded",
+          "sshSetupFailed": "[ssh] key setup failed: {{message}}"
         },
         "status": "Deployment status: {{status}}"
       },
@@ -235,6 +257,8 @@
       "loading": "Loading docs...",
       "loadError": "Failed to load docs",
       "fileTree": "File Tree",
+      "classIndex": "Class Index",
+      "searchPlaceholder": "Search classes...",
       "backToGenerate": "Back to generate",
       "refresh": "Refresh docs",
       "scanLocal": "Scan & Generate Docs",
@@ -244,7 +268,15 @@
         "ready": "Terminal ready.",
         "hint": "Click \"Scan & Generate Docs\" to start.",
         "scanStarted": "Scanning project {{project}} (branch: {{branch}}) ...",
-        "scanCompleted": "Scan completed: {{scanned}} file(s), {{generated}} doc(s) generated, {{skipped}} skipped, {{failed}} failed."
+        "scanCompleted": "Scan completed: {{scanned}} file(s), {{generated}} doc(s) generated, {{skipped}} skipped, {{failed}} failed.",
+        "scanError": "[ERROR] {{message}}",
+        "separator": "────────────────────────────────────────",
+        "scanTiming": {
+          "total": "  total:          {{ms}} ms",
+          "fileListing": "  fileListing:    {{ms}} ms",
+          "docGeneration": "  docGeneration:  {{ms}} ms",
+          "dbOps": "  dbOps:          {{ms}} ms"
+        }
       }
     }
   }

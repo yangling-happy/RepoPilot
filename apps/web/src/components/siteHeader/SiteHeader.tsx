@@ -55,7 +55,7 @@ export function SiteHeader() {
           disabled={!mounted}
           onClick={() => setTheme(isDark ? "light" : "dark")}
           aria-label={t("header.theme")}
-          title={isDark ? "Light Mode" : "Dark Mode"}
+          title={isDark ? t("header.themeLight") : t("header.themeDark")}
         />
 
         <Button

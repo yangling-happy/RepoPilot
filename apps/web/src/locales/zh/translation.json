@@ -2,6 +2,11 @@
   "brand": {
     "name": "RepoPilot"
   },
+  "common": {
+    "terminal": {
+      "unavailable": "虚拟终端当前未连接。克隆和生成文档仍会继续发起，但本页不会显示实时日志。请检查 terminal 服务地址，或确认 `VITE_TERMINAL_WS_URL` / `/ws` 代理配置是否正确。"
+    }
+  },
   "header": {
     "home": "首页",
     "dashboard": "控制台",
@@ -10,6 +15,8 @@
     "activeRepo": "当前仓库：{{repo}}",
     "language": "语言",
     "theme": "颜色模式",
+    "themeLight": "浅色模式",
+    "themeDark": "深色模式",
     "github": "在 GitHub 上打开",
     "loginPlaceholder": "登录"
   },
@@ -81,6 +88,9 @@
       "title": "文档",
       "lede": "RepoPilot 将 JavaDoc 与仓库元数据转化为持续更新的内部文档站。GitLab Webhook 触发增量重建；解析异常以告警形式呈现，不阻断主线路交付。",
       "contextRepo": "仓库 · {{repo}}",
+      "mockMode": {
+        "hint": "演示模式：不会连接 GitLab 或后端 API，可直接体验克隆与文档生成流程。"
+      },
       "actions": {
         "title": "文档闭环",
         "token": "GitLab Token",
@@ -101,7 +111,16 @@
           "tokenRequired": "请先输入 GitLab Token。",
           "projectIdInvalid": "请输入大于 0 的项目 ID。",
           "projectIdRequiredForDoc": "生成文档前请先提供项目 ID。",
-          "unexpected": "发生未知错误"
+          "unexpected": "发生未知错误",
+          "backend": {
+            "gitlabTokenRequired": "当前浏览器会话里没有可用的 GitLab Token。请先点击“保存 Token”，或重新输入 Token 后再克隆。",
+            "gitlabProjectNotFound": "未找到对应的 GitLab 项目：{{projectId}}。请确认项目 ID 是否正确。",
+            "branchNotFound": "未找到分支：{{branch}}。请确认分支名是否存在。",
+            "invalidToken": "GitLab Token 无效，或当前账号没有访问该仓库的权限。",
+            "cloneFailed": "仓库克隆失败。请检查 GitLab Token 是否可用，以及当前账号是否拥有仓库读取权限。",
+            "localDirExists": "{{message}}。如果这是之前已经克隆过的仓库，可以直接点击”进入文档生成页面”。",
+            "localFileIoFailed": "后端在克隆阶段发生了 I/O 异常。这条原始报错比较笼统，通常表示后端无法访问 GitLab 仓库地址，或无法在本地创建/写入克隆目录。请重点检查 GitLab API/仓库地址配置、克隆目录权限，以及目标目录是否已存在。"
+          }
         },
         "terminal": {
           "tokenSaved": "[session] GitLab token 已保存。",
@@ -130,6 +149,7 @@
       },
       "terminal": {
         "title": "虚拟终端",
+        "subtitle": "文档生成与 Webhook 触发的重建日志将在此展示（会话接入后）。",
         "line1": "RepoPilot 虚拟终端已初始化。",
         "line2": "等待文档流水线输出…"
       },
@@ -187,7 +207,10 @@
         "terminal": {
           "triggered": "[deploy] 已受理，project={{project}}，branch={{branch}}",
           "accepted": "[deploy] 任务已开始，id={{taskId}}",
-          "failed": "[deploy] 请求失败：{{message}}"
+          "failed": "[deploy] 请求失败：{{message}}",
+          "sshSetupStarted": "[ssh] 正在为 {{user}}@{{host}} 配置密钥...",
+          "sshSetupSucceeded": "[ssh] 密钥配置成功",
+          "sshSetupFailed": "[ssh] 密钥配置失败：{{message}}"
         },
         "status": "部署状态：{{status}}"
       },
@@ -234,6 +257,8 @@
       "loading": "加载文档中...",
       "loadError": "加载文档失败",
       "fileTree": "文件目录",
+      "classIndex": "类索引",
+      "searchPlaceholder": "搜索类...",
       "backToGenerate": "返回生成",
       "refresh": "刷新文档列表",
       "scanLocal": "扫描并生成文档",
@@ -243,7 +268,15 @@
         "ready": "终端就绪。",
         "hint": "点击「扫描并生成文档」开始。",
         "scanStarted": "开始扫描项目 {{project}} (分支: {{branch}}) ...",
-        "scanCompleted": "扫描完成：共 {{scanned}} 个文件，生成 {{generated}} 个文档，跳过 {{skipped}} 个，失败 {{failed}} 个。"
+        "scanCompleted": "扫描完成：共 {{scanned}} 个文件，生成 {{generated}} 个文档，跳过 {{skipped}} 个，失败 {{failed}} 个。",
+        "scanError": "[ERROR] {{message}}",
+        "separator": "────────────────────────────────────────",
+        "scanTiming": {
+          "total": "  total:          {{ms}} ms",
+          "fileListing": "  fileListing:    {{ms}} ms",
+          "docGeneration": "  docGeneration:  {{ms}} ms",
+          "dbOps": "  dbOps:          {{ms}} ms"
+        }
       }
     }
   }
