@@ -92,7 +92,7 @@ export function DocViewPage() {
   const [scanning, setScanning] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalBusy, setTerminalBusy] = useState(false);
-  const [terminalConnectionState, setTerminalConnectionState] =
+  const [_terminalConnectionState, setTerminalConnectionState] =
     useState<TerminalConnectionState>("connecting");
   const terminalClientRef = useRef<TerminalClient | null>(null);
   const terminalSessionIdRef = useRef<string>(createSessionId());
