@@ -28,6 +28,10 @@ public class DocLocalScanResult {
     private Integer skippedFileCount = 0;
     //生成失败的文件数
     private Integer failedFileCount = 0;
+    //第二轮重试的文件数
+    private Integer retryFileCount = 0;
+    //第二轮重试成功的文件数
+    private Integer retryGeneratedCount = 0;
     //成功生成文档的文件路径列表
     private List<String> generatedFilePaths = new ArrayList<>();
     //生成失败的文件路径列表

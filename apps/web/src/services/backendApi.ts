@@ -47,6 +47,8 @@ export type DocLocalScanResult = {
   generatedFileCount: number;
   skippedFileCount: number;
   failedFileCount: number;
+  retryFileCount: number;
+  retryGeneratedCount: number;
   generatedFilePaths: string[];
   failedFilePaths: string[];
   message: string;

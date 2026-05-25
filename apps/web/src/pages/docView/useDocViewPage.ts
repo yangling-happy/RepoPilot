@@ -123,6 +123,8 @@ export function useDocViewPage() {
           generated: result.generatedFileCount,
           skipped: result.skippedFileCount,
           failed: result.failedFileCount,
+          retried: result.retryFileCount,
+          recovered: result.retryGeneratedCount,
         }),
       );
       appendTerminal(

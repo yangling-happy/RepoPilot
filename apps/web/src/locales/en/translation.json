@@ -268,7 +268,7 @@
         "ready": "Terminal ready.",
         "hint": "Click \"Scan & Generate Docs\" to start.",
         "scanStarted": "Scanning project {{project}} (branch: {{branch}}) ...",
-        "scanCompleted": "Scan completed: {{scanned}} file(s), {{generated}} doc(s) generated, {{skipped}} skipped, {{failed}} failed.",
+        "scanCompleted": "Scan completed: {{scanned}} file(s), {{generated}} generated, {{skipped}} skipped, {{failed}} failed, {{retried}} retried, {{recovered}} recovered.",
         "scanError": "[ERROR] {{message}}",
         "separator": "────────────────────────────────────────",
         "scanTiming": {

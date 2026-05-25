@@ -268,7 +268,7 @@
         "ready": "终端就绪。",
         "hint": "点击「扫描并生成文档」开始。",
         "scanStarted": "开始扫描项目 {{project}} (分支: {{branch}}) ...",
-        "scanCompleted": "扫描完成：共 {{scanned}} 个文件，生成 {{generated}} 个文档，跳过 {{skipped}} 个，失败 {{failed}} 个。",
+        "scanCompleted": "扫描完成：共 {{scanned}} 个文件，生成 {{generated}} 个文档，跳过 {{skipped}} 个，失败 {{failed}} 个，重试 {{retried}} 个，恢复 {{recovered}} 个。",
         "scanError": "[ERROR] {{message}}",
         "separator": "────────────────────────────────────────",
         "scanTiming": {

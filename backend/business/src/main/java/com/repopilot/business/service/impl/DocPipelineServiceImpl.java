@@ -39,11 +39,17 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 //文档流水线服务的核心实现类
@@ -249,40 +255,117 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             result.setFileListingDurationMs(listingDuration);
 
             result.setScannedFileCount(files.size());
-            emitTerminal(terminalSessionId, "[doc] local scan found " + files.size() + " file(s)"
-                    + " (file listing: " + listingDuration + " ms)");
 
-            //逐个文件处理
-            long genTotalStart = System.currentTimeMillis();
+            //将文件分为"支持"和"不支持"两组
+            int parallelism = Runtime.getRuntime().availableProcessors();
+            List<Path> supportedFiles = new ArrayList<>();
+            int skippedCount = 0;
             for (Path file : files) {
-                //将绝对路径转为相对于仓库根的路径（如 src/main/java/Demo.java）
                 String filePath = toRepoRelativePath(sourceRoot, file);
-                //检查是否有对应的文档生成器（如 .java 文件有 JavaDocGenerator）
-                if (!isSupportedDocFile(filePath)) {
-                    //不支持的文件类型跳过（如 .xml、.yml、图片等）
-                    result.setSkippedFileCount(result.getSkippedFileCount() + 1);
-                    continue;
-                }
-
-                try {
-                    //调用文档生成器生成文档（执行 javadoc 命令 -> 解析 HTML -> 输出 JSON）
-                    generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot, file,
-                            filePath);
-                    result.setGeneratedFileCount(result.getGeneratedFileCount() + 1);
-                    result.getGeneratedFilePaths().add(filePath);
-                    emitTerminal(terminalSessionId, "[doc] generated " + filePath);
-                } catch (Exception ex) {
-                    //单个文件生成失败不影响其他文件，记录错误继续处理下一个
-                    log.error("Local doc generation failed. project={}, branch={}, filePath={}",
-                            project, branch, filePath, ex);
-                    emitTerminal(terminalSessionId, "[doc] failed " + filePath + ": " + summarizeError(ex));
-                    result.setFailedFileCount(result.getFailedFileCount() + 1);
-                    result.getFailedFilePaths().add(filePath);
-                    //将失败记录也写入数据库（状态为 FAILED，记录错误信息）
-                    upsertDocFile(gitlabUsername, project, branch, filePath, commitId, task.getId(),
-                            STATUS_FAILED, null, summarizeError(ex));
+                if (isSupportedDocFile(filePath)) {
+                    supportedFiles.add(file);
+                } else {
+                    skippedCount++;
                 }
             }
+            result.setSkippedFileCount(skippedCount);
+
+            emitTerminal(terminalSessionId, "[doc] local scan found " + files.size() + " file(s)"
+                    + " (file listing: " + listingDuration + " ms, parallelism=" + parallelism + ")");
+
+            //第一轮：并行处理所有支持的文件
+            long genTotalStart = System.currentTimeMillis();
+            ExecutorService executor = Executors.newFixedThreadPool(parallelism);
+            try {
+                List<Path> pass1Generated = Collections.synchronizedList(new ArrayList<>());
+                List<Path> pass1Failed = Collections.synchronizedList(new ArrayList<>());
+
+                emitTerminal(terminalSessionId,
+                        "[doc] pass 1: processing " + supportedFiles.size() + " file(s)...");
+                List<CompletableFuture<Void>> futures = new ArrayList<>();
+                for (Path file : supportedFiles) {
+                    String filePath = toRepoRelativePath(sourceRoot, file);
+                    futures.add(CompletableFuture.runAsync(() -> {
+                        try {
+                            generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(), sourceRoot,
+                                    file, filePath);
+                            pass1Generated.add(file);
+                            emitTerminal(terminalSessionId, "[doc] generated " + filePath);
+                        } catch (Exception ex) {
+                            log.error("Local doc generation failed (pass 1). project={}, filePath={}",
+                                    project, filePath, ex);
+                            emitTerminal(terminalSessionId,
+                                    "[doc] failed " + filePath + ": " + summarizeError(ex));
+                            pass1Failed.add(file);
+                            upsertDocFile(gitlabUsername, project, branch, filePath, commitId, task.getId(),
+                                    STATUS_FAILED, null, summarizeError(ex));
+                        }
+                    }, executor));
+                }
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+                emitTerminal(terminalSessionId, "[doc] pass 1 completed: " + pass1Generated.size()
+                        + " generated, " + pass1Failed.size() + " failed");
+
+                //第二轮：重试第一轮失败的文件（此时其依赖可能已在第一轮生成）
+                List<Path> finalFailed = new ArrayList<>();
+                int retryGenerated = 0;
+                if (!pass1Failed.isEmpty()) {
+                    emitTerminal(terminalSessionId,
+                            "[doc] pass 2: retrying " + pass1Failed.size() + " failed file(s)...");
+                    List<CompletableFuture<Path>> retryFutures = new ArrayList<>();
+                    for (Path file : pass1Failed) {
+                        String filePath = toRepoRelativePath(sourceRoot, file);
+                        retryFutures.add(CompletableFuture.supplyAsync(() -> {
+                            try {
+                                generateLocalDoc(gitlabUsername, project, branch, commitId, task.getId(),
+                                        sourceRoot, file, filePath);
+                                emitTerminal(terminalSessionId, "[doc] retry generated " + filePath);
+                                return file;
+                            } catch (Exception ex) {
+                                log.error("Local doc generation failed (pass 2). project={}, filePath={}",
+                                        project, filePath, ex);
+                                emitTerminal(terminalSessionId,
+                                        "[doc] retry failed " + filePath + ": " + summarizeError(ex));
+                                return null;
+                            }
+                        }, executor));
+                    }
+                    CompletableFuture.allOf(retryFutures.toArray(new CompletableFuture[0])).join();
+
+                    for (int i = 0; i < retryFutures.size(); i++) {
+                        if (retryFutures.get(i).join() != null) {
+                            retryGenerated++;
+                        } else {
+                            finalFailed.add(pass1Failed.get(i));
+                        }
+                    }
+
+                    emitTerminal(terminalSessionId, "[doc] pass 2 completed: " + retryGenerated
+                            + " recovered, " + finalFailed.size() + " still failed");
+                }
+
+                //汇总结果
+                int totalGenerated = pass1Generated.size() + retryGenerated;
+                List<String> generatedPaths = new ArrayList<>();
+                for (Path f : pass1Generated) {
+                    generatedPaths.add(toRepoRelativePath(sourceRoot, f));
+                }
+                List<String> failedPaths = new ArrayList<>();
+                for (Path f : finalFailed) {
+                    failedPaths.add(toRepoRelativePath(sourceRoot, f));
+                }
+
+                result.setGeneratedFileCount(totalGenerated);
+                result.setFailedFileCount(finalFailed.size());
+                result.setRetryFileCount(pass1Failed.size());
+                result.setRetryGeneratedCount(retryGenerated);
+                result.setGeneratedFilePaths(generatedPaths);
+                result.setFailedFilePaths(failedPaths);
+            } finally {
+                executor.shutdown();
+            }
+
             result.setDocGenerationDurationMs(System.currentTimeMillis() - genTotalStart);
 
             //根据扫描结果确定最终状态：有失败 -> FAILED，有生成 -> SUCCESS，否则 -> SKIPPED
@@ -298,14 +381,17 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             result.setDbOperationDurationMs(dbOperationTotalMs);
 
             result.setTotalDurationMs(totalElapsed);
-            //组装汇总消息（包含耗时统计）
+            //组装汇总消息（包含耗时统计和重试信息）
             result.setMessage(String.format(
-                    "Scanned %d file(s), generated %d doc(s), skipped %d file(s), failed %d file(s). "
+                    "Scanned %d file(s), generated %d doc(s), skipped %d file(s), failed %d file(s), "
+                            + "retried %d, recovered %d. "
                             + "Timing: total=%dms, fileListing=%dms, docGeneration=%dms, dbOps=%dms.",
                     result.getScannedFileCount(),
                     result.getGeneratedFileCount(),
                     result.getSkippedFileCount(),
                     result.getFailedFileCount(),
+                    result.getRetryFileCount(),
+                    result.getRetryGeneratedCount(),
                     totalElapsed,
                     result.getFileListingDurationMs(),
                     result.getDocGenerationDurationMs(),
@@ -313,6 +399,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             emitTerminal(terminalSessionId, "[doc] local scan completed, scanned="
                     + result.getScannedFileCount() + ", generated=" + result.getGeneratedFileCount()
                     + ", skipped=" + result.getSkippedFileCount() + ", failed=" + result.getFailedFileCount()
+                    + ", retried=" + result.getRetryFileCount() + ", recovered=" + result.getRetryGeneratedCount()
                     + " | timing: total=" + totalElapsed + "ms"
                     + ", fileListing=" + result.getFileListingDurationMs() + "ms"
                     + ", docGeneration=" + result.getDocGenerationDurationMs() + "ms"
