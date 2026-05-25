@@ -136,7 +136,7 @@ export function DocViewPage() {
     if (groups.length > 0 && expandedGroups.size === 0) {
       setExpandedGroups(new Set(groups.map((g: PackageGroup) => g.packagePath)));
     }
-  }, [groups]);
+  }, [groups, expandedGroups.size]);
 
   // Intersection observer to highlight active doc in sidebar
   useEffect(() => {
