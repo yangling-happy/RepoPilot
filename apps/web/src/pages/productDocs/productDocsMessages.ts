@@ -38,7 +38,7 @@ export function getCloneErrorMessage(
 
   if (message.startsWith("Local directory already exists:")) {
     return isChinese
-      ? `${message}。如果这是之前已经克隆过的仓库，可以直接点击“生成本地文档”。`
+      ? `${message}。如果这是之前已经克隆过的仓库，可以直接点击”进入文档生成页面”。`
       : `${message}. If this repository was cloned before, you can generate local docs directly.`;
   }
 

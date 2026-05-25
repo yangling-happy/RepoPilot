@@ -90,9 +90,7 @@
         "savingToken": "保存中...",
         "clone": "克隆仓库",
         "cloning": "克隆中...",
-        "scanLocal": "生成本地文档",
-        "scanning": "生成中...",
-        "viewDocs": "查看文档",
+        "enterDocPage": "进入文档生成页面",
         "success": {
           "tokenSaved": "Token 已保存，会话可复用。",
           "cloneCompleted": "克隆完成：{{projectPath}}。已同步到控制台列表。",

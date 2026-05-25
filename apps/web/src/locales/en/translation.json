@@ -90,9 +90,7 @@
         "savingToken": "Saving...",
         "clone": "Clone repository",
         "cloning": "Cloning...",
-        "scanLocal": "Generate local docs",
-        "scanning": "Generating...",
-        "viewDocs": "View docs",
+        "enterDocPage": "Enter document generation",
         "success": {
           "tokenSaved": "Token saved for this browser session.",
           "cloneCompleted": "Clone completed: {{projectPath}}. Synced to dashboard list.",

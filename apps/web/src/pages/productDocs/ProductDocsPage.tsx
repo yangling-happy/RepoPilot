@@ -9,7 +9,6 @@ import {
 import {
   ApiError,
   cloneRepo,
-  scanLocalDoc,
   setGitlabToken,
   type CloneRepoResponse,
 } from "../../services/backendApi";
@@ -43,13 +42,11 @@ export function ProductDocsPage() {
   const [branch, setBranch] = useState("main");
   const [savingToken, setSavingToken] = useState(false);
   const [cloning, setCloning] = useState(false);
-  const [scanning, setScanning] = useState(false);
   const [status, setStatus] = useState<{
     type: "success" | "error";
     text: string;
   } | null>(null);
   const [lastClone, setLastClone] = useState<CloneRepoResponse | null>(null);
-  const [scanCompleted, setScanCompleted] = useState(false);
   const [terminalSessionId] = useState(() => getOrCreateTerminalSessionId());
   const [terminalConnectionState, setTerminalConnectionState] =
     useState<TerminalConnectionState>("connecting");
@@ -210,75 +207,6 @@ export function ProductDocsPage() {
     token,
   ]);
 
-  const handleScanLocal = useCallback(async () => {
-    const project =
-      projectId.trim() || (lastClone ? String(lastClone.projectId) : "");
-    if (!project) {
-      setStatus({
-        type: "error",
-        text: t("pages.documentation.actions.errors.projectIdRequiredForDoc"),
-      });
-      return;
-    }
-
-    const effectiveBranch = branch.trim() || "main";
-    setTerminalOpen(true);
-    terminalClientRef.current?.clear();
-    setTerminalBusy(true);
-    setScanning(true);
-    setScanCompleted(false);
-    appendTerminal(
-      t("pages.documentation.actions.terminal.scanStarted", {
-        project,
-        branch: effectiveBranch,
-      }),
-    );
-
-    try {
-      const result = await scanLocalDoc({
-        project,
-        branch: effectiveBranch,
-        terminalSessionId,
-      });
-      appendTerminal(
-        t("pages.documentation.actions.terminal.scanCompleted", {
-          scanned: result.scannedFileCount,
-          generated: result.generatedFileCount,
-          skipped: result.skippedFileCount,
-        }),
-      );
-      setStatus({
-        type: result.failedFileCount > 0 ? "error" : "success",
-        text:
-          result.failedFileCount > 0
-            ? result.message
-            : t("pages.documentation.actions.success.scanCompleted", {
-                generated: result.generatedFileCount,
-              }),
-      });
-      setScanCompleted(true);
-    } catch (error) {
-      appendTerminal(
-        t("pages.documentation.actions.terminal.scanFailed", {
-          message: toErrorMessage(
-            error,
-            t("pages.documentation.actions.errors.unexpected"),
-          ),
-        }),
-      );
-      setStatus({
-        type: "error",
-        text: toErrorMessage(
-          error,
-          t("pages.documentation.actions.errors.unexpected"),
-        ),
-      });
-    } finally {
-      setScanning(false);
-      setTerminalBusy(false);
-    }
-  }, [appendTerminal, branch, lastClone, projectId, t, terminalSessionId]);
-
   const viewDocsUrl = useMemo(() => {
     const project =
       projectId.trim() || (lastClone ? String(lastClone.projectId) : "");
@@ -360,22 +288,12 @@ export function ProductDocsPage() {
               ? t("pages.documentation.actions.cloning")
               : t("pages.documentation.actions.clone")}
           </button>
-          <button
-            type="button"
-            onClick={handleScanLocal}
-            disabled={scanning}
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/20 dark:hover:bg-white/10"
-          >
-            {scanning
-              ? t("pages.documentation.actions.scanning")
-              : t("pages.documentation.actions.scanLocal")}
-          </button>
-          {scanCompleted && viewDocsUrl ? (
+          {viewDocsUrl ? (
             <Link
               to={viewDocsUrl}
-              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+              className="rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
             >
-              {t("pages.documentation.actions.viewDocs")}
+              {t("pages.documentation.actions.enterDocPage", "进入文档生成页面")}
             </Link>
           ) : null}
         </div>

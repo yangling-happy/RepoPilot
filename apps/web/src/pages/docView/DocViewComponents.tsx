@@ -73,9 +73,11 @@ export function getSectionMembers(
 export function StructuredDocDetail({
   doc,
   section,
+  hideHeader = false,
 }: {
   doc: DocQueryItem | null;
   section: StructuredDocSection;
+  hideHeader?: boolean;
 }) {
   const { t } = useTranslation();
 
@@ -106,6 +108,29 @@ export function StructuredDocDetail({
   const sectionLabel = t(STRUCTURED_DOC_SECTION_LABEL_KEYS[section]);
   const sectionCount = getSectionCount(doc, section);
 
+  const content = (
+    <div className={hideHeader ? "space-y-5" : "mt-5 space-y-5"}>
+      {section === "types" ? (
+        doc.structuredDoc.types.length > 0 ? (
+          doc.structuredDoc.types.map((typeDoc) => (
+            <TypeDocView
+              key={`${typeDoc.htmlFile}-${typeDoc.name}`}
+              typeDoc={typeDoc}
+            />
+          ))
+        ) : (
+          <EmptyStructuredSection />
+        )
+      ) : (
+        <StructuredMemberSection doc={doc.structuredDoc} section={section} />
+      )}
+    </div>
+  );
+
+  if (hideHeader) {
+    return content;
+  }
+
   return (
     <section className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.03]">
       <div className="flex flex-col gap-3 border-b border-neutral-200 pb-4 dark:border-white/10 md:flex-row md:items-start md:justify-between">
@@ -127,22 +152,7 @@ export function StructuredDocDetail({
         </div>
       </div>
 
-      <div className="mt-5 space-y-5">
-        {section === "types" ? (
-          doc.structuredDoc.types.length > 0 ? (
-            doc.structuredDoc.types.map((typeDoc) => (
-              <TypeDocView
-                key={`${typeDoc.htmlFile}-${typeDoc.name}`}
-                typeDoc={typeDoc}
-              />
-            ))
-          ) : (
-            <EmptyStructuredSection />
-          )
-        ) : (
-          <StructuredMemberSection doc={doc.structuredDoc} section={section} />
-        )}
-      </div>
+      {content}
     </section>
   );
 }
