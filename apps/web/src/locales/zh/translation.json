@@ -234,7 +234,17 @@
       "loading": "加载文档中...",
       "loadError": "加载文档失败",
       "fileTree": "文件目录",
-      "backToGenerate": "返回生成"
+      "backToGenerate": "返回生成",
+      "refresh": "刷新文档列表",
+      "scanLocal": "扫描并生成文档",
+      "terminal": {
+        "title": "文档扫描",
+        "subtitle": "文档生成流水线实时输出",
+        "ready": "终端就绪。",
+        "hint": "点击「扫描并生成文档」开始。",
+        "scanStarted": "开始扫描项目 {{project}} (分支: {{branch}}) ...",
+        "scanCompleted": "扫描完成：共 {{scanned}} 个文件，生成 {{generated}} 个文档，跳过 {{skipped}} 个，失败 {{failed}} 个。"
+      }
     }
   }
 }

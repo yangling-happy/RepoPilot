@@ -226,6 +226,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
 
         //在数据库中创建一条文档任务记录（状态为 RUNNING）
         //这个任务记录用于追踪本次扫描的状态和耗时
+        long dbStart = System.currentTimeMillis();
         DocTask task = new DocTask();
         task.setEventId(buildTaskEventId("doc-local-scan", commitId));
         task.setGitlabUsername(gitlabUsername);
@@ -235,16 +236,24 @@ public class DocPipelineServiceImpl implements DocPipelineService {
         task.setStatus(STATUS_RUNNING);
         task.setDuration(0);
         docTaskMapper.insert(task);
+        long dbInsertDuration = System.currentTimeMillis() - dbStart;
 
         //记录开始时间，用于计算耗时
-        long start = System.currentTimeMillis();
+        long totalStart = System.currentTimeMillis();
+        long dbOperationTotalMs = dbInsertDuration;
         try {
             //遍历本地仓库中的所有文件（排除 .git 目录和 .gitignore 中的文件）
+            long listingStart = System.currentTimeMillis();
             List<Path> files = listLocalRepoFiles(sourceRoot);
+            long listingDuration = System.currentTimeMillis() - listingStart;
+            result.setFileListingDurationMs(listingDuration);
+
             result.setScannedFileCount(files.size());
-            emitTerminal(terminalSessionId, "[doc] local scan found " + files.size() + " file(s)");
+            emitTerminal(terminalSessionId, "[doc] local scan found " + files.size() + " file(s)"
+                    + " (file listing: " + listingDuration + " ms)");
 
             //逐个文件处理
+            long genTotalStart = System.currentTimeMillis();
             for (Path file : files) {
                 //将绝对路径转为相对于仓库根的路径（如 src/main/java/Demo.java）
                 String filePath = toRepoRelativePath(sourceRoot, file);
@@ -274,31 +283,49 @@ public class DocPipelineServiceImpl implements DocPipelineService {
                             STATUS_FAILED, null, summarizeError(ex));
                 }
             }
+            result.setDocGenerationDurationMs(System.currentTimeMillis() - genTotalStart);
 
             //根据扫描结果确定最终状态：有失败 -> FAILED，有生成 -> SUCCESS，否则 -> SKIPPED
             String finalStatus = localScanStatus(result);
             task.setStatus(finalStatus);
             //计算耗时（毫秒转秒）
-            task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
-            //更新数据库中的任务状态
+            long totalElapsed = System.currentTimeMillis() - totalStart;
+            task.setDuration((int) (totalElapsed / 1000));
+
+            long dbUpdateStart = System.currentTimeMillis();
             docTaskMapper.updateById(task);
-            //组装汇总消息
+            dbOperationTotalMs += System.currentTimeMillis() - dbUpdateStart;
+            result.setDbOperationDurationMs(dbOperationTotalMs);
+
+            result.setTotalDurationMs(totalElapsed);
+            //组装汇总消息（包含耗时统计）
             result.setMessage(String.format(
-                    "Scanned %d file(s), generated %d doc(s), skipped %d file(s), failed %d file(s).",
+                    "Scanned %d file(s), generated %d doc(s), skipped %d file(s), failed %d file(s). "
+                            + "Timing: total=%dms, fileListing=%dms, docGeneration=%dms, dbOps=%dms.",
                     result.getScannedFileCount(),
                     result.getGeneratedFileCount(),
                     result.getSkippedFileCount(),
-                    result.getFailedFileCount()));
+                    result.getFailedFileCount(),
+                    totalElapsed,
+                    result.getFileListingDurationMs(),
+                    result.getDocGenerationDurationMs(),
+                    result.getDbOperationDurationMs()));
             emitTerminal(terminalSessionId, "[doc] local scan completed, scanned="
                     + result.getScannedFileCount() + ", generated=" + result.getGeneratedFileCount()
-                    + ", skipped=" + result.getSkippedFileCount() + ", failed=" + result.getFailedFileCount());
+                    + ", skipped=" + result.getSkippedFileCount() + ", failed=" + result.getFailedFileCount()
+                    + " | timing: total=" + totalElapsed + "ms"
+                    + ", fileListing=" + result.getFileListingDurationMs() + "ms"
+                    + ", docGeneration=" + result.getDocGenerationDurationMs() + "ms"
+                    + ", dbOps=" + result.getDbOperationDurationMs() + "ms");
             return result;
         } catch (Exception ex) {
             //整体扫描失败（如仓库目录损坏等严重错误）
             log.error("Local doc scan failed. project={}, branch={}, commitId={}", project, branch, commitId, ex);
+            long totalElapsed = System.currentTimeMillis() - totalStart;
+            result.setTotalDurationMs(totalElapsed);
             emitTerminal(terminalSessionId, "[doc] local scan failed: " + summarizeError(ex));
             task.setStatus(STATUS_FAILED);
-            task.setDuration((int) ((System.currentTimeMillis() - start) / 1000));
+            task.setDuration((int) (totalElapsed / 1000));
             docTaskMapper.updateById(task);
             //如果是运行时异常直接抛出，否则包装成 BusinessException
             if (ex instanceof RuntimeException runtimeException) {

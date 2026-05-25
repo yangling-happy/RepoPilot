@@ -50,6 +50,10 @@ export type DocLocalScanResult = {
   generatedFilePaths: string[];
   failedFilePaths: string[];
   message: string;
+  fileListingDurationMs: number;
+  docGenerationDurationMs: number;
+  dbOperationDurationMs: number;
+  totalDurationMs: number;
 };
 
 export type DocStructuredContent = {

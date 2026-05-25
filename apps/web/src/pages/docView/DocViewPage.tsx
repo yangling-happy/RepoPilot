@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useSearchParams } from "react-router-dom";
-import { queryDocs, type DocQueryItem } from "../../services/backendApi";
+import { useSearchParams } from "react-router-dom";
+import type { TerminalClient } from "../../../../terminal/src";
+import {
+  type TerminalConnectionState,
+  VirtualTerminalPanel,
+} from "../../components/virtualTerminal/VirtualTerminalPanel";
+import { queryDocs, scanLocalDoc, type DocQueryItem } from "../../services/backendApi";
 import {
   StructuredDocDetail,
   getDocKey,
@@ -84,6 +89,13 @@ export function DocViewPage() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [activeDocKey, setActiveDocKey] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalBusy, setTerminalBusy] = useState(false);
+  const [terminalConnectionState, setTerminalConnectionState] =
+    useState<TerminalConnectionState>("connecting");
+  const terminalClientRef = useRef<TerminalClient | null>(null);
+  const terminalSessionIdRef = useRef<string>(createSessionId());
   const contentRef = useRef<HTMLDivElement>(null);
 
   const loadDocs = useCallback(async () => {
@@ -105,6 +117,80 @@ export function DocViewPage() {
   useEffect(() => {
     loadDocs();
   }, [loadDocs]);
+
+  const bootLines = useMemo(
+    () => [
+      t("pages.docView.terminal.ready", "Terminal ready."),
+      t("pages.docView.terminal.hint", 'Click "Scan & Generate Docs" to start.'),
+    ],
+    [t],
+  );
+
+  const onSessionReady = useCallback(
+    ({ client }: { sessionId: string; client: TerminalClient }) => {
+      terminalClientRef.current = client;
+    },
+    [],
+  );
+
+  const appendTerminal = useCallback((line: string) => {
+    terminalClientRef.current?.writeln(line);
+  }, []);
+
+  const handleScan = useCallback(async () => {
+    if (!repo || scanning) return;
+    setScanning(true);
+    setTerminalOpen(true);
+    setTerminalBusy(true);
+    terminalClientRef.current?.clear();
+    appendTerminal(
+      t("pages.docView.terminal.scanStarted", { project: repo, branch: branchParam }),
+    );
+
+    const startTime = Date.now();
+    try {
+      const result = await scanLocalDoc({
+        project: repo,
+        branch: branchParam,
+        terminalSessionId: terminalSessionIdRef.current,
+      });
+
+      const elapsed = Date.now() - startTime;
+      appendTerminal("");
+      appendTerminal("────────────────────────────────────────");
+      appendTerminal(
+        t("pages.docView.terminal.scanCompleted", {
+          scanned: result.scannedFileCount,
+          generated: result.generatedFileCount,
+          skipped: result.skippedFileCount,
+          failed: result.failedFileCount,
+        }),
+      );
+      appendTerminal(
+        `  total:          ${result.totalDurationMs ?? elapsed} ms`,
+      );
+      appendTerminal(
+        `  fileListing:    ${result.fileListingDurationMs ?? "-"} ms`,
+      );
+      appendTerminal(
+        `  docGeneration:  ${result.docGenerationDurationMs ?? "-"} ms`,
+      );
+      appendTerminal(
+        `  dbOps:          ${result.dbOperationDurationMs ?? "-"} ms`,
+      );
+      appendTerminal("────────────────────────────────────────");
+
+      await loadDocs();
+    } catch (err) {
+      appendTerminal("");
+      appendTerminal(
+        `[ERROR] ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      setScanning(false);
+      setTerminalBusy(false);
+    }
+  }, [repo, branchParam, scanning, loadDocs, t, appendTerminal]);
 
   const groups = useMemo(() => buildGroups(docs), [docs]);
 
@@ -209,21 +295,23 @@ export function DocViewPage() {
                     <path d="M13.5 2.5v3h-3" />
                   </svg>
                 </button>
-                <Link
-                  to={`/documentation?repo=${encodeURIComponent(repo)}`}
-                  className="rounded p-1 text-neutral-400 transition hover:bg-neutral-200 hover:text-neutral-600 dark:hover:bg-white/10 dark:hover:text-neutral-300"
-                  title={t("pages.docView.goToGenerate", "Document Generation")}
+                <button
+                  type="button"
+                  onClick={handleScan}
+                  disabled={scanning || loading}
+                  className="rounded p-1 text-neutral-400 transition hover:bg-neutral-200 hover:text-neutral-600 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-neutral-300"
+                  title={t("pages.docView.scanLocal", "Scan & Generate Docs")}
                 >
                   <svg
-                    className="h-3.5 w-3.5"
+                    className={`h-3.5 w-3.5 ${scanning ? "animate-pulse" : ""}`}
                     viewBox="0 0 16 16"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="1.5"
                   >
-                    <path d="M8 2v12M2 8l6-6 6 6" />
+                    <path d="M2 4h12M2 8h12M2 12h8" />
                   </svg>
-                </Link>
+                </button>
                 <span className="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-mono text-neutral-500 dark:bg-white/10 dark:text-neutral-400">
                   {docs.length}
                 </span>
@@ -337,6 +425,22 @@ export function DocViewPage() {
           )}
         </div>
       </main>
+
+      <VirtualTerminalPanel
+        title={t("pages.docView.terminal.title", "Document Scan")}
+        subtitle={t(
+          "pages.docView.terminal.subtitle",
+          "Real-time output from the document generation pipeline.",
+        )}
+        bootLines={bootLines}
+        sessionId={terminalSessionIdRef.current}
+        variant="floating"
+        open={terminalOpen}
+        dismissible={!terminalBusy}
+        onRequestClose={() => setTerminalOpen(false)}
+        onConnectionStatusChange={setTerminalConnectionState}
+        onSessionReady={onSessionReady}
+      />
     </div>
   );
 }
@@ -419,4 +523,14 @@ function DocSection({ doc }: { doc: DocQueryItem }) {
       </div>
     </section>
   );
+}
+
+function createSessionId() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

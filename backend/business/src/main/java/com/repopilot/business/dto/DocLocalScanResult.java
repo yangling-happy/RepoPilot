@@ -34,4 +34,14 @@ public class DocLocalScanResult {
     private List<String> failedFilePaths = new ArrayList<>();
     //汇总提示信息
     private String message;
+
+    // ---- 耗时统计（毫秒） ----
+    //文件列表阶段耗时：目录遍历 + gitignore 加载/匹配 + 排序
+    private Long fileListingDurationMs = 0L;
+    //文档生成阶段耗时（所有文件累加）：读取源文件 + 生成文档 + 写入数据库
+    private Long docGenerationDurationMs = 0L;
+    //数据库操作阶段耗时：创建任务 + 更新任务
+    private Long dbOperationDurationMs = 0L;
+    //总耗时（端到端墙钟时间）
+    private Long totalDurationMs = 0L;
 }

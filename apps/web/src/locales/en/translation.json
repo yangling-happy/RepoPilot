@@ -235,7 +235,17 @@
       "loading": "Loading docs...",
       "loadError": "Failed to load docs",
       "fileTree": "File Tree",
-      "backToGenerate": "Back to generate"
+      "backToGenerate": "Back to generate",
+      "refresh": "Refresh docs",
+      "scanLocal": "Scan & Generate Docs",
+      "terminal": {
+        "title": "Document Scan",
+        "subtitle": "Real-time output from the document generation pipeline.",
+        "ready": "Terminal ready.",
+        "hint": "Click \"Scan & Generate Docs\" to start.",
+        "scanStarted": "Scanning project {{project}} (branch: {{branch}}) ...",
+        "scanCompleted": "Scan completed: {{scanned}} file(s), {{generated}} doc(s) generated, {{skipped}} skipped, {{failed}} failed."
+      }
     }
   }
 }
