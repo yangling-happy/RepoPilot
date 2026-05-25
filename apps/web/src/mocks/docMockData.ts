@@ -55,6 +55,8 @@ export function createMockScanResult(
     generatedFileCount: docs.length,
     skippedFileCount: 3,
     failedFileCount: 1,
+    retryFileCount: 1,
+    retryGeneratedCount: 1,
     generatedFilePaths: docs.map((doc) => doc.docFilePath),
     failedFilePaths: ["src/main/java/com/example/legacy/LegacyParser.java"],
     message: "Mock scan completed",
