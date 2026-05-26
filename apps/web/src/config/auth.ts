@@ -1,11 +1,7 @@
 /**
- * GitLab OAuth 入口：优先读环境变量；未配置时走网关代理的 Spring Security 常见路径。
- * 部署时在 `.env` / 平台注入中设置 `VITE_GITLAB_OAUTH_LOGIN_URL` 为实际授权地址。
+ * GitLab OAuth 登录入口：由后端 /api/oauth/login 生成授权 URL。
+ * 前端不再需要拼接 OAuth URL，直接跳转到后端接口即可。
  */
-export function getGitLabOAuthLoginUrl(): string {
-  const configured = import.meta.env.VITE_GITLAB_OAUTH_LOGIN_URL;
-  if (typeof configured === "string" && configured.trim().length > 0) {
-    return configured.trim();
-  }
-  return "/api/oauth2/authorization/gitlab";
-}
+export const OAUTH_LOGIN_URL = "/api/oauth/login";
+export const OAUTH_ME_URL = "/api/oauth/me";
+export const OAUTH_LOGOUT_URL = "/api/oauth/logout";

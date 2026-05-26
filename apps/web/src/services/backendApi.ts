@@ -262,6 +262,25 @@ export async function setupSshKey(
   });
 }
 
+export async function getOAuthLoginUrl(): Promise<string> {
+  return requestApi<string>("/api/oauth/login", { method: "GET" });
+}
+
+export async function getCurrentUser(): Promise<{
+  id: number;
+  gitlabId: number;
+  username: string;
+  name: string;
+  avatarUrl: string;
+  email: string;
+}> {
+  return requestApi("/api/oauth/me", { method: "GET" });
+}
+
+export async function logout(): Promise<void> {
+  return requestApi("/api/oauth/logout", { method: "POST" });
+}
+
 export async function cancelDeploy(
   taskId: string,
   terminalSessionId?: string,

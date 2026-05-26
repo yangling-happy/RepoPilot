@@ -10,7 +10,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: ${REPOPILOT_DB_URL:jdbc:mysql://127.0.0.1:3306/repopilot?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true}
     username: ${REPOPILOT_DB_USERNAME:root}
-    password: ${REPOPILOT_DB_PASSWORD:}
+    password: ${REPOPILOT_DB_PASSWORD:root}
   session:
     store-type: none
 
@@ -24,7 +24,14 @@ mybatis-plus:
 # GitLab Configuration
 gitlab:
   group: your-gitlab-group
-  api-url: https://gitlab.com/api/v4
+  api-url: ${GITLAB_API_URL:http://localhost:8082/api/v4}
+  oauth:
+    client-id: ${GITLAB_OAUTH_CLIENT_ID:3785ec07bd3ff8155092e5cbd990dcc16bee7ac1959f8e85b1f8184cab48f137}
+    client-secret: ${GITLAB_OAUTH_CLIENT_SECRET:gloas-e83b09712cf4757942fc36d141059abce798a40a6f01b46b6ef8185e449d315b}
+    redirect-uri: ${GITLAB_OAUTH_REDIRECT_URI:http://localhost:8080/api/oauth/callback}
+    authorize-url: ${GITLAB_OAUTH_AUTHORIZE_URL:http://localhost:8082/oauth/authorize}
+    token-url: ${GITLAB_OAUTH_TOKEN_URL:http://localhost:8082/oauth/token}
+    scopes: read_user api
 
 # Deployment Configuration
 deploy:
@@ -35,6 +42,9 @@ repo:
   clone:
     default-branch: main
     timeout-seconds: 120
+
+frontend:
+  base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
 
 user:
   workspace:

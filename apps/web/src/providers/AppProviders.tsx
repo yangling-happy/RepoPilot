@@ -4,6 +4,7 @@ import { I18nextProvider } from "react-i18next";
 import { ThemeProvider } from "next-themes";
 import i18n from "../i18n/i18n";
 import { AntdThemeBridge } from "./AntdThemeBridge";
+import { AuthProvider } from "../contexts/AuthContext";
 
 type Props = {
   children: ReactNode;
@@ -20,7 +21,9 @@ export function AppProviders({ children }: Props) {
           enableSystem: true,
           disableTransitionOnChange: true,
         },
-        <AntdThemeBridge>{children}</AntdThemeBridge>,
+        <AntdThemeBridge>
+          <AuthProvider>{children}</AuthProvider>
+        </AntdThemeBridge>,
       )}
     </I18nextProvider>
   );

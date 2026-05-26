@@ -1,7 +1,8 @@
 import { Button } from "antd";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
-import { getGitLabOAuthLoginUrl } from "../../config/auth";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
 import { GitLabMark } from "./GitLabMark";
 
 const glassCard =
@@ -9,7 +10,14 @@ const glassCard =
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const oauthHref = getGitLabOAuthLoginUrl();
+  const { user, loading, login } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, loading, navigate]);
 
   return (
     <div className="mx-auto max-w-lg pb-24 pt-4 text-neutral-950 dark:text-neutral-50 md:pt-10">
@@ -30,15 +38,12 @@ export function LoginPage() {
         <Button
           type="primary"
           size="large"
-          href={oauthHref}
+          onClick={login}
           className="mt-8 !flex !h-14 !w-full !items-center !justify-center !gap-3 !rounded-2xl !border-0 !bg-[#FC6D26] !px-6 !text-base !font-semibold !text-white hover:!bg-[#e24329] dark:!bg-[#FC6D26] dark:hover:!bg-[#e24329]"
           icon={<GitLabMark className="h-6 w-6 text-white" />}
         >
           {t("login.gitlabCta")}
         </Button>
-        <p className="mt-6 text-center text-xs leading-relaxed text-neutral-500 dark:text-neutral-500">
-          {t("login.redirectNote")}
-        </p>
       </div>
 
       <p className="mt-10 text-center text-sm text-neutral-500 dark:text-neutral-400">

@@ -18,7 +18,8 @@
     "themeLight": "Light mode",
     "themeDark": "Dark mode",
     "github": "Open on GitHub",
-    "loginPlaceholder": "Sign in"
+    "loginPlaceholder": "Sign in",
+    "logout": "Sign out"
   },
   "login": {
     "kicker": "Authentication",

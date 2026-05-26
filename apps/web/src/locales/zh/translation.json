@@ -18,7 +18,8 @@
     "themeLight": "浅色模式",
     "themeDark": "深色模式",
     "github": "在 GitHub 上打开",
-    "loginPlaceholder": "登录"
+    "loginPlaceholder": "登录",
+    "logout": "退出登录"
   },
   "login": {
     "kicker": "身份验证",

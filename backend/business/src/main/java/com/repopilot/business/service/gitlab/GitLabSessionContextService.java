@@ -16,6 +16,8 @@ public class GitLabSessionContextService {
     public static final String TOKEN_SESSION_KEY = "gitlabToken";
     //HttpSession 中存储 GitLab 用户名的 key
     public static final String USERNAME_SESSION_KEY = "gitlabUsername";
+    //HttpSession 中存储用户 ID 的 key（OAuth 登录后设置）
+    public static final String USER_ID_SESSION_KEY = "userId";
 
     //GitLab 用户 API 客户端，用于通过 Token 获取用户名
     private final GitLabUserClient gitLabUserClient;
