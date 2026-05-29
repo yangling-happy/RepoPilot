@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { NavLink, useLocation, useSearchParams } from "react-router-dom";
 import {
+  DOC_VIEW_SUBNAV_INNER,
+  DOC_VIEW_SUBNAV_SHELL,
   WORKBENCH_SUBNAV_INNER,
   WORKBENCH_SUBNAV_SHELL,
 } from "../../layout/workbenchLayout";
@@ -10,7 +12,12 @@ interface SecondaryNavItem {
   labelKey: string;
 }
 
-const WORKBENCH_PATHS = new Set(["/dashboard", "/documentation", "/documentation/view", "/deploy"]);
+const WORKBENCH_PATHS = new Set([
+  "/dashboard",
+  "/documentation",
+  "/documentation/view",
+  "/deploy",
+]);
 
 const SECONDARY_NAV_ITEMS: SecondaryNavItem[] = [
   { path: "/documentation", labelKey: "header.documentation" },
@@ -28,10 +35,15 @@ export function WorkbenchSubNav() {
   }
 
   const encodedRepo = encodeURIComponent(repo);
+  const isDocView = pathname === "/documentation/view";
 
   return (
-    <div className={WORKBENCH_SUBNAV_SHELL}>
-      <div className={WORKBENCH_SUBNAV_INNER}>
+    <div
+      className={isDocView ? DOC_VIEW_SUBNAV_SHELL : WORKBENCH_SUBNAV_SHELL}
+    >
+      <div
+        className={isDocView ? DOC_VIEW_SUBNAV_INNER : WORKBENCH_SUBNAV_INNER}
+      >
         <span className="hidden shrink-0 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-mono text-neutral-700 dark:border-white/15 dark:bg-white/5 dark:text-neutral-200 md:inline-flex">
           {t("header.activeRepo", { repo })}
         </span>
