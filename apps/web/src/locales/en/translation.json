@@ -28,6 +28,8 @@
     "gitlabHint": "You will be redirected to GitLab to approve access, then returned to RepoPilot.",
     "gitlabCta": "Continue with GitLab",
     "redirectNote": "If your deployment uses a custom OAuth entry, set VITE_GITLAB_OAUTH_LOGIN_URL in the web environment.",
+    "demoHint": "Preview generated documentation with built-in mock data—no GitLab or backend required.",
+    "tryDemo": "Open demo doc page",
     "backHome": "Back to home"
   },
   "home": {

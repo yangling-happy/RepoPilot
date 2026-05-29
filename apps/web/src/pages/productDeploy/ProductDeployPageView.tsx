@@ -47,7 +47,7 @@ export function ProductDeployPageView(props: ProductDeployPageViewProps) {
   } = props;
 
   return (
-    <div className="mx-auto max-w-[1200px] pb-20 pt-2 text-neutral-950 dark:text-neutral-50">
+    <div className="w-full pb-20 pt-2 text-neutral-950 dark:text-neutral-50">
       <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">
         {t("pages.deploy.title")}
       </h1>
