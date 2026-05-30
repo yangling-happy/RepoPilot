@@ -1,6 +1,10 @@
 import { Layout, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation } from "react-router-dom";
+import {
+  DOC_VIEW_SHELL,
+  WORKBENCH_PAGE_SHELL,
+} from "../../layout/workbenchLayout";
 import { SiteHeader } from "../siteHeader/SiteHeader";
 import { WorkbenchSubNav } from "../topNav/WorkbenchSubNav";
 
@@ -8,6 +12,7 @@ export function SiteShell() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const isHome = pathname === "/";
+  const isDocView = pathname === "/documentation/view";
 
   return (
     <Layout className="min-h-screen bg-white dark:bg-black">
@@ -17,7 +22,9 @@ export function SiteShell() {
         className={
           isHome
             ? "w-full flex-1 p-0"
-            : "mx-auto w-full max-w-6xl flex-1 px-6 py-10 md:px-10"
+            : isDocView
+              ? DOC_VIEW_SHELL
+              : WORKBENCH_PAGE_SHELL
         }
       >
         <Outlet />

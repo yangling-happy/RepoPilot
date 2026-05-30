@@ -28,6 +28,8 @@
     "gitlabHint": "将跳转至 GitLab 完成授权，随后回到 RepoPilot。",
     "gitlabCta": "使用 GitLab 继续",
     "redirectNote": "若网关 OAuth 地址与默认不同，请在 Web 环境变量中配置 VITE_GITLAB_OAUTH_LOGIN_URL。",
+    "demoHint": "无需登录即可预览文档生成效果，使用内置模拟数据，不连接 GitLab 或后端。",
+    "tryDemo": "进入演示文档页",
     "backHome": "返回首页"
   },
   "home": {

@@ -24,6 +24,14 @@ export function isMockMode(
   return isMockRepo(repo) || (projectId ? isMockProjectId(projectId) : false);
 }
 
+export function isMockDemoSearch(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return isMockRepo(params.get("repo"));
+}
+
+export const MOCK_DOC_VIEW_PATH = `/documentation/view?repo=${MOCK_REPO}&branch=${MOCK_BRANCH}`;
+export const MOCK_DOCS_WORKFLOW_PATH = `/documentation?repo=${MOCK_REPO}`;
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function createMockCloneResponse(

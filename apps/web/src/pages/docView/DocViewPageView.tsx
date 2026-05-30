@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
+import { DOC_VIEW_CONTENT_PADDING } from "../../layout/workbenchLayout";
 import {
   StructuredDocDetail,
   getDefaultDocSection,
@@ -41,9 +42,9 @@ export function DocViewPageView(props: DocViewPageViewProps) {
   } = props;
 
   return (
-    <div className="flex h-[calc(100vh-64px)] overflow-hidden text-neutral-900 dark:text-neutral-100">
-      <aside className="w-64 shrink-0 overflow-y-auto border-r border-neutral-200 bg-neutral-50 dark:border-white/10 dark:bg-neutral-900">
-        <div className="sticky top-0 z-10 border-b border-neutral-200 bg-neutral-50 p-3 dark:border-white/10 dark:bg-neutral-900">
+    <div className="flex w-full items-stretch text-neutral-900 dark:text-neutral-100">
+      <aside className="flex w-64 shrink-0 flex-col self-stretch border-r border-neutral-200 bg-neutral-50 dark:border-white/10 dark:bg-neutral-900">
+        <div className="shrink-0 border-b border-neutral-200 bg-neutral-50 p-3 dark:border-white/10 dark:bg-neutral-900">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">
               {t("pages.docView.classIndex")}
@@ -100,7 +101,7 @@ export function DocViewPageView(props: DocViewPageViewProps) {
           />
         </div>
 
-        <nav className="p-2">
+        <nav className="flex-1 p-3">
           {filteredGroups.map((group) => {
             const isExpanded = expandedGroups.has(group.packagePath);
             return (
@@ -154,8 +155,11 @@ export function DocViewPageView(props: DocViewPageViewProps) {
         </nav>
       </aside>
 
-      <main ref={contentRef} className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-8 py-6">
+      <main
+        ref={contentRef}
+        className={`min-w-0 flex-1 self-stretch ${DOC_VIEW_CONTENT_PADDING}`}
+      >
+        <div className="w-full">
           <div className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">
               {t("pages.docView.title")}
@@ -225,7 +229,7 @@ function DocSection({ doc }: { doc: DocQueryItem }) {
     return (
       <section
         id={anchorId}
-        className="scroll-mt-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]"
+        className="scroll-mt-24 rounded-xl border border-neutral-200 bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]"
       >
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm font-semibold text-neutral-900 dark:text-neutral-100">
@@ -259,7 +263,7 @@ function DocSection({ doc }: { doc: DocQueryItem }) {
   return (
     <section
       id={anchorId}
-      className="scroll-mt-4 rounded-xl border border-neutral-200 bg-white dark:border-white/10 dark:bg-white/[0.03]"
+      className="scroll-mt-24 rounded-xl border border-neutral-200 bg-white dark:border-white/10 dark:bg-white/[0.03]"
     >
       <div className="border-b border-neutral-100 px-5 py-4 dark:border-white/10">
         <div className="flex items-center gap-2">

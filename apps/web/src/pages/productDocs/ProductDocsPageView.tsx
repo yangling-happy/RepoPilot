@@ -2,6 +2,7 @@ import type { ChangeEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
+import { WORKBENCH_FORM_PAGE_INNER } from "../../layout/workbenchLayout";
 import type { useProductDocsPage } from "./useProductDocsPage";
 
 type ProductDocsPageViewProps = ReturnType<typeof useProductDocsPage>;
@@ -35,7 +36,7 @@ export function ProductDocsPageView(props: ProductDocsPageViewProps) {
   } = props;
 
   return (
-    <div className="mx-auto max-w-[1200px] pb-20 pt-2 text-neutral-950 dark:text-neutral-50">
+    <div className={WORKBENCH_FORM_PAGE_INNER}>
       <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">
         {t("pages.documentation.title")}
       </h1>

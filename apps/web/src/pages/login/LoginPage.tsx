@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
+import { MOCK_DOC_VIEW_PATH } from "../../mocks/docMockData";
 import { GitLabMark } from "./GitLabMark";
 
 const glassCard =
@@ -44,6 +45,18 @@ export function LoginPage() {
         >
           {t("login.gitlabCta")}
         </Button>
+      </div>
+
+      <div className={`${glassCard} mt-6`}>
+        <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+          {t("login.demoHint")}
+        </p>
+        <Link
+          to={MOCK_DOC_VIEW_PATH}
+          className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-2xl border border-neutral-300 text-sm font-semibold text-neutral-900 transition hover:bg-neutral-100 dark:border-white/20 dark:text-white dark:hover:bg-white/10"
+        >
+          {t("login.tryDemo")}
+        </Link>
       </div>
 
       <p className="mt-10 text-center text-sm text-neutral-500 dark:text-neutral-400">

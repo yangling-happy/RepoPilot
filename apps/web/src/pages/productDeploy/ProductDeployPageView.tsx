@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
+import { WORKBENCH_FORM_PAGE_INNER } from "../../layout/workbenchLayout";
 import type { useProductDeployPage } from "./useProductDeployPage";
 
 type ProductDeployPageViewProps = ReturnType<typeof useProductDeployPage>;
@@ -47,7 +48,7 @@ export function ProductDeployPageView(props: ProductDeployPageViewProps) {
   } = props;
 
   return (
-    <div className="mx-auto max-w-[1200px] pb-20 pt-2 text-neutral-950 dark:text-neutral-50">
+    <div className={WORKBENCH_FORM_PAGE_INNER}>
       <h1 className="mt-0 text-3xl font-semibold tracking-tight md:text-4xl">
         {t("pages.deploy.title")}
       </h1>

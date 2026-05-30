@@ -106,7 +106,7 @@ export function WorkbenchPageView() {
 
   return (
     <div className="w-full">
-      <header className="max-w-6xl">
+      <header className="w-full">
         <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
           {t("pages.dashboard.title")}
         </h1>
