@@ -43,7 +43,7 @@ backend/
 
 > [!Warning]
 >
-> 需要在 WSL 下的 MySQL 建库建表，避免出现“应用跑在 WSL，但数据库连到了 Windows MySQL”的错配。
+> 需要在 WSL 下的 MySQL 建库建表，避免出现”应用跑在 WSL，但数据库连到了 Windows MySQL”的错配。
 >
 > 推荐做法：Windows MySQL 改为 `3307`，WSL MySQL 保持 `3306`。这样数据库工具连接 `3306` 时，默认就是 WSL 内的数据库实例。
 
@@ -69,10 +69,10 @@ CREATE DATABASE repopilot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 ```bash
 # Linux / macOS / WSL
-mysql -h127.0.0.1 -P3306 -uroot -p repopilot < business/src/main/resources/scripts/01_init_tables.sql
+mysql -h127.0.0.1 -P3306 -uroot -p repopilot < backend/business/src/main/resources/scripts/01_init_tables.sql
 ```
 
-当前只保留一个一次性建表脚本，不再维护 02/03 这类增量迁移脚本。若本地数据库是旧版本，建议先备份再直接重建数据库后执行该脚本。
+当前只保留一个一次性建表脚本 `01_init_tables.sql`，包含所有业务表（`doc_task`、`doc_file_dtl`、`deploy_task`、`build_task`、`users`）。若本地数据库是旧版本，建议先备份再直接重建数据库后执行该脚本。
 
 3. 确认 `business/src/main/resources/application.yml` 使用以下占位符配置（不要提交真实账号密码）：
 
@@ -110,6 +110,42 @@ TERMINAL_RELAY_BASE_URL=http://localhost:8081/internal/terminal/sessions
 - `application.yml` 仅保留占位符，不提交真实账号密码。
 - 如需临时切换数据库账号，只改本机环境变量，不改仓库文件。
 
+### 配置 GitLab OAuth 登录
+
+项目支持 GitLab OAuth 2.0 授权码登录。首次部署需要在 GitLab 上注册 OAuth Application：
+
+1. 登录你的 GitLab → **Settings** → **Applications**
+2. 填写：
+   - **Name**: 随意，例如 `RepoPilot`
+   - **Redirect URI**: `http://localhost:8080/api/oauth/callback`
+   - **Scopes**: 勾选 `read_user` 和 `api`
+3. 保存后获得 `Application ID` 和 `Secret`
+
+配置方式（任选其一）：
+
+**方式一：环境变量（推荐，不提交到 git）**
+
+```bash
+export GITLAB_OAUTH_CLIENT_ID=your_application_id
+export GITLAB_OAUTH_CLIENT_SECRET=your_secret
+```
+
+**方式二：修改 application.yml**
+
+```yaml
+gitlab:
+  api-url: ${GITLAB_API_URL:https://gitlab.com/api/v4}
+  oauth:
+    client-id: ${GITLAB_OAUTH_CLIENT_ID:your_application_id}
+    client-secret: ${GITLAB_OAUTH_CLIENT_SECRET:your_secret}
+    redirect-uri: ${GITLAB_OAUTH_REDIRECT_URI:http://localhost:8080/api/oauth/callback}
+    authorize-url: ${GITLAB_OAUTH_AUTHORIZE_URL:https://gitlab.com/oauth/authorize}
+    token-url: ${GITLAB_OAUTH_TOKEN_URL:https://gitlab.com/oauth/token}
+    scopes: read_user api
+```
+
+默认配置指向 `localhost:8082`（本地 GitLab 实例）。如果使用 gitlab.com，将 `api-url`、`authorize-url`、`token-url` 改为对应的 `https://gitlab.com` 地址即可。
+
 ### 运行服务
 
 说明：
@@ -142,6 +178,13 @@ cd gateway
 ### 会话管理
 
 - `POST /api/session/setGitlabToken` - 设置 GitLab Token
+
+### OAuth 登录
+
+- `GET /api/oauth/login` - 获取 GitLab OAuth 授权 URL
+- `GET /api/oauth/callback?code=xxx` - GitLab OAuth 回调（由 GitLab 重定向触发）
+- `GET /api/oauth/me` - 获取当前登录用户信息，未登录返回 401
+- `POST /api/oauth/logout` - 登出，清除 Session
 
 ### 仓库管理
 
@@ -442,5 +485,18 @@ curl -sS -X POST "${BASE_URL}/doc/file/create" \
 - error_msg: 构建失败信息
 - start_time: 开始时间
 - duration: 执行时长
+- create_time: 创建时间
+- update_time: 更新时间
+
+### users - 用户表（GitLab OAuth 登录）
+
+- id: 自增主键，用户的数据库内部编号
+- gitlab_id: GitLab 用户 ID，唯一键
+- username: GitLab 用户名，唯一键
+- name: GitLab 显示名
+- avatar_url: GitLab 头像 URL
+- email: GitLab 邮箱
+- access_token: GitLab OAuth access_token，用于后续调用 GitLab API
+- last_login_at: 最近登录时间
 - create_time: 创建时间
 - update_time: 更新时间
