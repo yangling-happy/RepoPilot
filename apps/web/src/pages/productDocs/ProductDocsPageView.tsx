@@ -12,13 +12,8 @@ export function ProductDocsPageView(props: ProductDocsPageViewProps) {
   const {
     mockMode,
     repo,
-    token,
-    setToken,
-    projectId,
-    setProjectId,
     branch,
     setBranch,
-    savingToken,
     cloning,
     status,
     bootLines,
@@ -28,7 +23,6 @@ export function ProductDocsPageView(props: ProductDocsPageViewProps) {
     terminalBusy,
     showTerminalUnavailable,
     viewDocsUrl,
-    handleSaveToken,
     handleClone,
     onSessionReady,
     setTerminalConnectionState,
@@ -63,53 +57,18 @@ export function ProductDocsPageView(props: ProductDocsPageViewProps) {
         <h2 className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
           {t("pages.documentation.actions.title")}
         </h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
-            {t("pages.documentation.actions.token")}
-            <input
-              type="password"
-              value={token}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setToken(event.target.value)
-              }
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
-            {t("pages.documentation.actions.projectId")}
-            <input
-              type="number"
-              min={1}
-              value={projectId}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setProjectId(event.target.value)
-              }
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300 md:col-span-2">
-            {t("pages.documentation.actions.branch")}
-            <input
-              value={branch}
-              onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                setBranch(event.target.value)
-              }
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
-            />
-          </label>
-        </div>
+        <label className="mt-4 flex flex-col gap-1 text-sm text-neutral-600 dark:text-neutral-300">
+          {t("pages.documentation.actions.branch")}
+          <input
+            value={branch}
+            onChange={(event: ChangeEvent<HTMLInputElement>) =>
+              setBranch(event.target.value)
+            }
+            className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-neutral-400 transition focus:ring-2 dark:border-white/15 dark:bg-black/30 dark:text-neutral-100"
+          />
+        </label>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleSaveToken}
-            disabled={savingToken}
-            className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/20 dark:hover:bg-white/10"
-          >
-            {savingToken
-              ? t("pages.documentation.actions.savingToken")
-              : t("pages.documentation.actions.saveToken")}
-          </button>
           <button
             type="button"
             onClick={handleClone}
