@@ -1,10 +1,7 @@
 import { Layout, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation } from "react-router-dom";
-import {
-  DOC_VIEW_SHELL,
-  WORKBENCH_PAGE_SHELL,
-} from "../../layout/workbenchLayout";
+import { WORKBENCH_PAGE_SHELL } from "../../layout/workbenchLayout";
 import { SiteHeader } from "../siteHeader/SiteHeader";
 import { WorkbenchSubNav } from "../topNav/WorkbenchSubNav";
 
