@@ -6,9 +6,9 @@ import {
   DOC_VIEW_SIDEBAR,
 } from "../../layout/workbenchLayout";
 import {
-  StructuredDocDetail,
-  getDefaultDocSection,
+  MemberGroup,
   getDocKey,
+  getSectionMembers,
 } from "./DocViewComponents";
 import { getClassName } from "./docViewUtils";
 import type { useDocViewPage } from "./useDocViewPage";
@@ -291,6 +291,7 @@ export function DocViewPageView(props: DocViewPageViewProps) {
 }
 
 function DocSection({ doc }: { doc: DocQueryItem }) {
+  const { t } = useTranslation();
   const className = getClassName(doc);
 
   if (!doc.structuredDoc) {
@@ -325,6 +326,12 @@ function DocSection({ doc }: { doc: DocQueryItem }) {
   const sd = doc.structuredDoc;
   const firstType = sd.types[0];
 
+  const sectionEntries: { key: "fields" | "constructors" | "methods"; label: string }[] = [
+    { key: "fields", label: t("pages.documentation.structured.fields") },
+    { key: "constructors", label: t("pages.documentation.structured.constructors") },
+    { key: "methods", label: t("pages.documentation.structured.methods") },
+  ];
+
   return (
     <section className="rounded-xl border border-neutral-200 bg-white dark:border-white/10 dark:bg-white/[0.03]">
       <div className="border-b border-neutral-100 px-5 py-4 dark:border-white/10">
@@ -352,14 +359,46 @@ function DocSection({ doc }: { doc: DocQueryItem }) {
             {firstType.qualifiedName}
           </p>
         ) : null}
+        {firstType?.description ? (
+          <p className="mt-3 text-sm leading-6 text-neutral-700 dark:text-neutral-300">
+            {firstType.description}
+          </p>
+        ) : null}
+        {firstType?.signature ? (
+          <pre className="mt-3 overflow-x-auto rounded-lg bg-neutral-950 px-3 py-2 font-mono text-xs text-neutral-50 dark:bg-black">
+            {firstType.signature}
+          </pre>
+        ) : null}
       </div>
 
-      <div className="px-5 py-4">
-        <StructuredDocDetail
-          doc={doc}
-          section={getDefaultDocSection(doc)}
-          hideHeader
-        />
+      <div className="space-y-6 px-5 py-4">
+        {sectionEntries.map(({ key, label }) => {
+          const groups = sd.types
+            .map((typeDoc) => ({
+              typeDoc,
+              members: getSectionMembers(typeDoc, key),
+            }))
+            .filter((group) => group.members.length > 0);
+
+          if (groups.length === 0) return null;
+
+          return (
+            <div key={key}>
+              <h4 className="text-xs font-semibold uppercase tracking-normal text-neutral-500 dark:text-neutral-400">
+                {label}
+              </h4>
+              <div className="mt-2 space-y-2">
+                {groups.map(({ typeDoc, members }) => (
+                  <MemberGroup
+                    key={`${typeDoc.htmlFile}-${typeDoc.name}-${key}`}
+                    title={typeDoc.name}
+                    members={members}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
