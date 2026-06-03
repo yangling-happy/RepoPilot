@@ -3,23 +3,35 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import type { TerminalConnectionState } from "../../components/virtualTerminal/VirtualTerminalPanel";
+import { useAuth } from "../../hooks/useAuth";
+import { mapCloneErrorMessage } from "../../i18n/backendErrors";
 import {
   isMockRepo,
   MOCK_DOC_ITEMS,
+  simulateMockClone,
   simulateMockScan,
 } from "../../mocks/docMockData";
-import { queryDocs, scanLocalDoc, type DocQueryItem } from "../../services/backendApi";
-import { createSessionId } from "../../utils/terminalSession";
-import { getDocKey } from "./DocViewComponents";
 import {
-  buildGroups,
-  filterGroups,
-  getAnchorId,
-  scrollToAnchor,
-} from "./docViewUtils";
+  cloneRepo,
+  queryDocs,
+  scanLocalDoc,
+  type DocQueryItem,
+} from "../../services/backendApi";
+import { toErrorMessage } from "../../utils/errorMessage";
+import { createSessionId } from "../../utils/terminalSession";
+import { saveClonedRepo } from "../workbench/repoLocalStore";
+import { getDocKey } from "./DocViewComponents";
+import { buildGroups, filterGroups } from "./docViewUtils";
+
+export type CloneStatus = {
+  type: "success" | "error";
+  text: string;
+} | null;
 
 export function useDocViewPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const username = user?.username;
   const [params] = useSearchParams();
   const repo = params.get("repo");
   const branchParam = params.get("branch") || "main";
@@ -29,15 +41,17 @@ export function useDocViewPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [activeDocKey, setActiveDocKey] = useState<string | null>(null);
+  const [selectedDoc, setSelectedDoc] = useState<DocQueryItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [cloning, setCloning] = useState(false);
+  const [cloneStatus, setCloneStatus] = useState<CloneStatus>(null);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalBusy, setTerminalBusy] = useState(false);
   const [terminalConnectionState, setTerminalConnectionState] =
     useState<TerminalConnectionState>("connecting");
   const terminalClientRef = useRef<TerminalClient | null>(null);
   const terminalSessionIdRef = useRef<string>(createSessionId());
-  const contentRef = useRef<HTMLDivElement>(null);
 
   const loadDocs = useCallback(async () => {
     if (!repo) return;
@@ -191,30 +205,6 @@ export function useDocViewPage() {
     }
   }, [groups, expandedGroups.size]);
 
-  useEffect(() => {
-    const container = contentRef.current;
-    if (!container) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) {
-            const anchorId = entry.target.id;
-            const docKey = anchorId.replace("doc-", "").replace(/-/g, "/");
-            setActiveDocKey(docKey);
-            break;
-          }
-        }
-      },
-      { rootMargin: "-80px 0px -60% 0px", threshold: 0.1 },
-    );
-
-    const anchors = container.querySelectorAll("[id^='doc-']");
-    anchors.forEach((el) => observer.observe(el));
-
-    return () => observer.disconnect();
-  }, [docs]);
-
   const handleToggleGroup = useCallback((path: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
@@ -229,8 +219,72 @@ export function useDocViewPage() {
 
   const handleSelectDoc = useCallback((doc: DocQueryItem) => {
     setActiveDocKey(getDocKey(doc));
-    scrollToAnchor(getAnchorId(doc));
+    setSelectedDoc(doc);
   }, []);
+
+  const handleShowAll = useCallback(() => {
+    setSelectedDoc(null);
+  }, []);
+
+  const handleClone = useCallback(async () => {
+    if (!repo || cloning) return;
+    const projectIdNumber = /^\d+$/.test(repo) ? Number(repo) : null;
+    if (!projectIdNumber) {
+      setCloneStatus({
+        type: "error",
+        text: t("pages.docView.cloneRepo") + ": " + t("pages.documentation.actions.errors.projectIdInvalid"),
+      });
+      return;
+    }
+
+    setTerminalOpen(true);
+    terminalClientRef.current?.clear();
+    setTerminalBusy(true);
+    setCloning(true);
+    setCloneStatus(null);
+    appendTerminal(
+      t("pages.documentation.actions.terminal.cloneStarted", {
+        projectId: projectIdNumber,
+        branch: branchParam,
+      }),
+    );
+
+    try {
+      const response = isMockRepo(repo)
+        ? await simulateMockClone(appendTerminal)
+        : await cloneRepo({
+            projectId: projectIdNumber,
+            branch: branchParam,
+            terminalSessionId: terminalSessionIdRef.current,
+          });
+
+      saveClonedRepo(response, username);
+      appendTerminal(
+        t("pages.documentation.actions.terminal.cloneCompleted", {
+          localPath: response.localPath,
+        }),
+      );
+      setCloneStatus({
+        type: "success",
+        text: t("pages.documentation.actions.success.cloneCompleted", {
+          projectPath: response.projectPath,
+        }),
+      });
+      await loadDocs();
+    } catch (err) {
+      const msg = mapCloneErrorMessage(
+        toErrorMessage(err, t("pages.documentation.actions.errors.unexpected")),
+        t,
+      );
+      appendTerminal(
+        t("pages.documentation.actions.terminal.cloneFailed", { message: msg }),
+      );
+      setCloneStatus({ type: "error", text: msg });
+    } finally {
+      setCloning(false);
+      setTerminalBusy(false);
+    }
+  }, [repo, branchParam, cloning, t, appendTerminal, username, loadDocs]);
 
   return {
     mockMode: isMockRepo(repo),
@@ -241,20 +295,24 @@ export function useDocViewPage() {
     error,
     expandedGroups,
     activeDocKey,
+    selectedDoc,
     searchQuery,
     setSearchQuery,
     scanning,
+    cloning,
+    cloneStatus,
     terminalOpen,
     terminalBusy,
     terminalConnectionState,
     bootLines,
     terminalSessionId: terminalSessionIdRef.current,
-    contentRef,
     filteredGroups,
     loadDocs,
     handleScan,
     handleToggleGroup,
     handleSelectDoc,
+    handleShowAll,
+    handleClone,
     onSessionReady,
     setTerminalConnectionState,
     setTerminalOpen,

@@ -2,33 +2,33 @@ package com.repopilot.business.controller;
 
 import com.repopilot.business.service.gitlab.GitLabSessionContextService;
 import com.repopilot.common.dto.ApiResponse;
+import com.repopilot.common.exception.BusinessException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.repopilot.business.service.gitlab.GitLabOAuthClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpSession;
 
-//Lombok 注解，编译后自动生成 private static final Logger log = ...，
-//可直接用 log.info(...) 记录日志
 @Slf4j
 @RestController
 @RequestMapping("/session")
-//Lombok 注解，自动生成包含 final 字段的构造函数，Spring 会通过这个构造函数注入私有成员
 @RequiredArgsConstructor
 public class SessionController {
 
-    //GitLab 会话上下文服务，负责把 token/username 写入或读出 HttpSession
     private final GitLabSessionContextService gitLabSessionContextService;
+    private final GitLabOAuthClient gitLabOAuthClient;
 
-    //保存 GitLab Token 到当前浏览器 Session
-    //
-    //前端首次接入 GitLab 时调用这个接口：
-    //  1. 后端用 token 调 GitLab /user 接口验证 token
-    //  2. 解析出 username
-    //  3. 把 token 和 username 都缓存到 Session
     @PostMapping("/setGitlabToken")
     public ApiResponse<String> setGitlabToken(@RequestParam String token, HttpSession session) {
-        String username = gitLabSessionContextService.saveTokenAndResolveUsername(token, session);
+        if (!StringUtils.hasText(token)) {
+            throw new BusinessException(400, "GitLab token is required");
+        }
+        JsonNode userInfo = gitLabOAuthClient.getUserInfo(token.trim());
+        String username = userInfo.path("username").asText("");
+        gitLabSessionContextService.saveOAuthContext(token.trim(), userInfo, session);
         log.info("GitLab token set in session, username={}", username);
         return ApiResponse.success("Token saved successfully", username);
     }

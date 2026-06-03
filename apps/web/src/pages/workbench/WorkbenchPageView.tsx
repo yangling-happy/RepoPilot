@@ -1,23 +1,73 @@
 import {
   ArrowLeftOutlined,
   FileTextOutlined,
+  LoadingOutlined,
   RocketOutlined,
+  SyncOutlined,
 } from "@ant-design/icons";
-import { Button, Tag } from "antd";
+import { Button, message, Tag } from "antd";
 import type { MouseEvent } from "react";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router-dom";
-import { WORKBENCH_REPOS } from "./repoMock";
-import { loadClonedRepos } from "./repoLocalStore";
+import { useAuth } from "../../hooks/useAuth";
+import { getGitlabProjects } from "../../services/backendApi";
+import { WORKBENCH_REPOS, type WorkbenchRepo } from "./repoMock";
+import {
+  loadClonedRepos,
+  loadRemoteRepos,
+  saveRemoteRepos,
+} from "./repoLocalStore";
 
 export function WorkbenchPageView() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const username = user?.username;
   const [searchParams, setSearchParams] = useSearchParams();
+  const [remoteRepos, setRemoteRepos] = useState<WorkbenchRepo[]>(() =>
+    loadRemoteRepos(username),
+  );
+  const [syncing, setSyncing] = useState(false);
+  const initialSyncDone = useRef(false);
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const projects = await getGitlabProjects(1, 100);
+      const mapped: WorkbenchRepo[] = projects.map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        visibility: p.visibility,
+        stack: "",
+        description: p.description || "",
+        branch: p.defaultBranch || "main",
+        owner: p.ownerUsername || "",
+        lastUpdatedAt: p.lastActivityAt || "",
+        lastDeployAt: "-",
+        docsEndpoint: "-",
+        isRemote: true,
+        gitlabProjectId: p.id,
+      }));
+      setRemoteRepos(mapped);
+      saveRemoteRepos(mapped, username);
+      void message.success(t("pages.dashboard.syncSuccess", { count: mapped.length }));
+    } catch {
+      void message.error(t("pages.dashboard.syncFailed"));
+    } finally {
+      setSyncing(false);
+    }
+  }, [t, username]);
+
+  // 登录后自动同步一次（StrictMode 下防止重复触发）
+  useEffect(() => {
+    if (initialSyncDone.current) return;
+    initialSyncDone.current = true;
+    void handleSync();
+  }, [handleSync]);
 
   const repositories = useMemo(() => {
-    const clonedRepos = loadClonedRepos();
-    const merged = [...clonedRepos, ...WORKBENCH_REPOS];
+    const clonedRepos = loadClonedRepos(username);
+    const merged = [...clonedRepos, ...remoteRepos, ...WORKBENCH_REPOS];
     const seen = new Set<string>();
     return merged.filter((repo) => {
       if (seen.has(repo.id)) {
@@ -26,7 +76,7 @@ export function WorkbenchPageView() {
       seen.add(repo.id);
       return true;
     });
-  }, []);
+  }, [remoteRepos, username]);
 
   const selectedRepoId = searchParams.get("repo");
 
@@ -110,9 +160,20 @@ export function WorkbenchPageView() {
         <h1 className="mt-3 text-3xl font-semibold tracking-tight md:text-4xl">
           {t("pages.dashboard.title")}
         </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400 md:text-base">
-          {t("pages.dashboard.lede")}
-        </p>
+        <div className="mt-3 flex items-center gap-3">
+          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400 md:text-base">
+            {t("pages.dashboard.lede")}
+          </p>
+          <Button
+            className="shrink-0"
+            size="small"
+            icon={syncing ? <LoadingOutlined /> : <SyncOutlined />}
+            loading={syncing}
+            onClick={handleSync}
+          >
+            {t("pages.dashboard.syncGitlab")}
+          </Button>
+        </div>
       </header>
 
       <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -162,7 +223,7 @@ export function WorkbenchPageView() {
                 onClick={stopCardNavigation}
               >
                 <Link
-                  to={`/documentation?repo=${encodeURIComponent(repo.id)}`}
+                  to={`/documentation/view?repo=${encodeURIComponent(repo.id)}&branch=${encodeURIComponent(repo.branch || "main")}`}
                   className="inline-flex"
                   onClick={stopCardNavigation}
                 >
@@ -244,7 +305,7 @@ export function WorkbenchPageView() {
 
               <div className="mt-12 flex flex-wrap gap-3 border-t border-neutral-200 pt-10 dark:border-white/10">
                 <Link
-                  to={`/documentation?repo=${encodeURIComponent(selectedRepo.id)}`}
+                  to={`/documentation/view?repo=${encodeURIComponent(selectedRepo.id)}&branch=${encodeURIComponent(selectedRepo.branch || "main")}`}
                   onClick={stopCardNavigation}
                 >
                   <Button

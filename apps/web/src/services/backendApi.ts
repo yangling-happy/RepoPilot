@@ -294,6 +294,33 @@ export async function cancelDeploy(
   });
 }
 
+export type GitLabProjectInfo = {
+  id: number;
+  name: string;
+  pathWithNamespace: string;
+  defaultBranch: string;
+  visibility: "private" | "internal" | "public";
+  description: string;
+  httpUrlToRepo: string;
+  sshUrlToRepo: string;
+  lastActivityAt: string;
+  ownerUsername: string;
+};
+
+export async function getGitlabProjects(
+  page: number = 1,
+  perPage: number = 50,
+): Promise<GitLabProjectInfo[]> {
+  const params = new URLSearchParams({
+    page: String(page),
+    perPage: String(perPage),
+  });
+  return requestApi<GitLabProjectInfo[]>(
+    `/api/repo/gitlab-projects?${params.toString()}`,
+    { method: "GET" },
+  );
+}
+
 async function requestApi<T>(url: string, init: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,

@@ -10,16 +10,15 @@ import {
   MOCK_PROJECT_ID,
   simulateMockClone,
 } from "../../mocks/docMockData";
+import { useAuth } from "../../hooks/useAuth";
 import {
   cloneRepo,
-  setGitlabToken,
   type CloneRepoResponse,
 } from "../../services/backendApi";
 import { toErrorMessage } from "../../utils/errorMessage";
 import { getOrCreateTerminalSessionId } from "../../utils/terminalSession";
 import { saveClonedRepo } from "../workbench/repoLocalStore";
 
-const TOKEN_STORAGE_KEY = "repopilot.gitlabToken";
 const TERMINAL_SESSION_STORAGE_KEY = "repopilot.docs.terminalSessionId";
 
 export type ProductDocsStatus = {
@@ -29,16 +28,12 @@ export type ProductDocsStatus = {
 
 export function useProductDocsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const username = user?.username;
   const [params] = useSearchParams();
   const repo = params.get("repo");
   const terminalClientRef = useRef<TerminalClient | null>(null);
 
-  const [token, setToken] = useState(() => {
-    if (typeof window === "undefined") {
-      return "";
-    }
-    return window.localStorage.getItem(TOKEN_STORAGE_KEY) || "";
-  });
   const [projectId, setProjectId] = useState(() => {
     if (isMockRepo(repo)) {
       return String(MOCK_PROJECT_ID);
@@ -49,7 +44,6 @@ export function useProductDocsPage() {
     return /^\d+$/.test(repo) ? repo : "";
   });
   const [branch, setBranch] = useState("main");
-  const [savingToken, setSavingToken] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [status, setStatus] = useState<ProductDocsStatus>(null);
   const [lastClone, setLastClone] = useState<CloneRepoResponse | null>(null);
@@ -101,51 +95,6 @@ export function useProductDocsPage() {
     terminalClientRef.current?.writeln(line);
   }, []);
 
-  const handleSaveToken = useCallback(async () => {
-    const trimmedToken = token.trim();
-    if (!trimmedToken) {
-      setStatus({
-        type: "error",
-        text: t("pages.documentation.actions.errors.tokenRequired"),
-      });
-      return;
-    }
-
-    setSavingToken(true);
-    try {
-      if (isMockMode(repo, projectId)) {
-        await new Promise((resolve) => setTimeout(resolve, 300));
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(TOKEN_STORAGE_KEY, trimmedToken);
-        }
-        setStatus({
-          type: "success",
-          text: t("pages.documentation.actions.success.tokenSaved"),
-        });
-        return;
-      }
-
-      await setGitlabToken(trimmedToken);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(TOKEN_STORAGE_KEY, trimmedToken);
-      }
-      setStatus({
-        type: "success",
-        text: t("pages.documentation.actions.success.tokenSaved"),
-      });
-    } catch (error) {
-      setStatus({
-        type: "error",
-        text: toErrorMessage(
-          error,
-          t("pages.documentation.actions.errors.unexpected"),
-        ),
-      });
-    } finally {
-      setSavingToken(false);
-    }
-  }, [projectId, repo, t, token]);
-
   const handleClone = useCallback(async () => {
     const projectIdNumber = Number(projectId);
     if (!Number.isInteger(projectIdNumber) || projectIdNumber <= 0) {
@@ -172,19 +121,13 @@ export function useProductDocsPage() {
     try {
       const response = isMockMode(repo, projectId)
         ? await simulateMockClone(appendTerminal)
-        : await (async () => {
-            if (token.trim()) {
-              await setGitlabToken(token.trim());
-            }
+        : await cloneRepo({
+            projectId: projectIdNumber,
+            branch: effectiveBranch,
+            terminalSessionId,
+          });
 
-            return cloneRepo({
-              projectId: projectIdNumber,
-              branch: effectiveBranch,
-              terminalSessionId,
-            });
-          })();
-
-      saveClonedRepo(response);
+      saveClonedRepo(response, username);
       setLastClone(response);
       appendTerminal(
         t("pages.documentation.actions.terminal.cloneCompleted", {
@@ -218,7 +161,7 @@ export function useProductDocsPage() {
       setCloning(false);
       setTerminalBusy(false);
     }
-  }, [appendTerminal, branch, projectId, repo, t, terminalSessionId, token]);
+  }, [appendTerminal, branch, projectId, repo, t, terminalSessionId, username]);
 
   const viewDocsUrl = useMemo(() => {
     if (isMockMode(repo, projectId) || isMockRepo(repo)) {
@@ -243,13 +186,10 @@ export function useProductDocsPage() {
   return {
     mockMode,
     repo,
-    token,
-    setToken,
     projectId,
     setProjectId,
     branch,
     setBranch,
-    savingToken,
     cloning,
     status,
     bootLines,
@@ -259,7 +199,6 @@ export function useProductDocsPage() {
     terminalBusy,
     showTerminalUnavailable,
     viewDocsUrl,
-    handleSaveToken,
     handleClone,
     onSessionReady,
     setTerminalConnectionState,

@@ -11,6 +11,7 @@ import {
   getOAuthLoginUrl,
   logout as apiLogout,
 } from "../services/backendApi";
+import { clearUserData } from "../pages/workbench/repoLocalStore";
 
 export type AuthUser = {
   id: number;
@@ -63,12 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
+      clearUserData(user?.username);
       await apiLogout();
     } finally {
       setUser(null);
       window.location.href = "/login";
     }
-  }, []);
+  }, [user?.username]);
 
   const value = useMemo(
     () => ({ user, loading, login, logout, refresh: fetchUser }),

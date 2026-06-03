@@ -233,7 +233,7 @@ function EmptyStructuredSection() {
   );
 }
 
-function MemberGroup({
+export function MemberGroup({
   title,
   members,
 }: MemberGroupProps) {
@@ -258,7 +258,7 @@ function MemberGroup({
   );
 }
 
-function MemberDocView({ member }: MemberDocViewProps) {
+export function MemberDocView({ member }: MemberDocViewProps) {
   const { t } = useTranslation();
   const throwsItems = member.throws ?? [];
 

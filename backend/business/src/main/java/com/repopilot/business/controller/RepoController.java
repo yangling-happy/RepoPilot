@@ -2,7 +2,9 @@ package com.repopilot.business.controller;
 
 import com.repopilot.business.dto.CloneRepoRequest;
 import com.repopilot.business.dto.CloneRepoResponse;
+import com.repopilot.business.dto.GitLabProjectInfo;
 import com.repopilot.business.service.gitlab.GitLabSessionContextService;
+import com.repopilot.business.service.gitlab.GitLabUserClient;
 import com.repopilot.business.service.gitlab.GitLabUserContext;
 import com.repopilot.business.service.gitlab.GitlabRepoCloneService;
 import com.repopilot.common.dto.ApiResponse;
@@ -10,10 +12,8 @@ import com.repopilot.common.util.BizAssert;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
 
 //Lombok 注解，编译后自动生成 private static final Logger log = ...，
 //可直接用 log.info(...) 记录日志
@@ -29,6 +29,8 @@ public class RepoController {
     private final GitlabRepoCloneService gitlabRepoCloneService;
     //会话上下文服务，用来从 HttpSession 里拿到 GitLab token 和用户名
     private final GitLabSessionContextService gitLabSessionContextService;
+    //GitLab用户客户端，用于调用GitLab API
+    private final GitLabUserClient gitLabUserClient;
 
     //克隆 GitLab 仓库到当前用户的本地工作空间
     //
@@ -58,5 +60,17 @@ public class RepoController {
         log.info("Repository cloned successfully, username={}, projectId={}, branch={}",
                 response.getGitlabUsername(), response.getProjectId(), response.getBranch());
         return ApiResponse.success("Repository cloned", response);
+    }
+
+    //获取当前用户的GitLab项目列表
+    @GetMapping("/gitlab-projects")
+    public ApiResponse<List<GitLabProjectInfo>> getGitlabProjects(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "50") int perPage,
+            HttpSession session) {
+        GitLabUserContext context = gitLabSessionContextService.requireContext(session);
+        List<GitLabProjectInfo> projects = gitLabUserClient.getUserProjects(context.token(), page, perPage);
+        log.info("Fetched {} GitLab projects for user={}, page={}", projects.size(), context.username(), page);
+        return ApiResponse.success("GitLab projects fetched", projects);
     }
 }

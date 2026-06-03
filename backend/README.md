@@ -217,7 +217,7 @@ cd gateway
 
 ```bash
 cd backend/business
-../mvnw spring-boot:run -Dspring-boot.run.arguments=--gitlab.api-url=http://localhost:8081/api/v4
+../mvnw spring-boot:run -Dspring-boot.run.arguments=--gitlab.api-url=http://localhost:8082/api/v4
 ```
 
 `/api/session/setGitlabToken` 使用 `HttpSession` 保存 Token，所以后续 clone、refresh 请求要复用同一个 cookie 文件：

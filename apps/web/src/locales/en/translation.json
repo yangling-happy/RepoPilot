@@ -56,7 +56,8 @@
       "lastUpdated": "Updated {{time}}",
       "visibility": {
         "private": "Private",
-        "internal": "Internal"
+        "internal": "Internal",
+        "public": "Public"
       },
       "times": {
         "2h": "2h ago",
@@ -239,6 +240,9 @@
         "billing-svc": "Billing and subscription processing with reconciliation and audit trails.",
         "docs-hub": "Central documentation portal with search and cross-repo navigation."
       },
+      "syncGitlab": "Sync GitLab",
+      "syncSuccess": "Synced {{count}} GitLab project(s).",
+      "syncFailed": "Failed to sync GitLab projects. Check that your token is valid.",
       "actions": {
         "generateDocs": "Generate docs",
         "deploy": "Deploy"
@@ -265,6 +269,8 @@
       "backToGenerate": "Back to generate",
       "refresh": "Refresh docs",
       "scanLocal": "Scan & Generate Docs",
+      "showAll": "Show all docs",
+      "cloneRepo": "Clone repository",
       "terminal": {
         "title": "Document Scan",
         "subtitle": "Real-time output from the document generation pipeline.",

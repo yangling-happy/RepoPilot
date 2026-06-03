@@ -56,7 +56,8 @@
       "lastUpdated": "更新于 {{time}}",
       "visibility": {
         "private": "私有",
-        "internal": "内部"
+        "internal": "内部",
+        "public": "公开"
       },
       "times": {
         "2h": "2 小时前",
@@ -239,6 +240,9 @@
         "billing-svc": "账单与订阅计费，含对账与审计追踪。",
         "docs-hub": "文档门户与跨仓库检索聚合。"
       },
+      "syncGitlab": "同步 GitLab",
+      "syncSuccess": "已同步 {{count}} 个 GitLab 项目。",
+      "syncFailed": "同步 GitLab 项目失败，请检查 Token 是否有效。",
       "actions": {
         "generateDocs": "生成文档",
         "deploy": "部署"
@@ -265,6 +269,8 @@
       "backToGenerate": "返回生成",
       "refresh": "刷新文档列表",
       "scanLocal": "扫描并生成文档",
+      "showAll": "显示全部文档",
+      "cloneRepo": "克隆仓库",
       "terminal": {
         "title": "文档扫描",
         "subtitle": "文档生成流水线实时输出",

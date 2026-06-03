@@ -135,7 +135,7 @@ public class GitlabRepoCloneService {
         URI uri = URI.create(apiBase + "/projects/" + projectId);
 
         HttpRequest request = HttpRequest.newBuilder(uri)
-                .header("PRIVATE-TOKEN", token)
+                .header("Authorization", "Bearer " + token)
                 .GET()
                 .build();
 
@@ -169,16 +169,24 @@ public class GitlabRepoCloneService {
         URI cloneUri = URI.create(cloneUrl);
         URI apiUri = URI.create(gitlabApiUrl);
 
-        if (!isLocalHost(cloneUri.getHost()) || isLocalHost(apiUri.getHost())) {
+        // 如果 clone URL 不是 localhost，无需改写
+        if (!isLocalHost(cloneUri.getHost())) {
             return cloneUrl;
         }
 
+        // 如果两边的 authority（host:port）完全一致，无需改写
+        if (cloneUri.getAuthority().equals(apiUri.getAuthority())) {
+            return cloneUrl;
+        }
+
+        // clone URL 是 localhost 但 host:port 不匹配 → 用 API 的地址替换
+        // 典型场景：GitLab External URL 配置的端口与实际 API 端口不一致
         URI rewritten = URI.create(String.format("%s://%s%s%s",
                 apiUri.getScheme(),
                 apiUri.getAuthority(),
                 cloneUri.getPath(),
                 cloneUri.getQuery() == null ? "" : "?" + cloneUri.getQuery()));
-        log.info("Rewrote clone url host from {} to {}", cloneUri.getAuthority(), apiUri.getAuthority());
+        log.info("Rewrote clone url from {} to {}", cloneUri.getAuthority(), apiUri.getAuthority());
         return rewritten.toString();
     }
 
