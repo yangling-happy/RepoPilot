@@ -1,9 +1,5 @@
-/** Header(56px mobile/64px desktop) + SubNav(~48px) offset for sidebar sticky */
-export const DOC_VIEW_HEADER_OFFSET = "112px";
-
 export const DOC_VIEW_SIDEBAR = [
-  "sticky shrink-0 w-64",
-  "overflow-y-auto",
+  "shrink-0 w-64 overflow-y-auto",
   "border-r border-neutral-200 bg-neutral-50",
   "dark:border-white/10 dark:bg-neutral-900",
 ].join(" ");

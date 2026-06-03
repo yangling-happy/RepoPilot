@@ -2,7 +2,6 @@ import { useTranslation } from "react-i18next";
 import { VirtualTerminalPanel } from "../../components/virtualTerminal/VirtualTerminalPanel";
 import {
   DOC_VIEW_CONTENT_PADDING,
-  DOC_VIEW_HEADER_OFFSET,
   DOC_VIEW_SIDEBAR,
 } from "../../layout/workbenchLayout";
 import {
@@ -50,13 +49,9 @@ export function DocViewPageView(props: DocViewPageViewProps) {
   } = props;
 
   return (
-    <div className="flex w-full items-stretch text-neutral-900 dark:text-neutral-100">
+    <div className="flex min-h-0 w-full flex-1 items-stretch text-neutral-900 dark:text-neutral-100">
       <aside
         className={DOC_VIEW_SIDEBAR}
-        style={{
-          top: DOC_VIEW_HEADER_OFFSET,
-          height: `calc(100vh - ${DOC_VIEW_HEADER_OFFSET})`,
-        }}
       >
         <div className="shrink-0 border-b border-neutral-200 bg-neutral-50 p-3 dark:border-white/10 dark:bg-neutral-900">
           <div className="flex items-center justify-between gap-2">
@@ -188,7 +183,7 @@ export function DocViewPageView(props: DocViewPageViewProps) {
       </aside>
 
       <main
-        className={`min-w-0 flex-1 self-stretch ${DOC_VIEW_CONTENT_PADDING}`}
+        className={`min-w-0 flex-1 self-stretch overflow-y-auto ${DOC_VIEW_CONTENT_PADDING}`}
       >
         <div className="w-full">
           <div className="mb-6">
