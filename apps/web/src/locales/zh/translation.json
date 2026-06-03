@@ -269,6 +269,8 @@
       "backToGenerate": "返回生成",
       "refresh": "刷新文档列表",
       "scanLocal": "扫描并生成文档",
+      "showAll": "显示全部文档",
+      "cloneRepo": "克隆仓库",
       "terminal": {
         "title": "文档扫描",
         "subtitle": "文档生成流水线实时输出",

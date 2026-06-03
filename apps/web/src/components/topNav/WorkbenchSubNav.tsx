@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { NavLink, useLocation, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useLocation, useSearchParams } from "react-router-dom";
 import {
   DOC_VIEW_SUBNAV_INNER,
   DOC_VIEW_SUBNAV_SHELL,
@@ -20,7 +20,7 @@ const WORKBENCH_PATHS = new Set([
 ]);
 
 const SECONDARY_NAV_ITEMS: SecondaryNavItem[] = [
-  { path: "/documentation", labelKey: "header.documentation" },
+  { path: "/documentation/view", labelKey: "header.documentation" },
   { path: "/deploy", labelKey: "header.deploy" },
 ];
 
@@ -37,13 +37,34 @@ export function WorkbenchSubNav() {
   const encodedRepo = encodeURIComponent(repo);
   const isDocView = pathname === "/documentation/view";
 
+  if (isDocView) {
+    return (
+      <div className={DOC_VIEW_SUBNAV_SHELL}>
+        <div className={DOC_VIEW_SUBNAV_INNER}>
+          <nav className="flex min-w-0 flex-1 items-center gap-1.5 text-sm">
+            <Link
+              to="/dashboard"
+              className="text-neutral-500 transition hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-200"
+            >
+              {t("header.dashboard")}
+            </Link>
+            <span className="text-neutral-300 dark:text-neutral-600">/</span>
+            <span className="truncate font-mono text-xs text-neutral-700 dark:text-neutral-300">
+              {repo}
+            </span>
+            <span className="text-neutral-300 dark:text-neutral-600">/</span>
+            <span className="font-semibold text-neutral-950 dark:text-white">
+              {t("header.documentation")}
+            </span>
+          </nav>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={isDocView ? DOC_VIEW_SUBNAV_SHELL : WORKBENCH_SUBNAV_SHELL}
-    >
-      <div
-        className={isDocView ? DOC_VIEW_SUBNAV_INNER : WORKBENCH_SUBNAV_INNER}
-      >
+    <div className={WORKBENCH_SUBNAV_SHELL}>
+      <div className={WORKBENCH_SUBNAV_INNER}>
         <span className="hidden shrink-0 rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-mono text-neutral-700 dark:border-white/15 dark:bg-white/5 dark:text-neutral-200 md:inline-flex">
           {t("header.activeRepo", { repo })}
         </span>

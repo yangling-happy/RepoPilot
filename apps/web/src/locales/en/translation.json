@@ -269,6 +269,8 @@
       "backToGenerate": "Back to generate",
       "refresh": "Refresh docs",
       "scanLocal": "Scan & Generate Docs",
+      "showAll": "Show all docs",
+      "cloneRepo": "Clone repository",
       "terminal": {
         "title": "Document Scan",
         "subtitle": "Real-time output from the document generation pipeline.",
