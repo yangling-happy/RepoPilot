@@ -26,38 +26,29 @@ import java.util.Map;
 public class OAuthController {
 
     private final GitLabOAuthClient gitLabOAuthClient;
+    private final GitLabSessionContextService gitLabSessionContextService;
     private final UserMapper userMapper;
 
     @Value("${frontend.base-url:http://localhost:3000}")
     private String frontendBaseUrl;
 
-    /**
-     * 返回 GitLab OAuth 授权 URL，前端跳转到此 URL 完成授权
-     */
     @GetMapping("/login")
     public ApiResponse<String> login() {
-        String url = gitLabOAuthClient.buildAuthorizeUrl();
-        return ApiResponse.success(url);
+        return ApiResponse.success(gitLabOAuthClient.buildAuthorizeUrl());
     }
 
-    /**
-     * GitLab OAuth 回调：用 code 换 token，获取用户信息，存入 DB 和 Session
-     */
     @GetMapping("/callback")
     public void callback(@RequestParam String code, HttpSession session,
                          jakarta.servlet.http.HttpServletResponse response) {
-        // 1. 用 code 换 access_token
         String accessToken = gitLabOAuthClient.exchangeCodeForToken(code);
-
-        // 2. 用 token 获取用户信息
         JsonNode userInfo = gitLabOAuthClient.getUserInfo(accessToken);
+
         int gitlabId = userInfo.path("id").asInt();
         String username = userInfo.path("username").asText("");
         String name = userInfo.path("name").asText("");
         String avatarUrl = userInfo.path("avatar_url").asText("");
         String email = userInfo.path("email").asText("");
 
-        // 3. 存入 users 表（按 gitlab_id upsert）
         User existing = userMapper.selectOne(
                 new LambdaQueryWrapper<User>().eq(User::getGitlabId, gitlabId));
         if (existing != null) {
@@ -81,13 +72,9 @@ public class OAuthController {
             session.setAttribute("userId", user.getId());
         }
 
-        // 4. 写入 Session（兼容现有业务代码）
-        session.setAttribute(GitLabSessionContextService.TOKEN_SESSION_KEY, accessToken);
-        session.setAttribute(GitLabSessionContextService.USERNAME_SESSION_KEY, username);
-
+        gitLabSessionContextService.saveOAuthContext(accessToken, userInfo, session);
         log.info("OAuth login successful: username={}, gitlabId={}", username, gitlabId);
 
-        // 5. 重定向到前端 dashboard
         try {
             response.sendRedirect(frontendBaseUrl + "/dashboard");
         } catch (Exception e) {
