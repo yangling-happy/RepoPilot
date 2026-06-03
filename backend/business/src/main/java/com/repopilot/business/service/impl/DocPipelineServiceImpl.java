@@ -257,7 +257,7 @@ public class DocPipelineServiceImpl implements DocPipelineService {
             result.setScannedFileCount(files.size());
 
             //将文件分为"支持"和"不支持"两组
-            int parallelism = Runtime.getRuntime().availableProcessors();
+            int parallelism = Math.min(Runtime.getRuntime().availableProcessors(), 16);
             List<Path> supportedFiles = new ArrayList<>();
             int skippedCount = 0;
             for (Path file : files) {

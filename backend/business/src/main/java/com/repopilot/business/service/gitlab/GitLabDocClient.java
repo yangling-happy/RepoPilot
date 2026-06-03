@@ -204,10 +204,10 @@ public class GitLabDocClient {
 
         //所有 GitLab API 调用都走这个统一方法：
         //  - 统一拼接 apiBase
-        //  - 统一设置 PRIVATE-TOKEN
+        //  - 统一使用 Authorization: Bearer 头（兼容 OAuth Token 和 PAT）
         //  - 统一把 HTTP 状态码翻译成业务异常
         HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase() + pathAndQuery))
-                .header("PRIVATE-TOKEN", token.trim())
+                .header("Authorization", "Bearer " + token.trim())
                 .header("Accept", "application/json")
                 .GET()
                 .build();

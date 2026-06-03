@@ -56,7 +56,8 @@
       "lastUpdated": "更新于 {{time}}",
       "visibility": {
         "private": "私有",
-        "internal": "内部"
+        "internal": "内部",
+        "public": "公开"
       },
       "times": {
         "2h": "2 小时前",

@@ -52,10 +52,24 @@ if echo "$REPO_URL" | grep -qE '://[^/]+@'; then
 fi
 
 if [[ -z "$TARGET_DIR" ]]; then
-  TARGET_DIR="$WORKSPACE_ROOT/$USERNAME/project-$PROJECT_ID"
+  TARGET_DIR="$WORKSPACE_ROOT/project-$PROJECT_ID"
 fi
 
 info "clone request accepted, projectId=$PROJECT_ID, branch=$BRANCH, username=$USERNAME"
+if [[ -e "$TARGET_DIR" ]]; then
+  # 如果目录存在但不是 git 仓库，或工作区没有实际文件（只剩 .git），删掉重新克隆
+  if [[ ! -d "$TARGET_DIR/.git" && ! -f "$TARGET_DIR/.git" ]]; then
+    warn "repository directory exists but is not a valid git repo, removing and re-cloning"
+    rm -rf "$TARGET_DIR"
+  else
+    FILE_COUNT="$(find "$TARGET_DIR" -maxdepth 1 -not -name '.git' -not -name '.' | wc -l)"
+    if [[ "$FILE_COUNT" -eq 0 ]]; then
+      warn "repository directory exists but worktree is empty, removing and re-cloning"
+      rm -rf "$TARGET_DIR"
+    fi
+  fi
+fi
+
 if [[ -e "$TARGET_DIR" ]]; then
   ensure_git_repo "$TARGET_DIR"
   OLD_HEAD="$(git -C "$TARGET_DIR" rev-parse HEAD)"

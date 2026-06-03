@@ -56,7 +56,8 @@
       "lastUpdated": "Updated {{time}}",
       "visibility": {
         "private": "Private",
-        "internal": "Internal"
+        "internal": "Internal",
+        "public": "Public"
       },
       "times": {
         "2h": "2h ago",

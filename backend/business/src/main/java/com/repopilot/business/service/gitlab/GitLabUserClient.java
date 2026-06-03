@@ -2,8 +2,10 @@ package com.repopilot.business.service.gitlab;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.repopilot.business.dto.GitLabProjectInfo;
 import com.repopilot.common.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -13,8 +15,11 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 
 //Spring 注解，将这个类注册为 Spring Bean
+@Slf4j
 @Component
 //Lombok 注解，为 final 字段生成构造函数
 @RequiredArgsConstructor
@@ -37,10 +42,11 @@ public class GitLabUserClient {
             throw new BusinessException(400, "GitLab token is required");
         }
 
-        //GitLab Personal Access Token 通过 PRIVATE-TOKEN header 传递
+        //OAuth Access Token 通过 Authorization: Bearer header 传递
+        //同时兼容 Personal Access Token（GitLab 两种头都接受 PAT，但 OAuth token 只接受 Bearer）
         //这里不把 token 放到 URL 里，避免它出现在访问日志或浏览器历史中
         HttpRequest request = HttpRequest.newBuilder(URI.create(apiBase() + "/user"))
-                .header("PRIVATE-TOKEN", token.trim())
+                .header("Authorization", "Bearer " + token.trim())
                 .header("Accept", "application/json")
                 .GET()
                 .build();
@@ -68,6 +74,74 @@ public class GitLabUserClient {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new BusinessException(500, "Interrupted while reading current user from GitLab");
+        }
+    }
+
+    /**
+     * 获取当前用户的GitLab项目列表
+     * @param token GitLab访问令牌
+     * @param page 页码（从1开始）
+     * @param perPage 每页数量
+     * @return 项目列表
+     */
+    public List<GitLabProjectInfo> getUserProjects(String token, int page, int perPage) {
+        if (!StringUtils.hasText(token)) {
+            throw new BusinessException(400, "GitLab token is required");
+        }
+
+        String url = apiBase() + "/projects?membership=true&order_by=last_activity_at&sort=desc"
+                + "&page=" + page + "&per_page=" + perPage;
+
+        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                .header("Authorization", "Bearer " + token.trim())
+                .header("Accept", "application/json")
+                .GET()
+                .build();
+
+        try {
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            int status = response.statusCode();
+            if (status == 401 || status == 403) {
+                log.error("GitLab API returned status={}, body={}", status, response.body());
+                throw new BusinessException(401, "GitLab token is invalid or lacks permission");
+            }
+            if (status < 200 || status >= 300) {
+                log.error("GitLab API returned status={}, body={}", status, response.body());
+                throw new BusinessException(500, "GitLab API failed to get projects, status=" + status);
+            }
+
+            JsonNode projectsArray = objectMapper.readTree(response.body());
+            List<GitLabProjectInfo> projects = new ArrayList<>();
+
+            if (projectsArray.isArray()) {
+                for (JsonNode projectNode : projectsArray) {
+                    GitLabProjectInfo info = new GitLabProjectInfo();
+                    info.setId(projectNode.path("id").asLong());
+                    info.setName(projectNode.path("name").asText(""));
+                    info.setPathWithNamespace(projectNode.path("path_with_namespace").asText(""));
+                    info.setDefaultBranch(projectNode.path("default_branch").asText("main"));
+                    info.setVisibility(projectNode.path("visibility").asText("private"));
+                    info.setDescription(projectNode.path("description").asText(""));
+                    info.setHttpUrlToRepo(projectNode.path("http_url_to_repo").asText(""));
+                    info.setSshUrlToRepo(projectNode.path("ssh_url_to_repo").asText(""));
+                    info.setLastActivityAt(projectNode.path("last_activity_at").asText(""));
+
+                    // 提取所有者信息
+                    JsonNode ownerNode = projectNode.path("owner");
+                    if (ownerNode != null && !ownerNode.isMissingNode()) {
+                        info.setOwnerUsername(ownerNode.path("username").asText(""));
+                    }
+
+                    projects.add(info);
+                }
+            }
+
+            return projects;
+        } catch (IOException e) {
+            throw new BusinessException(500, "Failed to get projects from GitLab");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(500, "Interrupted while getting projects from GitLab");
         }
     }
 
