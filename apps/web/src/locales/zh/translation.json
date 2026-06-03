@@ -240,6 +240,9 @@
         "billing-svc": "账单与订阅计费，含对账与审计追踪。",
         "docs-hub": "文档门户与跨仓库检索聚合。"
       },
+      "syncGitlab": "同步 GitLab",
+      "syncSuccess": "已同步 {{count}} 个 GitLab 项目。",
+      "syncFailed": "同步 GitLab 项目失败，请检查 Token 是否有效。",
       "actions": {
         "generateDocs": "生成文档",
         "deploy": "部署"

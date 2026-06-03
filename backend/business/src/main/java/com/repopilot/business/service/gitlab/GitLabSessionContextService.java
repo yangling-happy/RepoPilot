@@ -1,5 +1,7 @@
 package com.repopilot.business.service.gitlab;
 
+import com.repopilot.business.entity.User;
+import com.repopilot.business.mapper.UserMapper;
 import com.repopilot.common.exception.BusinessException;
 import jakarta.servlet.http.HttpSession;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,8 @@ public class GitLabSessionContextService {
 
     //GitLab 用户 API 客户端，用于通过 Token 获取用户名
     private final GitLabUserClient gitLabUserClient;
+    //用户 Mapper，用于从数据库读取 Token
+    private final UserMapper userMapper;
 
     //获取完整的用户上下文（Token + 用户名）
     //如果 Session 中没有用户名，会自动调用 GitLab API 获取并缓存
@@ -37,16 +41,29 @@ public class GitLabSessionContextService {
         return new GitLabUserContext(token, username);
     }
 
-    //从 Session 中获取 GitLab Token，如果不存在则抛异常
+    //从 Session 中获取 GitLab Token
+    //如果 Session 中没有，尝试从数据库 users 表读取（服务器重启后恢复场景）
     public String requireToken(HttpSession session) {
         Object value = session.getAttribute(TOKEN_SESSION_KEY);
         //instanceof 模式匹配：同时检查类型和值是否为有效字符串
-        //如果 Session 过期、用户还没设置 token，或者存进去的不是字符串，都会走这里
-        if (!(value instanceof String token) || !StringUtils.hasText(token)) {
-            throw new BusinessException(400,
-                    "GitLab token not found in session. Call /api/session/setGitlabToken first.");
+        if (value instanceof String token && StringUtils.hasText(token)) {
+            return token;
         }
-        return token;
+
+        //Session 中没有 Token，尝试从数据库恢复（通过 userId）
+        Object userId = session.getAttribute(USER_ID_SESSION_KEY);
+        if (userId instanceof Long id) {
+            User user = userMapper.selectById(id);
+            if (user != null && StringUtils.hasText(user.getAccessToken())) {
+                //从数据库恢复 Token 到 Session，后续请求不再查库
+                session.setAttribute(TOKEN_SESSION_KEY, user.getAccessToken());
+                session.setAttribute(USERNAME_SESSION_KEY, user.getUsername());
+                return user.getAccessToken();
+            }
+        }
+
+        throw new BusinessException(400,
+                "GitLab token not found in session. Call /api/session/setGitlabToken first.");
     }
 
     //保存 Token 到 Session 并解析用户名
