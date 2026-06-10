@@ -269,6 +269,12 @@
       "backToGenerate": "返回生成",
       "refresh": "刷新文档列表",
       "scanLocal": "扫描并生成文档",
+      "scanConfirm": {
+        "title": "确认扫描",
+        "content": "即将对项目「{{project}}」进行全量文档扫描（分支: {{branch}}），这将重新生成所有文档。是否继续？",
+        "ok": "开始扫描",
+        "cancel": "取消"
+      },
       "showAll": "显示全部文档",
       "cloneRepo": "克隆仓库",
       "terminal": {

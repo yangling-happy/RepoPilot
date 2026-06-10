@@ -269,6 +269,12 @@
       "backToGenerate": "Back to generate",
       "refresh": "Refresh docs",
       "scanLocal": "Scan & Generate Docs",
+      "scanConfirm": {
+        "title": "Confirm Scan",
+        "content": "This will perform a full document scan on project \"{{project}}\" (branch: {{branch}}), regenerating all documents. Continue?",
+        "ok": "Start Scan",
+        "cancel": "Cancel"
+      },
       "showAll": "Show all docs",
       "cloneRepo": "Clone repository",
       "terminal": {

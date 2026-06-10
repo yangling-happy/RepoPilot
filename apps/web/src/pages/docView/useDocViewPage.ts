@@ -2,6 +2,7 @@ import type { TerminalClient } from "../../../../terminal/src";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
+import { Modal } from "antd";
 import type { TerminalConnectionState } from "../../components/virtualTerminal/VirtualTerminalPanel";
 import { useAuth } from "../../hooks/useAuth";
 import { mapCloneErrorMessage } from "../../i18n/backendErrors";
@@ -108,6 +109,16 @@ export function useDocViewPage() {
 
   const handleScan = useCallback(async () => {
     if (!repo || scanning) return;
+
+    Modal.confirm({
+      title: t("pages.docView.scanConfirm.title"),
+      content: t("pages.docView.scanConfirm.content", {
+        project: repoName || repo,
+        branch: branchParam,
+      }),
+      okText: t("pages.docView.scanConfirm.ok"),
+      cancelText: t("pages.docView.scanConfirm.cancel"),
+      onOk: async () => {
     setScanning(true);
     setTerminalOpen(true);
     setTerminalBusy(true);
@@ -176,8 +187,11 @@ export function useDocViewPage() {
       setScanning(false);
       setTerminalBusy(false);
     }
+      },
+    });
   }, [
     repo,
+    repoName,
     branchParam,
     scanning,
     loadDocs,
