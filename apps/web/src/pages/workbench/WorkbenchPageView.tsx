@@ -185,7 +185,7 @@ export function WorkbenchPageView() {
             aria-label={t("pages.dashboard.openRepoDetails", {
               name: repo.name,
             })}
-            className="group cursor-pointer rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] outline-none transition hover:border-neutral-950 hover:shadow-[0_24px_80px_-48px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 dark:border-white/12 dark:bg-black dark:shadow-none dark:hover:border-white dark:hover:shadow-[0_24px_80px_-48px_rgba(255,255,255,0.12)] dark:focus-visible:ring-white dark:focus-visible:ring-offset-black"
+            className="group cursor-pointer overflow-hidden rounded-2xl border border-neutral-200 bg-white p-5 shadow-[0_1px_0_rgba(0,0,0,0.04)] outline-none transition hover:border-neutral-950 hover:shadow-[0_24px_80px_-48px_rgba(0,0,0,0.35)] focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 dark:border-white/12 dark:bg-black dark:shadow-none dark:hover:border-white dark:hover:shadow-[0_24px_80px_-48px_rgba(255,255,255,0.12)] dark:focus-visible:ring-white dark:focus-visible:ring-offset-black"
             onClick={() => openDetails(repo.id)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -196,7 +196,7 @@ export function WorkbenchPageView() {
           >
             <div className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-2">
-                <span className="truncate font-mono text-[15px] font-medium">
+                <span className="min-w-0 truncate font-mono text-[15px] font-medium">
                   {repo.name}
                 </span>
                 <Tag className="m-0 shrink-0 border-neutral-200 bg-neutral-50 text-neutral-700 dark:border-white/20 dark:bg-white/10 dark:text-neutral-200">
@@ -208,9 +208,6 @@ export function WorkbenchPageView() {
                 {repo.descriptionKey
                   ? t(`pages.dashboard.repoDescriptions.${repo.descriptionKey}`)
                   : repo.description || "-"}
-              </p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-500">
-                {repo.stack}
               </p>
 
               <div className="flex flex-wrap gap-2">
