@@ -450,6 +450,6 @@ class JavaDocHtmlParserTest {
                         <div class="block">%s</div>
                     </section>
                 </section>
-                """.formatted(fieldName, fieldName, signature, description);
+                """.formatted(fieldName, fieldName, signature, description);    
     }
 }

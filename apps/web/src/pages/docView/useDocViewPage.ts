@@ -34,6 +34,7 @@ export function useDocViewPage() {
   const username = user?.username;
   const [params] = useSearchParams();
   const repo = params.get("repo");
+  const repoName = params.get("name") || repo;
   const branchParam = params.get("branch") || "main";
 
   const [docs, setDocs] = useState<DocQueryItem[]>([]);
@@ -289,6 +290,7 @@ export function useDocViewPage() {
   return {
     mockMode: isMockRepo(repo),
     repo,
+    repoName,
     branchParam,
     docs,
     loading,

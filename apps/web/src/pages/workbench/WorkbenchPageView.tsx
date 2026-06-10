@@ -223,7 +223,7 @@ export function WorkbenchPageView() {
                 onClick={stopCardNavigation}
               >
                 <Link
-                  to={`/documentation/view?repo=${encodeURIComponent(repo.id)}&branch=${encodeURIComponent(repo.branch || "main")}`}
+                  to={`/documentation/view?repo=${encodeURIComponent(repo.id)}&name=${encodeURIComponent(repo.name)}&branch=${encodeURIComponent(repo.branch || "main")}`}
                   className="inline-flex"
                   onClick={stopCardNavigation}
                 >
@@ -305,7 +305,7 @@ export function WorkbenchPageView() {
 
               <div className="mt-12 flex flex-wrap gap-3 border-t border-neutral-200 pt-10 dark:border-white/10">
                 <Link
-                  to={`/documentation/view?repo=${encodeURIComponent(selectedRepo.id)}&branch=${encodeURIComponent(selectedRepo.branch || "main")}`}
+                  to={`/documentation/view?repo=${encodeURIComponent(selectedRepo.id)}&name=${encodeURIComponent(selectedRepo.name)}&branch=${encodeURIComponent(selectedRepo.branch || "main")}`}
                   onClick={stopCardNavigation}
                 >
                   <Button

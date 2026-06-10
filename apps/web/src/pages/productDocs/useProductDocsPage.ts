@@ -17,7 +17,7 @@ import {
 } from "../../services/backendApi";
 import { toErrorMessage } from "../../utils/errorMessage";
 import { getOrCreateTerminalSessionId } from "../../utils/terminalSession";
-import { saveClonedRepo } from "../workbench/repoLocalStore";
+import { saveClonedRepo, loadClonedRepos, loadRemoteRepos } from "../workbench/repoLocalStore";
 
 const TERMINAL_SESSION_STORAGE_KEY = "repopilot.docs.terminalSessionId";
 
@@ -164,17 +164,23 @@ export function useProductDocsPage() {
   }, [appendTerminal, branch, projectId, repo, t, terminalSessionId, username]);
 
   const viewDocsUrl = useMemo(() => {
+    const effectiveBranch = branch.trim() || "main";
+    const clonedRepos = loadClonedRepos(username);
+    const remoteRepos = loadRemoteRepos(username);
+    const allRepos = [...clonedRepos, ...remoteRepos];
+
     if (isMockMode(repo, projectId) || isMockRepo(repo)) {
-      const effectiveBranch = branch.trim() || "main";
-      return `/documentation/view?repo=mock&branch=${encodeURIComponent(effectiveBranch)}`;
+      return `/documentation/view?repo=mock&name=MockProject&branch=${encodeURIComponent(effectiveBranch)}`;
     }
 
     const project =
       projectId.trim() || (lastClone ? String(lastClone.projectId) : "");
     if (!project) return null;
-    const effectiveBranch = branch.trim() || "main";
-    return `/documentation/view?repo=${encodeURIComponent(project)}&branch=${encodeURIComponent(effectiveBranch)}`;
-  }, [branch, lastClone, projectId, repo]);
+
+    const foundRepo = allRepos.find((r) => r.id === project);
+    const name = foundRepo ? foundRepo.name : project;
+    return `/documentation/view?repo=${encodeURIComponent(project)}&name=${encodeURIComponent(name)}&branch=${encodeURIComponent(effectiveBranch)}`;
+  }, [branch, lastClone, projectId, repo, username]);
 
   const showTerminalUnavailable =
     terminalOpen &&

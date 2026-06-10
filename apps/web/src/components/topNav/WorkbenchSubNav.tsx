@@ -29,12 +29,14 @@ export function WorkbenchSubNav() {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const repo = searchParams.get("repo");
+  const repoName = searchParams.get("name") || repo;
 
   if (!WORKBENCH_PATHS.has(pathname) || !repo) {
     return null;
   }
 
   const encodedRepo = encodeURIComponent(repo);
+  const encodedName = encodeURIComponent(repoName);
   const isDocView = pathname === "/documentation/view";
 
   if (isDocView) {
@@ -50,7 +52,7 @@ export function WorkbenchSubNav() {
             </Link>
             <span className="text-neutral-300 dark:text-neutral-600">/</span>
             <span className="truncate font-mono text-xs text-neutral-700 dark:text-neutral-300">
-              {repo}
+              {repoName}
             </span>
             <span className="text-neutral-300 dark:text-neutral-600">/</span>
             <span className="font-semibold text-neutral-950 dark:text-white">
@@ -73,7 +75,7 @@ export function WorkbenchSubNav() {
           {SECONDARY_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
-              to={`${item.path}?repo=${encodedRepo}`}
+              to={`${item.path}?repo=${encodedRepo}&name=${encodedName}`}
               end
               className={({ isActive }: { isActive: boolean }) =>
                 [

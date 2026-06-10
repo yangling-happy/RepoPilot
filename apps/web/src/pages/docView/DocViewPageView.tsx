@@ -20,6 +20,7 @@ export function DocViewPageView(props: DocViewPageViewProps) {
   const {
     mockMode,
     repo,
+    repoName,
     branchParam,
     docs,
     loading,
@@ -197,7 +198,7 @@ export function DocViewPageView(props: DocViewPageViewProps) {
             ) : null}
             {repo ? (
               <p className="mt-1 font-mono text-xs text-neutral-500 dark:text-neutral-400">
-                {repo}
+                {repoName}
                 {branchParam !== "main" ? ` · ${branchParam}` : ""}
               </p>
             ) : null}
