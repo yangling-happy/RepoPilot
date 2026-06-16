@@ -29,7 +29,7 @@ export function WorkbenchSubNav() {
   const { pathname } = useLocation();
   const [searchParams] = useSearchParams();
   const repo = searchParams.get("repo");
-  const repoName = searchParams.get("name") || repo;
+  const repoName = searchParams.get("name") || repo || "";
 
   if (!WORKBENCH_PATHS.has(pathname) || !repo) {
     return null;
